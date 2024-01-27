@@ -1,0 +1,13 @@
+Usage:
+	list players - python3 list.py in working directory /PalSaved/SaveGames/0/<server id>/Players
+	check player detail - python3 list.py <PLAYER UID>
+
+Fix data:
+use https://github.com/cheahjs/palworld-save-tools.git
+1. Copy the original player sav file
+2. Delete the player sav file in directory
+3. restart palworld server
+4. User login to the server and create a new charater
+5. stop the palworld server
+6. update the original backup player sav file all data exclude the InstanceId and update the sav to SaveGames
+7. start the PalWorld Server
