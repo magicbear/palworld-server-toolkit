@@ -11,3 +11,8 @@ use https://github.com/cheahjs/palworld-save-tools.git
 5. stop the palworld server
 6. update the original backup player sav file all data exclude the InstanceId and update the sav to SaveGames
 7. start the PalWorld Server
+
+Clean the data:
+Download https://github.com/cheahjs/palworld-save-tools.git
+Put auto-cleaner.py in palworld-save-tools directory
+Run auto-cleaner.py in SaveGames/0/<Server ID> folder
