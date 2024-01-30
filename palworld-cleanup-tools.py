@@ -140,7 +140,7 @@ def DeletePlayer(player_uid, dry_run=False):
             remove_instance_id.append(item['key']['InstanceId']['value'])
             print(
                 "\033[31mDelete User\033[0m  UUID: %s  Level: %d  CharacterID: \033[93m%s\033[0m" % (
-                    str(item['key']['InstanceId']['value']), player['Level']['value'],
+                    str(item['key']['InstanceId']['value']), player['Level']['value'] if 'Level' in player else -1,
                     player['NickName']['value']))
         elif 'OwnerPlayerUId' in player and player['OwnerPlayerUId']['value'] == uuid.UUID(player_uid):
             remove_instance_id.append(item['key']['InstanceId']['value'])
