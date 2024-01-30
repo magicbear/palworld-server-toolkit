@@ -13,9 +13,8 @@ use https://github.com/cheahjs/palworld-save-tools.git
 7. start the PalWorld Server
 
 Clean the data:
-Download https://github.com/cheahjs/palworld-save-tools.git
-Put palworld-cleanup-tools.py in palworld-save-tools directory
-Run palworld-cleanup-tools.py in SaveGames/0/<Server ID> folder
+Please use the following link
+Download https://github.com/magicbear/palworld-save-tools/tree/clenaup-tools
 
 Interactive feature:
 python3 -i palworld-cleanup-tools.py SaveGames/0/<SID>/Level.sav
