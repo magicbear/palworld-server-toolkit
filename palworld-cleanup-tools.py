@@ -89,11 +89,11 @@ def main():
 
     if sys.flags.interactive:
         print("Go To Interactive Mode, we have follow command:")
-        print("  ShowPlayers()                  - List the Players")
-        print("  ShowGuild(fix_capture=False)   - List the Guild and members")
-        print("  RenamePlayer(uid,new_name)     - Rename player to new_name")
-        print("  DeletePlayer(uid)              - Wipe player data from save")
-        print("  Save()                         - Save the file and exit")
+        print("  ShowPlayers()                      - List the Players")
+        print("  ShowGuild(fix_capture=False)       - List the Guild and members")
+        print("  RenamePlayer(uid,new_name)         - Rename player to new_name")
+        print("  DeletePlayer(uid,dry_run=False)    - Wipe player data from save, dry_run: only show how to delete")
+        print("  Save()                             - Save the file and exit")
         return
     
     if args.fix_missing or args.fix_capture:
@@ -110,9 +110,10 @@ def RenamePlayer(player_uid, new_name):
             player['NickName']['value'] = new_name
 
 #
-def DeletePlayer(player_uid):
+def DeletePlayer(player_uid, dry_run=False):
     player_sav_file = os.path.dirname(os.path.abspath(args.filename))+"/Players/"+player_uid.upper().replace("-","")+".sav"
     player_container_ids = []
+    playerInstanceId = None
     if not os.path.exists(player_sav_file):
         print("\033[33mWarning: Player Sav file Not exists: %s\033[0m" % player_sav_file)
         player_gvas_file = None
@@ -122,6 +123,7 @@ def DeletePlayer(player_uid):
             player_gvas_file = GvasFile.read(raw_gvas, PALWORLD_TYPE_HINTS, PALWORLD_CUSTOM_PROPERTIES)
         print("Player Container ID:")
         player_gvas = player_gvas_file.properties['SaveData']['value']
+        playerInstanceId = player_gvas['IndividualId']['value']['InstanceId']['value']
         for key in ['OtomoCharacterContainerId', 'PalStorageContainerId']:
             print("  %s" % player_gvas[key]['value']['ID']['value'])
             player_container_ids.append(player_gvas[key]['value']['ID']['value'])
@@ -154,8 +156,9 @@ def DeletePlayer(player_uid):
                     str(item['key']['InstanceId']['value']), str(player['SlotID']['value']['ContainerId']['value']['ID']['value']),
                     player['CharacterID']['value']))
             remove_items.append(item)
-    for item in remove_items:
-        wsd['CharacterSaveParameterMap']['value'].remove(item)
+    if not dry_run:
+        for item in remove_items:
+            wsd['CharacterSaveParameterMap']['value'].remove(item)
     # Remove Item from CharacterContainerSaveData
     remove_items=[]
     for container in wsd['CharacterContainerSaveData']['value']:
@@ -164,8 +167,9 @@ def DeletePlayer(player_uid):
             print(
                 "\033[31mDelete Character Container\033[0m  UUID: %s" % (
                     str(container['key']['ID']['value'])))
-    for item in remove_items:
-        wsd['CharacterContainerSaveData']['value'].remove(item)
+    if not dry_run:
+        for item in remove_items:
+            wsd['CharacterContainerSaveData']['value'].remove(item)
     # Remove Item from ItemContainerSaveData
     remove_items=[]
     for container in wsd['ItemContainerSaveData']['value']:
@@ -174,8 +178,20 @@ def DeletePlayer(player_uid):
             print(
                 "\033[31mDelete Item Container\033[0m  UUID: %s" % (
                     str(container['key']['ID']['value'])))
-    for item in remove_items:
-        wsd['ItemContainerSaveData']['value'].remove(item)
+    if not dry_run:
+        for item in remove_items:
+            wsd['ItemContainerSaveData']['value'].remove(item)
+    # Remove Item from CharacterSaveParameterMap
+    remove_items=[]
+    for container in wsd['CharacterSaveParameterMap']['value']:
+        if container['key']['InstanceId']['value'] == playerInstanceId:
+            remove_items.append(container)
+            print(
+                "\033[31mDelete CharacterSaveParameterMap\033[0m  UUID: %s" % (
+                    str(container['key']['InstanceId']['value'])))
+    if not dry_run:
+        for item in remove_items:
+            wsd['CharacterSaveParameterMap']['value'].remove(item)
     # Remove Item from GroupSaveDataMap
     for group_data in wsd['GroupSaveDataMap']['value']:
         if str(group_data['value']['GroupType']['value']['value']) == "EPalGroupType::Guild":
@@ -185,13 +201,17 @@ def DeletePlayer(player_uid):
                     print("\033[31mDelete User from Guild\033[0m  \033[93m%s\033[0m   [\033[92m%s\033[0m] Last Online: %d" % (
                         player['player_info']['player_name'], str(player['player_uid']),
                         player['player_info']['last_online_real_time']))
-                    item['players'].remove(player)
+                    if not dry_run:
+                        item['players'].remove(player)
                     break
             removeItems = []
             for ind_char in item['individual_character_handle_ids']:
                 if ind_char['instance_id'] in remove_instance_id:
                     print("\033[31mDelete Guild Character %s\033[0m" % (str(ind_char['instance_id'])))
                     removeItems.append(ind_char)
+            if not dry_run:
+                for ind_char in removeItems:
+                    item['individual_character_handle_ids'].remove(ind_char)
     print("Finish to remove player from Save, please delete this file manually: %s" % player_sav_file)
 
 def search_keys(dicts, key, level=""):
