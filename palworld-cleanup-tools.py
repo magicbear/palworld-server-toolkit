@@ -88,7 +88,7 @@ def main():
         output_path = args.output
 
     if sys.flags.interactive:
-        print("Go To Interactive Mode, we have follow command:")
+        print("Go To Interactive Mode (no auto save), we have follow command:")
         print("  ShowPlayers()                      - List the Players")
         print("  ShowGuild(fix_capture=False)       - List the Guild and members")
         print("  RenamePlayer(uid,new_name)         - Rename player to new_name")
@@ -355,6 +355,8 @@ def Save():
     with open(output_path, "wb") as f:
         f.write(sav_file)
     print("Done")
+    
+    sys.exit(0)
 
 if __name__ == "__main__":
     main()
