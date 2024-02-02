@@ -50,6 +50,9 @@ Migrate difference server to single server sample:
 1. And remove all the old `-000000000001.sav`, rename `Level_fixed.sav` to `Level.sav` and start the Palworld Server.
 
 
+## taskset.py
+Tools for set cpu affinity to CPU performance core
+
 ---
 
 # palworld-server-toolkit
@@ -102,3 +105,8 @@ Migrate difference server to single server sample:
 	1. 下一步对所有需迁移玩家执行 `CopyPlayer("xxxxxxxx-0000-0000-0000-000000000001", "xxxxxxxx-0000-0000-0000-000000000000", backup_wsd)`
 	1. 然后保存 `Save()`
 	1. 最后删除旧 `-000000000001.sav`, 把 `Level_fixed.sav` 替换至 `Level.sav` 并启动服务端
+
+
+## taskset.py
+
+把服务端绑定至CPU性能核
