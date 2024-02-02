@@ -20,18 +20,22 @@ Tools for Palworld servers
 
 2. Download [https://github.com/cheahjs/palworld-save-tools](https://github.com/cheahjs/palworld-save-tools) and put `lib` on the same directory
 
+---
+
 ## list.py
 Tool for list player's nickname, steam id on server
-
-Usage:
 
 - List player - `python3 list.py` in working directory `/PalSaved/SaveGames/0/<server id>/Players`
 - Check player detail - `python3 list.py <PLAYER HEX UID>`
 
 
+---
+
 ## palworld-cleanup-tools.py
 
 This tools is for cleanup the unreference item, rename the player name, migrate player and delete the player.
+
+> ### :warning: This tool is experimental. Be careful of data loss and *always* make a backup.
 
 - For cleaning the capture log in guild, use the follow command `python palworld-cleanup-tools.py --fix-missing --fix-capture Level.sav`
 
@@ -67,6 +71,8 @@ Migrate difference server to single server sample:
 ![](./docs/img/ShowGuild.png)
 
 
+
+---
 
 ## taskset.py
 Tools for set cpu affinity to CPU performance core

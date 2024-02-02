@@ -20,18 +20,19 @@
 
 2. 下载 [https://github.com/cheahjs/palworld-save-tools](https://github.com/cheahjs/palworld-save-tools) 并放置 `lib` 在目录下
 
+---
 ## list.py
 用于列出服务器中的玩家名字，PlayerUId，Steam ID
-
-用法:
 
 - 列出玩家 - 在工作目录 `/PalSaved/SaveGames/0/<server id>/Players` 中运行 `python3 list.py`
 - 玩家详细 - `python3 list.py <PLAYER HEX UID>`
 
-
+---
 ## palworld-cleanup-tools.py
 
 清理捕捉日志，改名，合并不同服务器玩家，删除玩家，迁移坏档等工具包
+
+> ### :warning: 此工具是实验性的。 小心数据丢失并 ***务必*** 进行备份。
 
 - 清理捕捉日志及不存在玩家数据 - `python palworld-cleanup-tools.py --fix-missing --fix-capture Level.sav`
 
@@ -67,6 +68,7 @@
 ![](./docs/img/ShowPlayer.png)
 ![](./docs/img/ShowGuild.png)
 
+---
 
 ## taskset.py
 
