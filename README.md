@@ -18,7 +18,7 @@
 1. Python 3.9或以上版本.
     - Windows用户: 可从 [Microsoft Store下载Python 3.12](https://apps.microsoft.com/detail/9NCVDN91XZQP) or [python.org](https://www.python.org/)
 
-2. 下载 [https://github.com/cheahjs/palworld-save-tools.git](url) 并放置 `lib` 在目录下
+2. 下载 [https://github.com/cheahjs/palworld-save-tools](url) 并放置 `lib` 在目录下
 
 ## list.py
 用于列出服务器中的玩家名字，PlayerUId，Steam ID
