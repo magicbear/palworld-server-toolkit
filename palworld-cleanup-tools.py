@@ -82,8 +82,7 @@ def main():
     wsd = gvas_file.properties['worldSaveData']['value']
 
     if args.statistics:
-        for key in wsd:
-            print("%40s\t%.3f MB" % (key, len(str(wsd[key])) / 1048576))
+        Statistics()
 
     ShowPlayers()
     if args.fix_missing:
@@ -115,6 +114,7 @@ def main():
         print("  CopyPlayer(old_uid,new_uid, backup_wsd)    - Copy the player from old PlayerUId to new PlayerUId ")
         print("                                               Note: be sure you have already use the new playerUId to ")
         print("                                               login the game.")
+        print("  Statistics()                               - Counting wsd block data size")
         print("  Save()                                     - Save the file and exit")
         print()
         print("Advance feature:")
@@ -125,6 +125,10 @@ def main():
 
     if args.fix_missing or args.fix_capture:
         Save()
+
+def Statistics():
+    for key in wsd:
+        print("%40s\t%.3f MB\tKey: %d" % (key, len(str(wsd[key])) / 1048576, len(wsd[key]['value'])))
 
 def EditPlayer(player_uid):
     global player
