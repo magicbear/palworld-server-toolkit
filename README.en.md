@@ -35,7 +35,13 @@ Tool for list player's nickname, steam id on server
 
 This tools is for cleanup the unreference item, rename the player name, migrate player and delete the player.
 
-> ### :warning: This tool is experimental. Be careful of data loss and *always* make a backup.
+> [!CAUTION]
+> 
+> :warning: This tool is experimental. Be careful of data loss and *always* make a backup.
+
+
+> [!NOTE]
+> 
 > Without -o params, default save file is `Level_fixed.sav`
 
 - For cleaning the capture log in guild, use the follow command `python palworld-cleanup-tools.py --fix-missing --fix-capture Level.sav`
