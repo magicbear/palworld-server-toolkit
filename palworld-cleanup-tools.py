@@ -66,7 +66,7 @@ def skip_decode(
             "value": reader.read(size),
         }
     else:
-        raise Exception(f"Expected ArrayProperty or StructProperty, got {type_name} in {path}")
+        raise Exception(f"Expected ArrayProperty or MapProperty or StructProperty, got {type_name} in {path}")
     return value
 
 def skip_encode(
@@ -96,7 +96,7 @@ def skip_encode(
         writer.write(properties['value'])
         return len(properties['value'])
     else:
-        raise Exception(f"Expected ArrayProperty or StructProperty, got {property_type} in {path}")
+        raise Exception(f"Expected ArrayProperty or MapProperty or StructProperty, got {property_type}")
 
 def load_skiped_decode(wsd, skip_paths):
     if isinstance(skip_paths, str):
