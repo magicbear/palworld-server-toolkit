@@ -1,9 +1,9 @@
 # palworld-server-toolkit
+
+### 幻兽帕鲁服务端工具包
+
 <p align="center">
    <strong>简体中文</strong> | <a href="/README.en.md">English</a>
-</p>
-<p align="center">
-幻兽帕鲁服务端工具包
 </p>
 
 <p align='center'>

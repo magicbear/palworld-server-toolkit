@@ -1,11 +1,11 @@
 # palworld-server-toolkit
+
+### Tools for Palworld servers
+
 <p align="center">
    <a href="/README.md">简体中文</a> | <strong>English</strong>
 </p>
 
-<p align="center">
-Tools for Palworld servers
-</p>
 
 <p align='center'>
 <img alt="GitHub Repo stars" src="https://img.shields.io/github/stars/magicbear/palworld-server-toolkit?style=for-the-badge">&nbsp;&nbsp;
