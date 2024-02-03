@@ -72,6 +72,18 @@
 	1. 最后删除旧 `xxxxxxxx000000000000000000000001.sav`, 把 `Level_fixed.sav` 替换至 `Level.sav` 并启动服务端
 
 
+- 本地存档迁移至服务器示例
+
+	1. 退出服务端
+	1. 复制本地 `Level.sav` 至 `SaveGames/0/<Server ID>/Old-Level.sav`
+	1. 复制本地 `Players/00000000000000000000000000000001.sav` 至 `SaveGames/0/<Server ID>/Players/00000000000000000000000000000001.sav`
+	1. 使用编辑模式运行 `python -i palworld-cleanup-tools.py Level.sav`
+	1. 使用以下命令 `OpenBackup("Old-Level.sav")`
+	1. 下一步执行 `CopyPlayer("00000000-0000-0000-0000-000000000001", "xxxxxxxx-0000-0000-0000-000000000000", backup_wsd)`
+	1. 然后保存 `Save()`
+	1. 最后删除旧 `00000000000000000000000000000001.sav`, 把 `Level_fixed.sav` 替换至 `Level.sav` 并启动服务端
+
+
 - 迁移用户示例
 
 	1. 退出服务端

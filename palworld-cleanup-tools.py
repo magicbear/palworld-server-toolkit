@@ -245,7 +245,7 @@ def main():
         output_path = args.output
 
     ShowGuild()
-    ShowPlayers()
+    ShowPlayers(data_source=wsd)
 
     if args.fix_missing:
         FixMissing()
@@ -334,7 +334,7 @@ def OpenBackup(filename):
         backup_gvas_file = GvasFile.read(raw_gvas, PALWORLD_TYPE_HINTS, PALWORLD_CUSTOM_PROPERTIES)
         print("Done in %.1fs." % (time.time() - start_time))
     backup_wsd = backup_gvas_file.properties['worldSaveData']['value']
-
+    ShowPlayers(backup_wsd)
 
 def to_storage_uuid(uuid_str):
     return UUID.from_str(str(uuid_str))
@@ -415,7 +415,7 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
             break
     for item in old_wsd['CharacterSaveParameterMap']['value']:
         player = item['value']['RawData']['value']['object']['SaveParameter']['value']
-        if str(item['key']['PlayerUId']['value']) == player_uid:
+        if str(item['key']['PlayerUId']['value']) == player_uid and 'IsPlayer' in player and player['IsPlayer']['value']:
             # if not IsFoundUser:
             copy_user_params = copy.deepcopy(item)
             copy_user_params['key']['PlayerUId']['value'] = to_storage_uuid(uuid.UUID(new_player_uid))
@@ -450,7 +450,8 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
         print("\033[32mCopy User\033[0m")
     else:
         wsd['CharacterSaveParameterMap']['value'][IsFoundUser] = copy_user_params
-        print("\033[32mUpdate User\033[0m")
+        print("\033[32mUpdate exists user to %s\033[0m" % copy_user_params['value']['RawData']['value']['object']
+            ['SaveParameter']['value']['NickName']['value'])
     # Copy Item from GroupSaveDataMap
     player_group = None
     for group_data in wsd['GroupSaveDataMap']['value']:
@@ -462,9 +463,11 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
                     if not dry_run:
                         item['individual_character_handle_ids'] += instances
                     print(
-                        "\033[32mCopy User to Guild\033[0m  \033[93m%s\033[0m   [\033[92m%s\033[0m] Last Online: %d" % (
-                            g_player['player_info']['player_name'], str(g_player['player_uid']),
-                            g_player['player_info']['last_online_real_time']))
+                        "\033[32mCopy User \033[93m %s \033[0m -> \033[93m %s \033[32m to Guild\033[0m \033[32m %s \033[0m" % (
+                            g_player['player_info']['player_name'],
+                            copy_user_params['value']['RawData']['value']['object']['SaveParameter']['value'][
+                                'NickName']['value'],
+                            item['guild_name']))
                     copy_user_params['value']['RawData']['value']['group_id'] = group_data['value']['RawData']['value']['group_id']
                     break
     if player_group is None:
@@ -780,21 +783,25 @@ def search_values(dicts, key, level=""):
     return isFound
 
 
-def ShowPlayers():
+def ShowPlayers(data_source=wsd):
     global playerMapping, instanceMapping
-    playerMapping = {}
-    instanceMapping = {}
-    for item in wsd['CharacterSaveParameterMap']['value']:
-        instanceMapping[str(item['key']['InstanceId']['value'])] = item
-        if "00000000-0000-0000-0000-000000000000" != str(item['key']['PlayerUId']['value']):
-            player = item['value']['RawData']['value']['object']['SaveParameter']
+    if data_source == wsd:
+        playerMapping = {}
+        instanceMapping = {}
+    for item in data_source['CharacterSaveParameterMap']['value']:
+        if data_source == wsd:
+            instanceMapping[str(item['key']['InstanceId']['value'])] = item
+        player = item['value']['RawData']['value']['object']['SaveParameter']
+        # if "00000000-0000-0000-0000-000000000000" != str(item['key']['PlayerUId']['value']):
+        if 'IsPlayer' in player['value'] and player['value']['IsPlayer']['value']:
             if player['struct_type'] == 'PalIndividualCharacterSaveParameter':
                 playerParams = player['value']
                 playerMeta = {}
                 for player_k in playerParams:
                     playerMeta[player_k] = playerParams[player_k]['value']
                 playerMeta['InstanceId'] = item['key']['InstanceId']['value']
-                playerMapping[str(item['key']['PlayerUId']['value'])] = playerMeta
+                if data_source == wsd:
+                    playerMapping[str(item['key']['PlayerUId']['value'])] = playerMeta
             try:
                 print("PlayerUId \033[32m %s \033[0m [InstanceID %s %s \033[0m] -> Level %2d  %s" % (
                     item['key']['PlayerUId']['value'], "\033[33m" if str(item['key']['PlayerUId']['value']) in guildInstanceMapping and
