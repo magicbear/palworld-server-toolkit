@@ -33,10 +33,11 @@
 清理捕捉日志，改名，合并不同服务器玩家，删除玩家，迁移坏档等工具包
 
 > ### :warning: 此工具是实验性的。 小心数据丢失并 ***务必*** 进行备份。
+> 未加-o参数默认保存文件为`Level_fixed.sav`
 
 - 清理捕捉日志及不存在玩家数据 - `python palworld-cleanup-tools.py --fix-missing --fix-capture Level.sav`
 
-- 修改 `Level.sav` 文件 - `python -i palworld-cleanup-tools.py Level.sav`
+- 修改 `Level.sav` 文件 - `python -i palworld-cleanup-tools.py -o Level.sav Level.sav`
 
 	- `ShowPlayers()` - 列出玩家
 	- `FixMissing()` - 删除未引用玩家数据
