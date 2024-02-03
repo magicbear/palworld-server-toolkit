@@ -18,7 +18,7 @@
 1. Python 3.9或以上版本.
     - Windows用户: 可从 [Microsoft Store下载Python 3.12](https://apps.microsoft.com/detail/9NCVDN91XZQP) or [python.org](https://www.python.org/)
 
-2. 下载 [https://github.com/cheahjs/palworld-save-tools](https://github.com/cheahjs/palworld-save-tools) 并放置其中的 `lib` 在本工具目录下
+2. 使用 `git submodule update --init --recursive` 或 下载 [https://github.com/cheahjs/palworld-save-tools](https://github.com/cheahjs/palworld-save-tools) 并放置 `palworld-save-tools` 在本工具目录下
 
 ---
 ## list.py
@@ -34,7 +34,7 @@
 
 > ### :warning: 此工具是实验性的。 小心数据丢失并 ***务必*** 进行备份。
 > 未加-o参数默认保存文件为`Level_fixed.sav`
-
+	
 - 清理捕捉日志及不存在玩家数据 - `python palworld-cleanup-tools.py --fix-missing --fix-capture Level.sav`
 
 - 修改 `Level.sav` 文件 - `python -i palworld-cleanup-tools.py -o Level.sav Level.sav`
