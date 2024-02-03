@@ -76,6 +76,9 @@
 
 	1. 退出服务端
 	1. 复制本地 `Level.sav` 至 `SaveGames/0/<Server ID>/Old-Level.sav`
+	> 本地存档通常在
+	C:\Users\\[username]\\AppData\\Local\\Pal\\Saved\\SaveGames\\[SteamID]\\[World Folder]
+
 	1. 复制本地 `Players/00000000000000000000000000000001.sav` 至 `SaveGames/0/<Server ID>/Players/00000000000000000000000000000001.sav`
 	1. 使用编辑模式运行 `python -i palworld-cleanup-tools.py Level.sav`
 	1. 使用以下命令 `OpenBackup("Old-Level.sav")`

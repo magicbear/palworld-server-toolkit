@@ -81,6 +81,9 @@ This tools is for cleanup the unreference item, rename the player name, migrate 
 
 	1. stop the server
 	1. Copy local save `Level.sav` to `SaveGames/0/<Server ID>/Old-Level.sav`
+	> For co-op saves, they are usually at
+	C:\Users\\[username]\\AppData\\Local\\Pal\\Saved\\SaveGames\\[SteamID]\\[World Folder]
+
 	1. Copy local `Players/00000000000000000000000000000001.sav` to `SaveGames/0/<Server ID>/Players/00000000000000000000000000000001.sav`
 	1. Use interactive mode `python -i palworld-cleanup-tools.py Level.sav`
 	1. Use following command `OpenBackup("Old-Level.sav")`
