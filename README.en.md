@@ -52,9 +52,9 @@ This tools is for cleanup the unreference item, rename the player name, migrate 
 	- `RenamePlayer(uid,new_name)` - Rename player to new_name
 	- `DeletePlayer(uid,InstanceId=None, dry_run=False)` - Wipe player data from save InstanceId: delete specified InstanceId
 	- `EditPlayer(uid)` - Allocate player base meta data to variable `player`
-	- `OpenBackup(filename)` - Open Backup Level.sav file and assign to backup_wsd
+	- `OpenBackup(filename)` - Open Backup Level.sav file and assign to `backup_wsd`
 	- `MigratePlayer(old_uid,new_uid)` - Migrate the player from old PlayerUId to new PlayerUId
-	- `CopyPlayer(old_uid,new_uid, backup_wsd)` - Copy the player from old PlayerUId to new PlayerUId `backup_wsd is the OpenBackup file, wsd is current file`
+	- `CopyPlayer(old_uid,new_uid, backup_wsd)` - Copy the player from old PlayerUId to new PlayerUId `backup_wsd` is the OpenBackup file, `wsd` is current file
 	- `Save()` - Save the file and exit
 
 - Migrate difference server to single server sample:

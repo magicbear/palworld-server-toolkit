@@ -50,7 +50,7 @@
 	- `EditPlayer(uid)` - 快速指定玩家数据至变量`player`
 	- `OpenBackup(filename)` - 打开备份`Level.sav`文件并指向变量`backup_wsd`
 	- `MigratePlayer(old_uid,new_uid)` - 从`old_uid`向`new_uid`迁移玩家数据
-	- `CopyPlayer(old_uid,new_uid, backup_wsd)` - 复制玩家数据 `backup_wsd 为OpenBackup备份文件 wsd为当前主文件`
+	- `CopyPlayer(old_uid,new_uid, backup_wsd)` - 复制玩家数据 `backup_wsd` 为OpenBackup备份文件 `wsd`为当前主文件
 	- `Save()` - 保存修改并退出
 
 
