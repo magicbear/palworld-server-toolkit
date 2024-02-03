@@ -2,7 +2,7 @@
 # Author: MagicBear
 # License: MIT License
 
-import glob, os, datetime, zlib, subprocess
+import glob, os, datetime, time, zlib, subprocess
 from operator import itemgetter, attrgetter
 import json
 import os
@@ -82,8 +82,9 @@ def main():
         raw_gvas, _ = decompress_sav_to_gvas(data)
 
         print(f"Parsing {args.filename}...", end="", flush=True)
+        start_time = time.time()
         gvas_file = GvasFile.read(raw_gvas, PALWORLD_TYPE_HINTS, PALWORLD_CUSTOM_PROPERTIES)
-        print("Done.")
+        print("Done in %.1fs." % (time.time() - start_time))
 
     wsd = gvas_file.properties['worldSaveData']['value']
 
@@ -112,6 +113,7 @@ def main():
         print("  FixCaptureLog(dry_run=False)               - Remove unused capture log")
         print("  FixDuplicateUser(dry_run=False)            - Remove duplicate player instance")
         print("  ShowGuild()                                - List the Guild and members")
+        print("  BindGuildInstanceId(uid,instance_id)       - Update Guild binding instance for user")
         print("  RenamePlayer(uid,new_name)                 - Rename player to new_name")
         print("  DeletePlayer(uid,InstanceId=None,          ")
         print("               dry_run=False)                - Wipe player data from save")
@@ -180,8 +182,9 @@ def OpenBackup(filename):
         raw_gvas, _ = decompress_sav_to_gvas(data)
 
         print(f"Parsing {filename}...", end="", flush=True)
+        start_time = time.time()
         backup_gvas_file = GvasFile.read(raw_gvas, PALWORLD_TYPE_HINTS, PALWORLD_CUSTOM_PROPERTIES)
-        print("Done.")
+        print("Done in %.1fs." % (time.time() - start_time))
     backup_wsd = backup_gvas_file.properties['worldSaveData']['value']
 
 
@@ -641,10 +644,16 @@ def ShowPlayers():
                     playerMeta[player_k] = playerParams[player_k]['value']
                 playerMeta['InstanceId'] = item['key']['InstanceId']['value']
                 playerMapping[str(item['key']['PlayerUId']['value'])] = playerMeta
-            print("PlayerUId \033[32m %s \033[0m [InstanceID %s %s \033[0m] -> Level %2d  %s" % (
-                item['key']['PlayerUId']['value'], "\033[33m" if str(item['key']['PlayerUId']['value']) in guildInstanceMapping and
-                str(playerMeta['InstanceId']) == guildInstanceMapping[str(item['key']['PlayerUId']['value'])] else "\033[31m", playerMeta['InstanceId'],
-                playerMeta['Level'] if 'Level' in playerMeta else -1, playerMeta['NickName']))
+            try:
+                print("PlayerUId \033[32m %s \033[0m [InstanceID %s %s \033[0m] -> Level %2d  %s" % (
+                    item['key']['PlayerUId']['value'], "\033[33m" if str(item['key']['PlayerUId']['value']) in guildInstanceMapping and
+                    str(playerMeta['InstanceId']) == guildInstanceMapping[str(item['key']['PlayerUId']['value'])] else "\033[31m", playerMeta['InstanceId'],
+                    playerMeta['Level'] if 'Level' in playerMeta else -1, playerMeta['NickName']))
+            except KeyError:
+                print("PlayerUId \033[32m %s \033[0m [InstanceID %s %s \033[0m] -> Level %2d" % (
+                    item['key']['PlayerUId']['value'], "\033[33m" if str(item['key']['PlayerUId']['value']) in guildInstanceMapping and
+                    str(playerMeta['InstanceId']) == guildInstanceMapping[str(item['key']['PlayerUId']['value'])] else "\033[31m", playerMeta['InstanceId'],
+                    playerMeta['Level'] if 'Level' in playerMeta else -1))
         else:
             # Non Player
             player = item['value']['RawData']['value']['object']['SaveParameter']
@@ -731,6 +740,16 @@ def TickToLocal(tick):
     t = datetime.datetime.fromtimestamp(ts)
     return t.strftime("%Y-%m-%d %H:%M:%S")
 
+def BindGuildInstanceId(uid, instance_id):
+    for group_data in wsd['GroupSaveDataMap']['value']:
+        if str(group_data['value']['GroupType']['value']['value']) == "EPalGroupType::Guild":
+            item = group_data['value']['RawData']['value']
+            for ind_char in item['individual_character_handle_ids']:
+                if str(ind_char['guid']) == uid:
+                    print("Update Guild %s binding guild UID %s  %s -> %s" % (item['guild_name'], uid, ind_char['instance_id'], instance_id))
+                    ind_char['instance_id'] = to_storage_uuid(uuid.UUID(instance_id))
+                    guildInstanceMapping[str(ind_char['guid'])] = str(ind_char['instance_id'])
+            print()
 
 def ShowGuild():
     global guildInstanceMapping

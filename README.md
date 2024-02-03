@@ -43,6 +43,7 @@
 	- `FixCaptureLog()` - 删除多余捕捉日志
 	- `FixDuplicateUser()` - 删除多余用户数据
 	- `ShowGuild()` - 列出公会及成员列表
+	- `BindGuildInstanceId(uid,instance_id)` - 修改公会成员绑定ID
 	- `RenamePlayer(uid,new_name)` - 修改玩家名字为 `new_name`
 	- `DeletePlayer(uid,InstanceId=None, dry_run=False)` - 删除玩家数据 `InstanceId: 删除指定InstanceId`
 	- `EditPlayer(uid)` - 快速指定玩家数据至变量`player`
