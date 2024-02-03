@@ -85,4 +85,4 @@
 
 ## taskset.py
 
-把服务端绑定至CPU性能核
+把服务端绑定至CPU性能核 (Linux only)

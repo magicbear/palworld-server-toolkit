@@ -88,5 +88,5 @@ This tools is for cleanup the unreference item, rename the player name, migrate 
 ---
 
 ## taskset.py
-Tools for set cpu affinity to CPU performance core
+Tools for set cpu affinity to CPU performance core (Linux only)
 
