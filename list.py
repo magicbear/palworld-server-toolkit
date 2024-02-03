@@ -104,9 +104,14 @@ for item in lists:
     save_path = item['file']
     #  or int(sav[0:8], 16) not in mapping
     if (len(sys.argv) > 1 and sys.argv[1] in sav):
-        from lib.gvas import GvasFile
-        from lib.palsav import compress_gvas_to_sav, decompress_sav_to_gvas
-        from lib.paltypes import PALWORLD_CUSTOM_PROPERTIES, PALWORLD_TYPE_HINTS
+        module_dir = os.path.dirname(os.path.abspath(__file__))
+        sys.path.insert(0, os.path.join(module_dir, "save_tools"))
+        sys.path.insert(0, os.path.join(module_dir, "palworld-save-tools"))
+
+        from palworld_save_tools.gvas import GvasFile
+        from palworld_save_tools.palsav import compress_gvas_to_sav, decompress_sav_to_gvas
+        from palworld_save_tools.paltypes import PALWORLD_CUSTOM_PROPERTIES, PALWORLD_TYPE_HINTS
+        from palworld_save_tools.archive import *
         with open(item['file'], "rb") as f:
             # Read the file
             data = f.read()
