@@ -66,7 +66,9 @@ def skip_decode(
             "value": reader.read(size),
         }
     else:
-        raise Exception(f"Expected ArrayProperty or MapProperty or StructProperty, got {type_name} in {path}")
+        raise Exception(
+            f"Expected ArrayProperty or MapProperty or StructProperty, got {type_name} in {path}"
+        )
     return value
 
 def skip_encode(
@@ -77,26 +79,28 @@ def skip_encode(
         del properties["skip_type"]
         writer.fstring(properties["array_type"])
         writer.optional_guid(properties.get("id", None))
-        writer.write(properties['value'])
-        return len(properties['value'])
+        writer.write(properties["value"])
+        return len(properties["value"])
     elif property_type == "MapProperty":
         del properties["custom_type"]
         del properties["skip_type"]
         writer.fstring(properties["key_type"])
         writer.fstring(properties["value_type"])
         writer.optional_guid(properties.get("id", None))
-        writer.write(properties['value'])
-        return len(properties['value'])
+        writer.write(properties["value"])
+        return len(properties["value"])
     elif property_type == "StructProperty":
         del properties["custom_type"]
         del properties["skip_type"]
         writer.fstring(properties["struct_type"])
         writer.guid(properties["struct_id"])
         writer.optional_guid(properties.get("id", None))
-        writer.write(properties['value'])
-        return len(properties['value'])
+        writer.write(properties["value"])
+        return len(properties["value"])
     else:
-        raise Exception(f"Expected ArrayProperty or MapProperty or StructProperty, got {property_type}")
+        raise Exception(
+            f"Expected ArrayProperty or MapProperty or StructProperty, got {property_type}"
+        )
 
 def load_skiped_decode(wsd, skip_paths):
     if isinstance(skip_paths, str):
