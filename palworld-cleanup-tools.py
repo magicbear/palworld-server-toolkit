@@ -783,8 +783,10 @@ def search_values(dicts, key, level=""):
     return isFound
 
 
-def ShowPlayers(data_source=wsd):
-    global playerMapping, instanceMapping
+def ShowPlayers(data_source=None):
+    global playerMapping, instanceMapping, wsd
+    if data_source is None:
+        data_source = wsd
     if data_source == wsd:
         playerMapping = {}
         instanceMapping = {}
