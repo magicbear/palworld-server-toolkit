@@ -40,7 +40,9 @@
 
 	- `ShowPlayers()` - 列出玩家
 	- `FixMissing()` - 删除未引用玩家数据
-	- `ShowGuild(fix_capture=False)` - 列出公会及成员列表 `fix_capture=True`为删除多余捕捉日志
+	- `FixCaptureLog()` - 删除多余捕捉日志
+	- `FixDuplicateUser()` - 删除多余用户数据
+	- `ShowGuild()` - 列出公会及成员列表
 	- `RenamePlayer(uid,new_name)` - 修改玩家名字为 `new_name`
 	- `DeletePlayer(uid,InstanceId=None, dry_run=False)` - 删除玩家数据 `InstanceId: 删除指定InstanceId`
 	- `EditPlayer(uid)` - 快速指定玩家数据至变量`player`

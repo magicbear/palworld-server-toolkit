@@ -44,7 +44,9 @@ This tools is for cleanup the unreference item, rename the player name, migrate 
 
 	- `ShowPlayers()` - List the Players
 	- `FixMissing()` - Remove missing player instance
-	- `ShowGuild(fix_capture=False)` - List the Guild and members
+	- `FixCaptureLog()` - Remove invalid caputre log in guild
+	- `FixDuplicateUser()` - Remove duplicated user data
+	- `ShowGuild()` - List the Guild and members
 	- `RenamePlayer(uid,new_name)` - Rename player to new_name
 	- `DeletePlayer(uid,InstanceId=None, dry_run=False)` - Wipe player data from save InstanceId: delete specified InstanceId
 	- `EditPlayer(uid)` - Allocate player base meta data to variable `player`

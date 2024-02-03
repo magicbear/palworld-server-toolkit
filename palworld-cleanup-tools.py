@@ -23,6 +23,7 @@ gvas_file = None
 backup_gvas_file = None
 backup_wsd = None
 playerMapping = None
+guildInstanceMapping = None
 instanceMapping = None
 output_path = None
 args = None
@@ -51,6 +52,11 @@ def main():
         "--fix-capture",
         action="store_true",
         help="Fix the too many capture logs (not need after 1.4.0)",
+    )
+    parser.add_argument(
+        "--fix-duplicate",
+        action="store_true",
+        help="Fix duplicate user data",
     )
     parser.add_argument(
         "--output",
@@ -84,11 +90,15 @@ def main():
     if args.statistics:
         Statistics()
 
+    ShowGuild()
     ShowPlayers()
+
     if args.fix_missing:
         FixMissing()
-
-    ShowGuild(fix_capture=args.fix_capture)
+    if args.fix_capture:
+        FixCaptureLog()
+    if args.fix_duplicate:
+        FixDuplicateUser()
 
     if not args.output:
         output_path = args.filename.replace(".sav", "_fixed.sav")
@@ -98,8 +108,10 @@ def main():
     if sys.flags.interactive:
         print("Go To Interactive Mode (no auto save), we have follow command:")
         print("  ShowPlayers()                              - List the Players")
-        print("  FixMissing()                               - Remove missing player instance")
-        print("  ShowGuild(fix_capture=False)               - List the Guild and members")
+        print("  FixMissing(dry_run=False)                  - Remove missing player instance")
+        print("  FixCaptureLog(dry_run=False)               - Remove unused capture log")
+        print("  FixDuplicateUser(dry_run=False)            - Remove duplicate player instance")
+        print("  ShowGuild()                                - List the Guild and members")
         print("  RenamePlayer(uid,new_name)                 - Rename player to new_name")
         print("  DeletePlayer(uid,InstanceId=None,          ")
         print("               dry_run=False)                - Wipe player data from save")
@@ -629,8 +641,9 @@ def ShowPlayers():
                     playerMeta[player_k] = playerParams[player_k]['value']
                 playerMeta['InstanceId'] = item['key']['InstanceId']['value']
                 playerMapping[str(item['key']['PlayerUId']['value'])] = playerMeta
-            print("PlayerUId \033[32m %s \033[0m [InstanceID \033[33m %s \033[0m] -> Level %2d  %s" % (
-                item['key']['PlayerUId']['value'], playerMeta['InstanceId'],
+            print("PlayerUId \033[32m %s \033[0m [InstanceID %s %s \033[0m] -> Level %2d  %s" % (
+                item['key']['PlayerUId']['value'], "\033[33m" if str(item['key']['PlayerUId']['value']) in guildInstanceMapping and
+                str(playerMeta['InstanceId']) == guildInstanceMapping[str(item['key']['PlayerUId']['value'])] else "\033[31m", playerMeta['InstanceId'],
                 playerMeta['Level'] if 'Level' in playerMeta else -1, playerMeta['NickName']))
         else:
             # Non Player
@@ -659,6 +672,45 @@ def FixMissing(dry_run=False):
             wsd['CharacterSaveParameterMap']['value'].remove(item)
 
 
+def FixCaptureLog(dry_run=False):
+    for group_data in wsd['GroupSaveDataMap']['value']:
+        if str(group_data['value']['GroupType']['value']['value']) == "EPalGroupType::Guild":
+            item = group_data['value']['RawData']['value']
+            removeItems = []
+            for ind_char in item['individual_character_handle_ids']:
+                if str(ind_char['instance_id']) not in instanceMapping:
+                    print("    \033[31mInvalid Character %s\033[0m" % (str(ind_char['instance_id'])))
+                    removeItems.append(ind_char)
+            print("After remove character count: %d" % (len(
+                group_data['value']['RawData']['value']['individual_character_handle_ids']) - len(removeItems)))
+            if dry_run:
+                for rm_item in removeItems:
+                    item['individual_character_handle_ids'].remove(rm_item)
+
+
+def FixDuplicateUser(dry_run=False):
+    # Remove Unused in CharacterSaveParameterMap
+    removeItems = []
+    for item in wsd['CharacterSaveParameterMap']['value']:
+        if "00000000-0000-0000-0000-000000000000" != str(item['key']['PlayerUId']['value']):
+            player_meta = item['value']['RawData']['value']['object']['SaveParameter']['value']
+            if str(item['key']['PlayerUId']['value']) not in guildInstanceMapping:
+                print(
+                    "\033[31mInvalid player on CharacterSaveParameterMap\033[0m  PlayerUId: %s  InstanceID: %s  Nick: %s" % (
+                        str(item['key']['PlayerUId']['value']), str(item['key']['InstanceId']['value']),
+                    str(player_meta['NickName']['value'])))
+                removeItems.append(item)
+            elif str(item['key']['InstanceId']['value']) != guildInstanceMapping[str(item['key']['PlayerUId']['value'])]:
+                print(
+                    "\033[31mDuplicate player on CharacterSaveParameterMap\033[0m  PlayerUId: %s  InstanceID: %s  Nick: %s" % (
+                        str(item['key']['PlayerUId']['value']), str(item['key']['InstanceId']['value']),
+                    str(player_meta['NickName']['value'])))
+                removeItems.append(item)
+    if not dry_run:
+        for item in removeItems:
+            wsd['CharacterSaveParameterMap']['value'].remove(item)
+
+
 def TickToHuman(tick):
     seconds = (wsd['GameTimeSaveData']['value']['RealDateTimeTicks']['value'] - tick) / 1e7
     s = ""
@@ -680,7 +732,9 @@ def TickToLocal(tick):
     return t.strftime("%Y-%m-%d %H:%M:%S")
 
 
-def ShowGuild(fix_capture=False):
+def ShowGuild():
+    global guildInstanceMapping
+    guildInstanceMapping = {}
     # Remove Unused in GroupSaveDataMap
     for group_data in wsd['GroupSaveDataMap']['value']:
         # print("%s %s" % (group_data['key'], group_data['value']['GroupType']['value']['value']))
@@ -699,25 +753,8 @@ def ShowGuild(fix_capture=False):
                     player['player_info']['player_name'], str(player['player_uid']),
                     TickToLocal(player['player_info']['last_online_real_time']),
                     TickToHuman(player['player_info']['last_online_real_time'])))
-            removeItems = []
             for ind_char in mapObjectMeta['individual_character_handle_ids']:
-                if str(ind_char['instance_id']) in instanceMapping:
-                    character = \
-                        instanceMapping[str(ind_char['instance_id'])]['value']['RawData']['value']['object'][
-                            'SaveParameter'][
-                            'value']
-                    # if 'NickName' in character:
-                    #     print("    Player %s -> %s" % (str(ind_char['instance_id']), character['NickName']['value']))
-                    # else:
-                    #     print("    Character %s -> %s" % (str(ind_char['instance_id']), character['CharacterID']['value']))
-                else:
-                    print("    \033[31mInvalid Character %s\033[0m" % (str(ind_char['instance_id'])))
-                    removeItems.append(ind_char)
-            print("After remove character count: %d" % (len(
-                group_data['value']['RawData']['value']['individual_character_handle_ids']) - len(removeItems)))
-            if fix_capture:
-                for rmitem in removeItems:
-                    item['individual_character_handle_ids'].remove(rmitem)
+                guildInstanceMapping[str(ind_char['guid'])] = str(ind_char['instance_id'])
             print()
         # elif str(group_data['value']['GroupType']['value']['value']) == "EPalGroupType::Neutral":
         #     item = group_data['value']['RawData']['value']
