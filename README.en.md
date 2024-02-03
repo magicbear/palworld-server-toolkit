@@ -65,9 +65,15 @@ This tools is for cleanup the unreference item, rename the player name, migrate 
 
 ### Operate Sample
 
+> [!IMPORTANT]
+> 
+> ALL OPERATE REQUIRE to STOP SERVER
+> 
+> Finally is replace `Level_fixed.sav` to `Level.sav` and start Palworld Server.
+
+
 - Migrate difference server to single server sample:
 
-	1. stop the server
 	1. Copy old server `Level.sav` to `SaveGames/0/<Server ID>/Old-Level.sav`
 	1. Copy old server `Players/xxxxxxxx000000000000000000000000.sav` to `SaveGames/0/<Server ID>/Players/xxxxxxxx000000000000000000000000.sav`
 	1. Use interactive mode `python -i palworld-cleanup-tools.py Level.sav`
@@ -75,11 +81,10 @@ This tools is for cleanup the unreference item, rename the player name, migrate 
 	1. Next step `CopyPlayer("xxxxxxxx-0000-0000-0000-000000000000", "xxxxxxxx-0000-0000-0000-000000000000", backup_wsd)` for every require to migrate player
 		> :warning: UUID can be the same, the user data will be copy from `backup_wsd`
 	1. Next step `Save()`
-	1. Finally, remove all the old `xxxxxxxx000000000000000000000000.sav` and `Old-Level.sav`, rename `Level_fixed.sav` to `Level.sav` and start the Palworld Server.
+	1. remove all the old `xxxxxxxx000000000000000000000000.sav`
 
 - Migrate Local save to server:
 
-	1. stop the server
 	1. Copy local save `Level.sav` to `SaveGames/0/<Server ID>/Old-Level.sav`
 	> For co-op saves, they are usually at
 	C:\Users\\[username]\\AppData\\Local\\Pal\\Saved\\SaveGames\\[SteamID]\\[World Folder]
@@ -89,15 +94,12 @@ This tools is for cleanup the unreference item, rename the player name, migrate 
 	1. Use following command `OpenBackup("Old-Level.sav")`
 	1. Next step `CopyPlayer("00000000-0000-0000-0000-000000000001", "xxxxxxxx-0000-0000-0000-000000000000", backup_wsd)`
 	1. Next step `Save()`
-	1. Finally, remove `00000000000000000000000000000001.sav` and `Old-Level.sav`, rename `Level_fixed.sav` to `Level.sav` and start the Palworld Server.
-
+	1. remove `00000000000000000000000000000001.sav` and `Old-Level.sav`
 
 - Migrate User
 
-	1. stop the server
 	1. Use interactive mode `python -i palworld-cleanup-tools.py Level.sav`	1. Use following command `MigratePlayer("xxxxxxxx-0000-0000-0000-000000000000","yyyyyyyy-0000-0000-0000-000000000000")`
 	1. Next step `Save()`
-	1. Finally, rename `Level_fixed.sav` to `Level.sav` and start the Palworld Server.
 
 
 ---
