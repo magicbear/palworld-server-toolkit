@@ -20,6 +20,8 @@
 
 2. 使用 `git submodule update --init --recursive` 或 下载 [https://github.com/cheahjs/palworld-save-tools](https://github.com/cheahjs/palworld-save-tools) 并放置 `palworld-save-tools` 内容至 `save_tools` 目录下
 
+3. Windows 用户建议使用 `Windows Terminal` 取代 `cmd`，否则不显示色彩
+
 ---
 ## list.py
 用于列出服务器中的玩家名字，PlayerUId，Steam ID

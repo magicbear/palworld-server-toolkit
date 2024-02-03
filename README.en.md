@@ -20,6 +20,8 @@ Tools for Palworld servers
 
 2. Use `git submodule update --init --recursive` or Download [https://github.com/cheahjs/palworld-save-tools](https://github.com/cheahjs/palworld-save-tools) and put `palworld-save-tools` contents to `save_tools` directory
 
+3. Windows User present use `Windows Terminal` instance of `cmd` for color
+
 ---
 
 ## list.py
