@@ -30,6 +30,126 @@ args = None
 player = None
 filetime = None
 
+def skip_decode(
+    reader: FArchiveReader, type_name: str, size: int, path: str
+) -> dict[str, Any]:
+    if type_name == "ArrayProperty":
+        array_type = reader.fstring()
+        value = {
+            "skip_type": type_name,
+            "array_type": array_type,
+            "id": reader.optional_guid(),
+            "value": reader.read(size),
+        }
+    elif type_name == "MapProperty":
+        key_type = reader.fstring()
+        value_type = reader.fstring()
+        _id = reader.optional_guid()
+        value = {
+            "skip_type": type_name,
+            "key_type": key_type,
+            "value_type": value_type,
+            "id": _id,
+            "value": reader.read(size),
+        }
+    elif type_name == "StructProperty":
+        value = {
+            "skip_type": type_name,
+            "struct_type": reader.fstring(),
+            "struct_id": reader.guid(),
+            "id": reader.optional_guid(),
+            "value": reader.read(size),
+        }
+    else:
+        raise Exception(f"Expected ArrayProperty or StructProperty, got {type_name} in {path}")
+    return value
+
+def skip_encode(
+    writer: FArchiveWriter, property_type: str, properties: dict[str, Any]
+) -> int:
+    if property_type == "ArrayProperty":
+        del properties["custom_type"]
+        del properties["skip_type"]
+        writer.fstring(properties["array_type"])
+        writer.optional_guid(properties.get("id", None))
+        writer.write(properties['value'])
+        return len(properties['value'])
+    elif property_type == "MapProperty":
+        del properties["custom_type"]
+        del properties["skip_type"]
+        writer.fstring(properties["key_type"])
+        writer.fstring(properties["value_type"])
+        writer.optional_guid(properties.get("id", None))
+        writer.write(properties['value'])
+        return len(properties['value'])
+    elif property_type == "StructProperty":
+        del properties["custom_type"]
+        del properties["skip_type"]
+        writer.fstring(properties["struct_type"])
+        writer.guid(properties["struct_id"])
+        writer.optional_guid(properties.get("id", None))
+        writer.write(properties['value'])
+        return len(properties['value'])
+    else:
+        raise Exception(f"Expected ArrayProperty or StructProperty, got {property_type} in {path}")
+
+def load_skiped_decode(wsd, skip_paths):
+    if isinstance(skip_paths, str):
+        skip_paths = [skip_paths]
+    for skip_path in skip_paths:
+        properties = wsd[skip_path]
+        if "skip_type" not in properties:
+            return
+
+        print("Parsing worldSaveData.%s..." % skip_path, end="", flush=True)
+        with FArchiveReader(
+                properties['value'], PALWORLD_TYPE_HINTS, PALWORLD_CUSTOM_PROPERTIES
+            ) as reader:
+            if properties["skip_type"] == "ArrayProperty":
+                properties['value'] = reader.array_property(properties["array_type"], len(properties['value']) - 4, ".worldSaveData.%s" % skip_path)
+            elif properties["skip_type"] == "StructProperty":
+                properties['value'] = reader.struct_value(properties['struct_type'], ".worldSaveData.%s" % skip_path)
+            elif properties["skip_type"] == "MapProperty":
+                reader.u32()
+                count = reader.u32()
+                path = ".worldSaveData.%s" % skip_path
+                key_path = path + ".Key"
+                key_type = properties['key_type']
+                value_type = properties['value_type']
+                if key_type == "StructProperty":
+                    key_struct_type = reader.get_type_or(key_path, "Guid")
+                else:
+                    key_struct_type = None
+                value_path = path + ".Value"
+                if value_type == "StructProperty":
+                    value_struct_type = reader.get_type_or(value_path, "StructProperty")
+                else:
+                    value_struct_type = None
+                values: list[dict[str, Any]] = []
+                for _ in range(count):
+                    key = reader.prop_value(key_type, key_struct_type, key_path)
+                    value = reader.prop_value(value_type, value_struct_type, value_path)
+                    values.append(
+                        {
+                            "key": key,
+                            "value": value,
+                        }
+                    )
+                properties["key_struct_type"] = key_struct_type
+                properties["value_struct_type"] = value_struct_type
+                properties["value"] = values
+            del properties['custom_type']
+            del properties["skip_type"]
+        del PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.%s" % skip_path]
+        print("Done")
+
+PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.MapObjectSaveData"] = (skip_decode, skip_encode)
+PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.FoliageGridSaveDataMap"] = (skip_decode, skip_encode)
+PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.MapObjectSpawnerInStageSaveData"] = (skip_decode, skip_encode)
+PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.ItemContainerSaveData"] = (skip_decode, skip_encode)
+PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.DynamicItemSaveData"] = (skip_decode, skip_encode)
+PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.CharacterContainerSaveData"] = (skip_decode, skip_encode)
+
 def main():
     global wsd, output_file, gvas_file, playerMapping, instanceMapping, output_path, args, filetime
 
@@ -91,6 +211,11 @@ def main():
     if args.statistics:
         Statistics()
 
+    if args.output is None:
+        output_path = args.filename.replace(".sav", "_fixed.sav")
+    else:
+        output_path = args.output
+
     ShowGuild()
     ShowPlayers()
 
@@ -100,11 +225,6 @@ def main():
         FixCaptureLog()
     if args.fix_duplicate:
         FixDuplicateUser()
-
-    if not args.output:
-        output_path = args.filename.replace(".sav", "_fixed.sav")
-    else:
-        output_path = args.output
 
     if sys.flags.interactive:
         print("Go To Interactive Mode (no auto save), we have follow command:")
@@ -192,6 +312,7 @@ def to_storage_uuid(uuid_str):
     return UUID.from_str(str(uuid_str))
 
 def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
+    load_skiped_decode(['ItemContainerSaveData', 'CharacterContainerSaveData'])
     player_sav_file = os.path.dirname(os.path.abspath(args.filename)) + "/Players/" + player_uid.upper().replace("-",
                                                                                                                  "") + ".sav"
     new_player_sav_file = os.path.dirname(
@@ -388,11 +509,16 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
             f.write(sav_file)
 
 def MigratePlayer(player_uid, new_player_uid):
+    load_skiped_decode(wsd, ['MapObjectSaveData'])
+
     player_sav_file = os.path.dirname(os.path.abspath(args.filename)) + "/Players/" + player_uid.upper().replace("-","") + ".sav"
     new_player_sav_file = os.path.dirname(os.path.abspath(args.filename)) + "/Players/" + new_player_uid.upper().replace("-","") + ".sav"
     DeletePlayer(new_player_uid)
-    if not os.path.exists(player_sav_file) or not os.path.exists(new_player_sav_file):
+    if not os.path.exists(player_sav_file):
         print("\033[33mWarning: Player Sav file Not exists: %s\033[0m" % player_sav_file)
+        return
+    elif not os.path.exists(new_player_sav_file):
+        print("\033[33mWarning: Player Sav file Not exists: %s\033[0m" % new_player_sav_file)
         return
     else:
         with open(player_sav_file, "rb") as f:
@@ -463,6 +589,9 @@ def MigratePlayer(player_uid, new_player_uid):
     print("Finish to migrate player from Save, please delete this file manually: %s" % player_sav_file)
 
 def DeletePlayer(player_uid, InstanceId = None, dry_run=False):
+    load_skiped_decode(wsd, ['ItemContainerSaveData', 'CharacterContainerSaveData'])
+    if isinstance(player_uid, int):
+        player_uid = str(uuid.UUID("%08x-0000-0000-0000-000000000000" % player_uid))
     player_sav_file = os.path.dirname(os.path.abspath(args.filename)) + "/Players/" + player_uid.upper().replace("-",
                                                                                                                  "") + ".sav"
     player_container_ids = []
@@ -849,6 +978,7 @@ def Save():
     with open(output_path, "wb") as f:
         f.write(sav_file)
     print("Done")
+    print("File saved to %s" % output_path)
 
     sys.exit(0)
 
