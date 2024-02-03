@@ -317,7 +317,7 @@ def to_storage_uuid(uuid_str):
     return UUID.from_str(str(uuid_str))
 
 def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
-    load_skiped_decode(['ItemContainerSaveData', 'CharacterContainerSaveData'])
+    load_skiped_decode(wsd, ['ItemContainerSaveData', 'CharacterContainerSaveData'])
     player_sav_file = os.path.dirname(os.path.abspath(args.filename)) + "/Players/" + player_uid.upper().replace("-",
                                                                                                                  "") + ".sav"
     new_player_sav_file = os.path.dirname(
