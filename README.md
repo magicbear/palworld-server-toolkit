@@ -18,7 +18,7 @@
 1. Python 3.9或以上版本.
     - Windows用户: 可从 [Microsoft Store下载Python 3.12](https://apps.microsoft.com/detail/9NCVDN91XZQP) or [python.org](https://www.python.org/)
 
-2. 下载 [https://github.com/cheahjs/palworld-save-tools](https://github.com/cheahjs/palworld-save-tools) 并放置 `lib` 在目录下
+2. 下载 [https://github.com/cheahjs/palworld-save-tools](https://github.com/cheahjs/palworld-save-tools) 并放置其中的 `lib` 在本工具目录下
 
 ---
 ## list.py

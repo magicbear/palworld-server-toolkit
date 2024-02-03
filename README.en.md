@@ -18,7 +18,7 @@ Tools for Palworld servers
 1. Python 3.9 or newer.
     - Windows users: You can install [Python 3.12 from the Microsoft Store](https://apps.microsoft.com/detail/9NCVDN91XZQP) or from [python.org](https://www.python.org/)
 
-2. Download [https://github.com/cheahjs/palworld-save-tools](https://github.com/cheahjs/palworld-save-tools) and put `lib` on the same directory
+2. Download [https://github.com/cheahjs/palworld-save-tools](https://github.com/cheahjs/palworld-save-tools) and put `lib` directory on the same directory
 
 ---
 
