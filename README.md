@@ -53,25 +53,33 @@
 	- `CopyPlayer(old_uid,new_uid, backup_wsd)` - 复制玩家数据 `backup_wsd` 为OpenBackup备份文件 `wsd`为当前主文件
 	- `Save()` - 保存修改并退出
 
-
-- 跨服务器迁移玩家数据示例
-
-	1. 需迁移的所有玩家登录新服务器创建新用户，然后退出服务端
-	1. 复制旧服务器 `Level.sav` 至 `SaveGames/0/<Server ID>/Old-Level.sav`
-	1. 复制旧服务器所有需迁移玩家 `Players/xxxxxxxx000000000000000000000000.sav` 至 `SaveGames/0/<Server ID>/Players/xxxxxxxx000000000000000000000001.sav`
-		> :warning: 注意最后数字，如果旧服务器与新服务器UUID不一致可以不修改数字
-	1. 使用编辑模式运行 `python -i palworld-cleanup-tools.py Level.sav`
-	1. 使用以下命令 `OpenBackup("Old-Level.sav")`
-	1. 下一步对所有需迁移玩家执行 `CopyPlayer("xxxxxxxx-0000-0000-0000-000000000001", "xxxxxxxx-0000-0000-0000-000000000000", backup_wsd)`
-	1. 然后保存 `Save()`
-	1. 最后删除旧 `xxxxxxxx000000000000000000000001.sav`, 把 `Level_fixed.sav` 替换至 `Level.sav` 并启动服务端
-
-
-
 ### 功能截图
 
 ![](./docs/img/ShowPlayer.png)
 ![](./docs/img/ShowGuild.png)
+
+### 操作示例
+- 跨服务器迁移玩家数据示例
+
+	1. 退出服务端
+	1. 复制旧服务器 `Level.sav` 至 `SaveGames/0/<Server ID>/Old-Level.sav`
+	1. 复制旧服务器所有需迁移玩家 `Players/xxxxxxxx000000000000000000000000.sav` 至 `SaveGames/0/<Server ID>/Players/xxxxxxxx000000000000000000000000.sav`
+	1. 使用编辑模式运行 `python -i palworld-cleanup-tools.py Level.sav`
+	1. 使用以下命令 `OpenBackup("Old-Level.sav")`
+	1. 下一步对所有需迁移玩家执行 `CopyPlayer("xxxxxxxx-0000-0000-0000-000000000000", "xxxxxxxx-0000-0000-0000-000000000000", backup_wsd)`
+		> :warning: UUID 可相同，数据自`backup_wsd`拷贝
+	1. 然后保存 `Save()`
+	1. 最后删除旧 `xxxxxxxx000000000000000000000001.sav`, 把 `Level_fixed.sav` 替换至 `Level.sav` 并启动服务端
+
+
+- 迁移用户示例
+
+	1. 退出服务端
+	1. 使用编辑模式运行 `python -i palworld-cleanup-tools.py Level.sav`
+	1. 使用以下命令 `MigratePlayer("xxxxxxxx-0000-0000-0000-000000000000","yyyyyyyy-0000-0000-0000-000000000000")`
+	1. 然后保存 `Save()`
+	1. 最后把 `Level_fixed.sav` 替换至 `Level.sav` 并启动服务端
+
 
 ---
 

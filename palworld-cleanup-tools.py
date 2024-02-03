@@ -7,6 +7,7 @@ from operator import itemgetter, attrgetter
 import json
 import os
 import sys
+import threading
 
 module_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(module_dir, "save_tools"))
@@ -102,6 +103,21 @@ def skip_encode(
             f"Expected ArrayProperty or MapProperty or StructProperty, got {property_type}"
         )
 
+class skip_loading_progress(threading.Thread):
+    def __init__(self, reader, size):
+        super().__init__()
+        self.reader = reader
+        self.size = size
+
+    def run(self) -> None:
+        try:
+            while not self.reader.eof():
+                print("%3.0f%%" % (100 * self.reader.data.tell() / self.size), end="\b\b\b\b", flush=True)
+                time.sleep(0.02)
+        except ValueError:
+            pass
+
+
 def load_skiped_decode(wsd, skip_paths):
     if isinstance(skip_paths, str):
         skip_paths = [skip_paths]
@@ -114,6 +130,7 @@ def load_skiped_decode(wsd, skip_paths):
         with FArchiveReader(
                 properties['value'], PALWORLD_TYPE_HINTS, PALWORLD_CUSTOM_PROPERTIES
             ) as reader:
+            skip_loading_progress(reader, len(properties['value'])).start()
             if properties["skip_type"] == "ArrayProperty":
                 properties['value'] = reader.array_property(properties["array_type"], len(properties['value']) - 4, ".worldSaveData.%s" % skip_path)
             elif properties["skip_type"] == "StructProperty":
@@ -328,25 +345,20 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
                                                                                                                  "") + ".sav"
     new_player_sav_file = os.path.dirname(
         os.path.abspath(args.filename)) + "/Players/" + new_player_uid.upper().replace("-", "") + ".sav"
-    playerInstanceId = None
     instances = []
     container_mapping = {}
-    if not os.path.exists(player_sav_file) or not os.path.exists(new_player_sav_file):
+    if not os.path.exists(player_sav_file):
         print("\033[33mWarning: Player Sav file Not exists: %s\033[0m" % player_sav_file)
         return
     else:
         with open(player_sav_file, "rb") as f:
             raw_gvas, _ = decompress_sav_to_gvas(f.read())
             player_gvas_file = GvasFile.read(raw_gvas, PALWORLD_TYPE_HINTS, PALWORLD_CUSTOM_PROPERTIES)
-        with open(new_player_sav_file, "rb") as f:
-            raw_gvas, _ = decompress_sav_to_gvas(f.read())
-            new_player_gvas_file = GvasFile.read(raw_gvas, PALWORLD_TYPE_HINTS, PALWORLD_CUSTOM_PROPERTIES)
-        new_player_gvas = new_player_gvas_file.properties['SaveData']['value']
         player_gvas = player_gvas_file.properties['SaveData']['value']
         player_uid = str(player_gvas['PlayerUId']['value'])
-        player_gvas['PlayerUId']['value'] = new_player_gvas['PlayerUId']['value']
-        player_gvas['IndividualId']['value']['PlayerUId']['value'] = new_player_gvas['PlayerUId']['value']
-        player_gvas['IndividualId']['value']['InstanceId']['value'] = new_player_gvas['IndividualId']['value']['InstanceId']['value']
+        player_gvas['PlayerUId']['value'] = to_storage_uuid(uuid.UUID(new_player_uid))
+        player_gvas['IndividualId']['value']['PlayerUId']['value'] = player_gvas['PlayerUId']['value']
+        player_gvas['IndividualId']['value']['InstanceId']['value'] = to_storage_uuid(uuid.uuid4())
     # Clone Item from CharacterContainerSaveData
     for idx_key in ['OtomoCharacterContainerId', 'PalStorageContainerId']:
         for container in old_wsd['CharacterContainerSaveData']['value']:
@@ -459,14 +471,15 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
         for group_data in old_wsd['GroupSaveDataMap']['value']:
             if str(group_data['value']['GroupType']['value']['value']) == "EPalGroupType::Guild":
                 item = group_data['value']['RawData']['value']
-                for player in item['players']:
-                    if str(player['player_uid']) == player_uid:
+                for old_gplayer in item['players']:
+                    if str(old_gplayer['player_uid']) == player_uid:
                         # Check group is exists
                         player_group = None
                         for chk_group_data in wsd['GroupSaveDataMap']['value']:
                             if str(group_data['key']) == str(chk_group_data['key']):
                                 player_group = chk_group_data
                                 break
+                        # Same Guild is not exists in local save
                         if player_group is None:
                             print(
                                 "\033[32mCopy Guild\033[0m  \033[93m%s\033[0m   [\033[92m%s\033[0m] Last Online: %d" % (
@@ -484,12 +497,12 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
                                     break
                             n_item['individual_character_handle_ids'] = instances
                         else:
+                            # Same Guild already has a group on local
+                            group_info = group_data['value']['RawData']['value']
                             print(
-                                "\033[32mCopy User from Guild\033[0m  \033[93m%s\033[0m   [\033[92m%s\033[0m] Last Online: %d" % (
-                                g_player['player_info']['player_name'], str(g_player['player_uid']),
-                                g_player['player_info']['last_online_real_time']))
-                            copy_user_params['value']['RawData']['value']['group_id'] = \
-                            group_data['value']['RawData']['value']['group_id']
+                                "\033[32mGuild \033[93m %s \033[0m exists\033[0m  Group ID \033[92m %s \033[0m   " % (
+                                group_info['guild_name'], group_info['group_id']))
+                            copy_user_params['value']['RawData']['value']['group_id'] = group_info['group_id']
                             n_item = player_group['value']['RawData']['value']
                             is_player_found = False
                             for n_player_info in n_item['players']:
@@ -498,12 +511,14 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
                                     is_player_found = True
                                     break
                             if not is_player_found:
-                                print("\033[32mAdd User to Guild\033[0m  \033[93m%s\033[0m   [\033[92m%s\033[0m] Last Online: %d" % (
-                                g_player['player_info']['player_name'], str(g_player['player_uid']),
-                                g_player['player_info']['last_online_real_time']))
-                                n_player_info['players'].append({
+                                print("\033[32mAdd User to Guild\033[0m  \033[93m%s\033[0m" % (
+                                copy_user_params['value']['RawData']['value']['object']['SaveParameter']['value']['NickName']['value']))
+                                n_item['players'].append({
                                     'player_uid': to_storage_uuid(uuid.UUID(new_player_uid)),
-                                    'player_info': copy.deepcopy(player_info['player_info'])
+                                    'player_info': {
+                                        'last_online_real_time': 0,
+                                        'player_name': copy_user_params['value']['RawData']['value']['object']['SaveParameter']['value']['NickName']['value']
+                                    }
                                 })
                             n_item['individual_character_handle_ids'] = instances
                         break
@@ -528,26 +543,15 @@ def MigratePlayer(player_uid, new_player_uid):
     if not os.path.exists(player_sav_file):
         print("\033[33mWarning: Player Sav file Not exists: %s\033[0m" % player_sav_file)
         return
-    elif not os.path.exists(new_player_sav_file):
-        print("\033[33mWarning: Player Sav file Not exists: %s\033[0m" % new_player_sav_file)
-        return
     else:
         with open(player_sav_file, "rb") as f:
             raw_gvas, _ = decompress_sav_to_gvas(f.read())
             player_gvas_file = GvasFile.read(raw_gvas, PALWORLD_TYPE_HINTS, PALWORLD_CUSTOM_PROPERTIES)
         player_gvas = player_gvas_file.properties['SaveData']['value']
-        with open(new_player_sav_file, "rb") as f:
-            raw_gvas, _ = decompress_sav_to_gvas(f.read())
-            new_player_gvas_file = GvasFile.read(raw_gvas, PALWORLD_TYPE_HINTS, PALWORLD_CUSTOM_PROPERTIES)
-        new_player_gvas = new_player_gvas_file.properties['SaveData']['value']
-        # Copy Instance ID From new player
         player_uid = player_gvas['PlayerUId']['value']
-        player_gvas['PlayerUId']['value'] = new_player_gvas['PlayerUId']['value']
-        player_gvas['IndividualId']['value']['PlayerUId']['value'] = new_player_gvas['PlayerUId']['value']
-        player_gvas['IndividualId']['value']['InstanceId']['value'] = new_player_gvas['IndividualId']['value']['InstanceId']['value']
-        for idx_key in ['CommonContainerId', 'DropSlotContainerId', 'EssentialContainerId', 'FoodEquipContainerId',
-                        'PlayerEquipArmorContainerId', 'WeaponLoadOutContainerId']:
-           new_player_gvas['inventoryInfo']['value'][idx_key]['value']['ID']['value'] = player_gvas['inventoryInfo']['value'][idx_key]['value']['ID']['value']
+        player_gvas['PlayerUId']['value'] = to_storage_uuid(uuid.UUID(new_player_uid))
+        player_gvas['IndividualId']['value']['PlayerUId']['value'] = player_gvas['PlayerUId']['value']
+        player_gvas['IndividualId']['value']['InstanceId']['value'] = to_storage_uuid(uuid.uuid4())
         with open(new_player_sav_file, "wb") as f:
             print("Saving new player sav %s" % new_player_sav_file)
             if "Pal.PalWorldSaveGame" in player_gvas_file.header.save_game_class_name or "Pal.PalLocalWorldSaveGame" in player_gvas_file.header.save_game_class_name:
@@ -559,8 +563,8 @@ def MigratePlayer(player_uid, new_player_uid):
     for item in wsd['CharacterSaveParameterMap']['value']:
         player = item['value']['RawData']['value']['object']['SaveParameter']['value']
         if str(item['key']['PlayerUId']['value']) == str(player_uid):
-            item['key']['PlayerUId']['value'] = new_player_gvas['PlayerUId']['value']
-            item['key']['InstanceId']['value'] = new_player_gvas['IndividualId']['value']['InstanceId']['value']
+            item['key']['PlayerUId']['value'] = player_gvas['PlayerUId']['value']
+            item['key']['InstanceId']['value'] = player_gvas['IndividualId']['value']['InstanceId']['value']
             print(
                 "\033[32mMigrate User\033[0m  UUID: %s  Level: %d  CharacterID: \033[93m%s\033[0m" % (
                     str(item['key']['InstanceId']['value']), player['Level']['value'] if 'Level' in player else -1,
@@ -577,23 +581,30 @@ def MigratePlayer(player_uid, new_player_uid):
             item = group_data['value']['RawData']['value']
             for player in item['players']:
                 if str(player['player_uid']) == str(player_uid):
-                    player['player_uid'] = new_player_gvas['PlayerUId']['value']
+                    player['player_uid'] = player_gvas['PlayerUId']['value']
                     print(
                         "\033[32mMigrate User from Guild\033[0m  \033[93m%s\033[0m   [\033[92m%s\033[0m] Last Online: %d" % (
                             player['player_info']['player_name'], str(player['player_uid']),
                             player['player_info']['last_online_real_time']))
+                    remove_handle_ids = []
+                    for ind_char in item['individual_character_handle_ids']:
+                        if str(ind_char['guid']) == str(player_uid):
+                            remove_handle_ids.append(ind_char)
+                            print("\033[31mDelete Guild Character InstanceID %s \033[0m" % str(ind_char['instance_id']))
+                    for remove_handle in remove_handle_ids:
+                        item['individual_character_handle_ids'].remove(remove_handle)
+                    item['individual_character_handle_ids'].append({
+                        'guid': player_gvas['PlayerUId']['value'],
+                        'instance_id': player_gvas['IndividualId']['value']['InstanceId']['value']
+                    })
+                    print("\033[32mAppend Guild Character InstanceID %s \033[0m" % (str(player_gvas['IndividualId']['value']['InstanceId']['value'])))
                     break
             if str(item['admin_player_uid']) == str(player_uid):
-                item['admin_player_uid'] =  new_player_gvas['PlayerUId']['value']
+                item['admin_player_uid'] =  player_gvas['PlayerUId']['value']
                 print("\033[32mMigrate Guild Admin \033[0m")
-            for ind_char in item['individual_character_handle_ids']:
-                if str(ind_char['guid']) == str(player_uid):
-                    ind_char['guid'] = new_player_gvas['PlayerUId']['value']
-                    ind_char['instance_id'] = new_player_gvas['IndividualId']['value']['InstanceId']['value']
-                    print("\033[32mMigrate Guild Character %s\033[0m" % (str(ind_char['instance_id'])))
     for map_data in wsd['MapObjectSaveData']['value']['values']:
         if str(map_data['Model']['value']['RawData']['value']['build_player_uid']) == str(player_uid):
-            map_data['Model']['value']['RawData']['value']['build_player_uid'] = new_player_gvas['PlayerUId']['value']
+            map_data['Model']['value']['RawData']['value']['build_player_uid'] = player_gvas['PlayerUId']['value']
             print(
                 "\033[32mMigrate Building\033[0m  \033[93m%s\033[0m" % (
                     str(map_data['MapObjectInstanceId']['value'])))
