@@ -42,6 +42,7 @@
 
 [Discord](https://discord.com/channels/1200798336916144188/1200803146407096341)
 
+
 ---
 
 ## palworld-player-list
@@ -164,3 +165,8 @@ This tools is for cleanup the unreference item, rename the player name, migrate 
 ## palworld-server-taskset
 Tools for set cpu affinity to CPU performance core (Linux only)
 
+---
+
+## Acknowledgements
+
+- [palworld-save-tools](https://github.com/cheahjs/palworld-save-tools) for providing save file parsing tool implementation

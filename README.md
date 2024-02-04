@@ -157,3 +157,9 @@ options:
 ## palworld-server-taskset
 
 把服务端绑定至CPU性能核 (Linux only)
+
+---
+
+# 感谢
+
+- [palworld-save-tools](https://github.com/cheahjs/palworld-save-tools) 提供了存档解析工具实现
