@@ -1,7 +1,7 @@
 # palworld-server-toolkit
 
 ### Tools for Palworld servers
-The world fastest PalWorld server save editor
+The world fastest PalWorld server save editor, parse Level.sav in 1.1s for JSON about 1.5GB, and for convert.py time spent in 1m40s.
 
 <p align="center">
    <a href="/README.md">简体中文</a> | <strong>English</strong>

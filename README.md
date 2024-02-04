@@ -1,7 +1,7 @@
 # palworld-server-toolkit
 
 ### 幻兽帕鲁服务端工具包
-世界上最高速的帕鲁服务器存档编辑器
+世界上最高速的帕鲁服务器存档编辑器, 1.1秒打开对应转换时间1分40秒的约1.5GB的JSON。
 
 <p align="center">
    <strong>简体中文</strong> | <a href="/README.en.md">English</a>
