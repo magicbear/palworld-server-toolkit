@@ -303,16 +303,16 @@ def build_gui():
     gui.title('PalWorld Save Editor')
     gui.geometry('640x400')
     #
-    font = TkFont.Font(family="得意黑, Courier New")
+    font = TkFont.Font(family="Courier New")
     gui.option_add('*TCombobox*Listbox.font', font)
     # window.resizable(False, False)
     f_src_player = tk.Frame()
-    tk.Label(master=f_src_player, text="Source Player").pack(side="left")
+    tk.Label(master=f_src_player, text="Source Player", font=font).pack(side="left")
     gui_src_player = ttk.Combobox(master=f_src_player, font=font, width=50)
     gui_src_player.pack(side="left")
     #
     f_target_player = tk.Frame()
-    tk.Label(master=f_target_player, text="Target Player").pack(side="left")
+    tk.Label(master=f_target_player, text="Target Player", font=font).pack(side="left")
     gui_taret_player = ttk.Combobox(master=f_target_player, font=font, width=50)
     gui_taret_player.pack(side="left")
     #
@@ -325,6 +325,8 @@ def build_gui():
         gui_taret_player['value'] = value_lists
     f_src_player.pack(anchor=W)
     f_target_player.pack(anchor=W)
+
+# build_gui()
 
 def LoadFile(filename):
     global filetime, gvas_file, wsd
@@ -620,7 +622,7 @@ def MigratePlayer(player_uid, new_player_uid):
     for item in wsd['CharacterSaveParameterMap']['value']:
         player = item['value']['RawData']['value']['object']['SaveParameter']['value']
         if str(item['key']['PlayerUId']['value']) == str(player_uid) and \
-                'IsPlayer' in player['value'] and player['value']['IsPlayer']['value']:
+                'IsPlayer' in player and player['IsPlayer']['value']:
             item['key']['PlayerUId']['value'] = player_gvas['PlayerUId']['value']
             item['key']['InstanceId']['value'] = player_gvas['IndividualId']['value']['InstanceId']['value']
             print(
