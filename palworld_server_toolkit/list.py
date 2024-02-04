@@ -2,13 +2,15 @@
 # Author: MagicBear
 # License: MIT License
 
-import glob, os, datetime, zlib, subprocess
+import glob, sys, os, datetime, zlib, subprocess
 from operator import itemgetter, attrgetter
-from rcon.source import Client
+
+module_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, module_dir)
+
+from .rcon.source import Client
 import argparse
 import json
-import os
-import sys
 from palworld_save_tools.gvas import GvasFile
 from palworld_save_tools.palsav import compress_gvas_to_sav, decompress_sav_to_gvas
 from palworld_save_tools.paltypes import PALWORLD_CUSTOM_PROPERTIES, PALWORLD_TYPE_HINTS
