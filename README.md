@@ -20,7 +20,7 @@
 1. Python 3.9或以上版本.
     - Windows用户: 可从 [Microsoft Store下载Python 3.12](https://apps.microsoft.com/detail/9NCVDN91XZQP) or [python.org](https://www.python.org/)
 
-2. 使用 `git submodule update --init --recursive` 或 下载 [https://github.com/cheahjs/palworld-save-tools](https://github.com/cheahjs/palworld-save-tools) 并放置 `palworld-save-tools` 内容至 `save_tools` 目录下
+2. 使用 `pip install palworld-save-tools` or `git submodule update --init --recursive` 或 下载 [https://github.com/cheahjs/palworld-save-tools](https://github.com/cheahjs/palworld-save-tools) 并放置 `palworld-save-tools` 内容至 `save_tools` 目录下
 
 3. Windows 用户建议使用 `Windows Terminal` 取代 `cmd`，否则不显示色彩
 
