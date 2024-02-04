@@ -9,6 +9,11 @@ import os
 import sys
 import threading
 
+import tkinter as tk
+from tkinter import ttk
+from tkinter import font as TkFont
+from tkinter.constants import *
+
 module_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(module_dir, "save_tools"))
 sys.path.insert(0, os.path.join(module_dir, "palworld-save-tools"))
@@ -35,6 +40,7 @@ output_path = None
 args = None
 player = None
 filetime = None
+gui = None
 
 def skip_decode(
     reader: FArchiveReader, type_name: str, size: int, path: str
@@ -179,7 +185,7 @@ SKP_PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.DynamicItemSaveData"] = (skip_dec
 SKP_PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.CharacterContainerSaveData"] = (skip_decode, skip_encode)
 
 def main():
-    global wsd, output_file, gvas_file, playerMapping, instanceMapping, output_path, args, filetime
+    global output_file, output_path, args, gui
 
     parser = argparse.ArgumentParser(
         prog="palworld-cleanup-tools",
@@ -211,6 +217,12 @@ def main():
         "-o",
         help="Output file (default: <filename>_fixed.sav)",
     )
+    parser.add_argument(
+        "--gui",
+        "-g",
+        action="store_true",
+        help="Open GUI",
+    )
 
     args = parser.parse_args()
 
@@ -222,19 +234,7 @@ def main():
         print(f"{args.filename} is not a file")
         exit(1)
 
-    print(f"Loading {args.filename}...")
-    filetime = os.stat(args.filename).st_mtime
-    with open(args.filename, "rb") as f:
-        # Read the file
-        data = f.read()
-        raw_gvas, _ = decompress_sav_to_gvas(data)
-
-        print(f"Parsing {args.filename}...", end="", flush=True)
-        start_time = time.time()
-        gvas_file = GvasFile.read(raw_gvas, PALWORLD_TYPE_HINTS, SKP_PALWORLD_CUSTOM_PROPERTIES)
-        print("Done in %.1fs." % (time.time() - start_time))
-
-    wsd = gvas_file.properties['worldSaveData']['value']
+    LoadFile(args.filename)
 
     if args.statistics:
         Statistics()
@@ -253,6 +253,9 @@ def main():
         FixCaptureLog()
     if args.fix_duplicate:
         FixDuplicateUser()
+
+    if args.gui:
+        build_gui()
 
     if sys.flags.interactive:
         print("Go To Interactive Mode (no auto save), we have follow command:")
@@ -284,9 +287,60 @@ def main():
         print("  search_values(wsd, '<value>')              - Locate the value in the structure")
         print("  PrettyPrint(value)                         - Use XML format to show the value")
         return
+    elif args.gui:
+        gui.mainloop()
+        return
 
     if args.fix_missing or args.fix_capture:
         Save()
+
+def build_gui():
+    global gui, gui_src_player, gui_taret_player
+    #
+    if gui is not None:
+        gui.destroy()
+    gui = tk.Tk()
+    gui.title('PalWorld Save Editor')
+    gui.geometry('640x400')
+    #
+    font = TkFont.Font(family="得意黑, Courier New")
+    gui.option_add('*TCombobox*Listbox.font', font)
+    # window.resizable(False, False)
+    f_src_player = tk.Frame()
+    tk.Label(master=f_src_player, text="Source Player").pack(side="left")
+    gui_src_player = ttk.Combobox(master=f_src_player, font=font, width=50)
+    gui_src_player.pack(side="left")
+    #
+    f_target_player = tk.Frame()
+    tk.Label(master=f_target_player, text="Target Player").pack(side="left")
+    gui_taret_player = ttk.Combobox(master=f_target_player, font=font, width=50)
+    gui_taret_player.pack(side="left")
+    #
+    if playerMapping is not None:
+        value_lists = []
+        for player_uid in playerMapping:
+            player = playerMapping[player_uid]
+            value_lists.append(player_uid[0:8] + " - "+player['NickName'])
+        gui_src_player['value'] = value_lists
+        gui_taret_player['value'] = value_lists
+    f_src_player.pack(anchor=W)
+    f_target_player.pack(anchor=W)
+
+def LoadFile(filename):
+    global filetime, gvas_file, wsd
+    print(f"Loading {filename}...")
+    filetime = os.stat(filename).st_mtime
+    with open(filename, "rb") as f:
+        # Read the file
+        data = f.read()
+        raw_gvas, _ = decompress_sav_to_gvas(data)
+
+        print(f"Parsing {filename}...", end="", flush=True)
+        start_time = time.time()
+        gvas_file = GvasFile.read(raw_gvas, PALWORLD_TYPE_HINTS, SKP_PALWORLD_CUSTOM_PROPERTIES)
+        print("Done in %.1fs." % (time.time() - start_time))
+
+    wsd = gvas_file.properties['worldSaveData']['value']
 
 def Statistics():
     for key in wsd:
@@ -565,7 +619,8 @@ def MigratePlayer(player_uid, new_player_uid):
             f.write(sav_file)
     for item in wsd['CharacterSaveParameterMap']['value']:
         player = item['value']['RawData']['value']['object']['SaveParameter']['value']
-        if str(item['key']['PlayerUId']['value']) == str(player_uid):
+        if str(item['key']['PlayerUId']['value']) == str(player_uid) and \
+                'IsPlayer' in player['value'] and player['value']['IsPlayer']['value']:
             item['key']['PlayerUId']['value'] = player_gvas['PlayerUId']['value']
             item['key']['InstanceId']['value'] = player_gvas['IndividualId']['value']['InstanceId']['value']
             print(
