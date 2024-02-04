@@ -606,6 +606,34 @@ def RenamePlayer(player_uid, new_name):
                     break
 
 
+def GetPlayerItems(player_uid):
+    load_skiped_decode(wsd, ["ItemContainerSaveData"])
+    item_containers = {}
+    for item_container in wsd["ItemContainerSaveData"]['value']:
+        item_containers[str(item_container['key']['ID']['value'])] = [{
+                'ItemId': x['ItemId']['value']['StaticId']['value'],
+                'SlotIndex': x['SlotIndex']['value'],
+                'StackCount': x['StackCount']['value']
+            }
+            for x in item_container['value']['Slots']['value']['values']
+        ]
+    player_sav_file = os.path.dirname(os.path.abspath(args.filename)) + "/Players/" + player_uid.upper().replace("-",
+                                                                                                                 "") + ".sav"
+    if not os.path.exists(player_sav_file):
+        print("\033[33mWarning: Player Sav file Not exists: %s\033[0m" % player_sav_file)
+        return
+    else:
+        with open(player_sav_file, "rb") as f:
+            raw_gvas, _ = decompress_sav_to_gvas(f.read())
+            player_gvas_file = GvasFile.read(raw_gvas, PALWORLD_TYPE_HINTS, PALWORLD_CUSTOM_PROPERTIES)
+        player_gvas = player_gvas_file.properties['SaveData']['value']
+        for idx_key in ['CommonContainerId', 'DropSlotContainerId', 'EssentialContainerId', 'FoodEquipContainerId',
+                        'PlayerEquipArmorContainerId', 'WeaponLoadOutContainerId']:
+            print("  %s" % player_gvas['inventoryInfo']['value'][idx_key]['value']['ID']['value'])
+            pp.pprint(item_containers[str(player_gvas['inventoryInfo']['value'][idx_key]['value']['ID']['value'])])
+            print()
+
+
 def OpenBackup(filename):
     global backup_gvas_file, backup_wsd
     print(f"Loading {filename}...")
@@ -1176,7 +1204,7 @@ def LoadPlayers(data_source=None):
                     playerMeta[player_k] = playerParams[player_k]['value']
     if data_source == wsd:
         playerMapping = l_playerMapping
-        l_instanceMapping = instanceMapping
+        instanceMapping = l_instanceMapping
     return l_playerMapping, l_instanceMapping
 
 
