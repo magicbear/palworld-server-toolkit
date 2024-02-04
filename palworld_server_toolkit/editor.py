@@ -693,6 +693,8 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
                 break
     IsFoundUser = None
     copy_user_params = None
+    playerMapping, instanceMapping = LoadPlayers(wsd)
+    
     for idx, insert_item in enumerate(wsd['CharacterSaveParameterMap']['value']):
         if str(insert_item['key']['PlayerUId']['value']) == new_player_uid:
             IsFoundUser = idx
@@ -1215,6 +1217,8 @@ def FixMissing(dry_run=False):
 
 
 def FixCaptureLog(dry_run=False):
+    global instanceMapping
+    
     for group_data in wsd['GroupSaveDataMap']['value']:
         if str(group_data['value']['GroupType']['value']['value']) == "EPalGroupType::Guild":
             item = group_data['value']['RawData']['value']

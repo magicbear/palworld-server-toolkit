@@ -15,7 +15,18 @@
 
 ![](./docs/img/GUI.png)
 
-### 前置安装需求
+### 安装
+
+1. Python 3.9或以上版本.
+    - Windows用户: 可从 [Microsoft Store下载Python 3.12](https://apps.microsoft.com/detail/9NCVDN91XZQP) or [python.org](https://www.python.org/)
+
+2. 安装 `pip` 包管理器
+	- For Linux users: `python -m ensurepip --upgrade`
+	- For Windows users: `py -m ensurepip --upgrade`
+
+3. 使用 `pip install palworld-server-toolkit` 安装
+
+### 使用源码前置安装需求
 
 1. Python 3.9或以上版本.
     - Windows用户: 可从 [Microsoft Store下载Python 3.12](https://apps.microsoft.com/detail/9NCVDN91XZQP) or [python.org](https://www.python.org/)
@@ -25,14 +36,28 @@
 3. Windows 用户建议使用 `Windows Terminal` 取代 `cmd`，否则不显示色彩
 
 ---
-## list.py
-用于列出服务器中的玩家名字，PlayerUId，Steam ID
+## palworld-player-list
+```
+usage: palworld-playey-list [-h] [--host HOST] [--port PORT] [--password PASSWORD] [filename]
+
+用于列出服务器Players目录中的玩家名字，PlayerUId，Steam ID
+
+positional arguments:
+  filename              Filename of the player sav
+
+options:
+  -h, --help            show this help message and exit
+  --host HOST, -H HOST  Host for PalWorld Server RCON
+  --port PORT, -P PORT  PalWorld Server RCON Port
+  --password PASSWORD, -p PASSWORD  RCON密码
+```
+
 
 - 列出玩家 - 在工作目录 `/PalSaved/SaveGames/0/<server id>/Players` 中运行 `python3 list.py`
 - 玩家详细 - `python3 list.py <PLAYER HEX UID>`
 
 ---
-## palworld-save-editor.py
+## palworld-save-editor
 
 清理捕捉日志，改名，合并不同服务器玩家，删除玩家，迁移坏档等工具包
 
@@ -46,11 +71,11 @@
 > 未加-o参数默认保存文件为`Level_fixed.sav`
 
 
-- 清理捕捉日志及不存在玩家数据 - `python palworld-cleanup-tools.py --fix-missing --fix-capture Level.sav`
+- 清理捕捉日志及不存在玩家数据 - `python -m palworld_server_toolkit.editor --fix-missing --fix-capture Level.sav`
 
-- 使用GUI修改 `Level.sav` 文件 - `python -i palworld-cleanup-tools.py -g -o Level.sav Level.sav`
+- 使用GUI修改 `Level.sav` 文件 - `python -i -m palworld_server_toolkit.editor -g -o Level.sav Level.sav`
 
-- 修改 `Level.sav` 文件 - `python -i palworld-cleanup-tools.py -o Level.sav Level.sav`
+- 修改 `Level.sav` 文件 - `python -m palworld_server_toolkit.editor -i -o Level.sav Level.sav`
 
 	- `ShowPlayers()` - 列出玩家
 	- `FixMissing()` - 删除未引用玩家数据
@@ -84,7 +109,7 @@
 
 	1. 复制旧服务器 `Level.sav` 至 `SaveGames/0/<Server ID>/Old-Level.sav`
 	1. 复制旧服务器所有需迁移玩家 `Players/xxxxxxxx000000000000000000000000.sav` 至 `SaveGames/0/<Server ID>/Players/xxxxxxxx000000000000000000000000.sav`
-	1. 使用编辑模式运行 `python -i palworld-cleanup-tools.py Level.sav`
+	1. 使用编辑模式运行 `python -i -m palworld_server_toolkit.editor Level.sav`
 	1. 使用以下命令 并所有需迁移玩家执行`CopyPlayer`
 		> :warning: UUID 可相同，数据自`backup_wsd`拷贝
 		```
@@ -101,7 +126,7 @@
 	`C:\Users\<username>\AppData\Local\Pal\Saved\SaveGames\<SteamID>\<World Folder>`
 
 	2. 复制本地 `Players/00000000000000000000000000000001.sav` 至 `SaveGames/0/<Server ID>/Players/00000000000000000000000000000001.sav`
-	3. 使用编辑模式运行 `python -i palworld-cleanup-tools.py Level.sav`
+	3. 使用编辑模式运行 `python -i -m palworld_server_toolkit.editor Level.sav`
 	4. 使用以下命令
 		```
 		OpenBackup("Old-Level.sav")
@@ -112,7 +137,7 @@
 
 - 迁移用户示例
 
-	1. 使用编辑模式运行 `python -i palworld-cleanup-tools.py Level.sav`
+	1. 使用编辑模式运行 `python -i -m palworld_server_toolkit.editor Level.sav`
 	2. 使用以下命令 
 		```
 		MigratePlayer("xxxxxxxx-0000-0000-0000-000000000000","yyyyyyyy-0000-0000-0000-000000000000")
@@ -122,6 +147,6 @@
 
 ---
 
-## taskset.py
+## palworld-server-taskset
 
 把服务端绑定至CPU性能核 (Linux only)

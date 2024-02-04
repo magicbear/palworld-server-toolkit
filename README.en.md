@@ -17,8 +17,18 @@
 
 ![](./docs/img/GUI.png)
 
+### Install
 
-### Prerequisites
+1. Python 3.9 or newer.
+    - Windows users: You can install [Python 3.12 from the Microsoft Store](https://apps.microsoft.com/detail/9NCVDN91XZQP) or from [python.org](https://www.python.org/)
+
+2. Install `pip` Package manager
+	- For Linux users: `python -m ensurepip --upgrade`
+	- For Windows users: `py -m ensurepip --upgrade`
+
+3. Use pip to install `pip install palworld-server-toolkit` or `python -m pip install palworld-server-toolkit`
+
+### Source Code Prerequisites
 
 1. Python 3.9 or newer.
     - Windows users: You can install [Python 3.12 from the Microsoft Store](https://apps.microsoft.com/detail/9NCVDN91XZQP) or from [python.org](https://www.python.org/)
@@ -29,8 +39,22 @@
 
 ---
 
-## list.py
-Tool for list player's nickname, steam id on server
+## palworld-player-list
+```
+usage: palworld-playey-list [-h] [--host HOST] [--port PORT] [--password PASSWORD] [filename]
+
+List player on the Players Folder
+
+positional arguments:
+  filename              Filename of the player sav
+
+options:
+  -h, --help            show this help message and exit
+  --host HOST, -H HOST  Host for PalWorld Server RCON
+  --port PORT, -P PORT  PalWorld Server RCON Port
+  --password PASSWORD, -p PASSWORD
+                        RCON Password
+```
 
 - List player - `python3 list.py` in working directory `/PalSaved/SaveGames/0/<server id>/Players`
 - Check player detail - `python3 list.py <PLAYER HEX UID>`
@@ -38,7 +62,7 @@ Tool for list player's nickname, steam id on server
 
 ---
 
-## palworld-save-editor.py
+## palworld-save-editor
 
 This tools is for cleanup the unreference item, rename the player name, migrate player and delete the player.
 
@@ -51,12 +75,12 @@ This tools is for cleanup the unreference item, rename the player name, migrate 
 > 
 > Without -o params, default save file is `Level_fixed.sav`
 
-- For cleaning the capture log in guild, use the follow command `python palworld-cleanup-tools.py --fix-missing --fix-capture Level.sav`
+- For cleaning the capture log in guild, use the follow command `python -m palworld_server_toolkit.editor --fix-missing --fix-capture Level.sav`
 
-- For GUI to modify `Level.sav` file - `python -i palworld-cleanup-tools.py -g -o Level.sav Level.sav`
+- For GUI to modify `Level.sav` file - `python -i -m palworld_server_toolkit.editor -g -o Level.sav Level.sav`
 
 - For modifiy the `Level.sav` file, use the follow command
-`python -i palworld-cleanup-tools.py -o Level.sav Level.sav`
+`python -i -m palworld_server_toolkit.editor -o Level.sav Level.sav`
 
 	- `ShowPlayers()` - List the Players
 	- `FixMissing()` - Remove missing player instance
@@ -92,7 +116,7 @@ This tools is for cleanup the unreference item, rename the player name, migrate 
 
 	1. Copy old server `Level.sav` to `SaveGames/0/<Server ID>/Old-Level.sav`
 	2. Copy old server `Players/xxxxxxxx000000000000000000000000.sav` to `SaveGames/0/<Server ID>/Players/xxxxxxxx000000000000000000000000.sav`
-	3. Use interactive mode `python -i palworld-cleanup-tools.py Level.sav`
+	3. Use interactive mode `python -i -m palworld_server_toolkit.editor Level.sav`
 	4. Execute following command and run `CopyPlayer` for each migrate player
 		> :warning: UUID can be the same, the user data will be copy from `backup_wsd`
 		```
@@ -109,7 +133,7 @@ This tools is for cleanup the unreference item, rename the player name, migrate 
 	`C:\Users\<username>\AppData\Local\Pal\Saved\SaveGames\<SteamID>\<World Folder>`
 
 	1. Copy local `Players/00000000000000000000000000000001.sav` to `SaveGames/0/<Server ID>/Players/00000000000000000000000000000001.sav`
-	1. Use interactive mode `python -i palworld-cleanup-tools.py Level.sav`
+	1. Use interactive mode `python -i -m palworld_server_toolkit.editor Level.sav`
 	1. Execute following command 
 		```
 		OpenBackup("Old-Level.sav")
@@ -120,7 +144,7 @@ This tools is for cleanup the unreference item, rename the player name, migrate 
 
 - Migrate User
 
-	1. Use interactive mode `python -i palworld-cleanup-tools.py Level.sav`
+	1. Use interactive mode `python -i -m palworld_server_toolkit.editor Level.sav`
 	1. Execute following command 
 		```
 		MigratePlayer("xxxxxxxx-0000-0000-0000-000000000000","yyyyyyyy-0000-0000-0000-000000000000")
@@ -130,6 +154,6 @@ This tools is for cleanup the unreference item, rename the player name, migrate 
 
 ---
 
-## taskset.py
+## palworld-server-taskset
 Tools for set cpu affinity to CPU performance core (Linux only)
 

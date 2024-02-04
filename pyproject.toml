@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "palworld-server-toolkit"
+authors = [
+    {name = "MagicBear", email = "magicbearmo@gmail.com"},
+]
+description = "A toolset for PalWorld Server"
+readme = "README.md"
+requires-python = ">=3.9"
+keywords = ["palworld"]
+license = {file = "LICENSE"}
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "palworld-save-tools",
+]
+dynamic = ["version"]
+
+[project.urls]
+Homepage = "https://github.com/magicbear/palworld-server-tool"
+Issues = "https://github.com/magicbear/palworld-server-tool/issues"
+
+[project.scripts]
+palworld-save-editor = "palworld_server_toolkit.editor:main"
+palworld-server-taskset = "palworld_server_toolkit.taskset:main"
+palworld-player-list = "palworld_server_toolkit.list:main"
