@@ -37,6 +37,10 @@
 
 3. Windows User present use `Windows Terminal` instance of `cmd` for color
 
+### Question?
+
+[Discord](https://discord.com/channels/1200798336916144188/1200803146407096341)
+
 ---
 
 ## palworld-player-list

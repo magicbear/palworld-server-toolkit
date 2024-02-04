@@ -35,6 +35,10 @@
 
 3. Windows 用户建议使用 `Windows Terminal` 取代 `cmd`，否则不显示色彩
 
+### 问题交流
+
+QQ群 139107098
+
 ---
 ## palworld-player-list
 ```
