@@ -701,7 +701,9 @@ def DeletePlayer(player_uid, InstanceId = None, dry_run=False):
     # Remove item from CharacterSaveParameterMap
     for item in wsd['CharacterSaveParameterMap']['value']:
         player = item['value']['RawData']['value']['object']['SaveParameter']['value']
-        if str(item['key']['PlayerUId']['value']) == player_uid and (InstanceId is None or str(item['key']['InstanceId']['value']) == InstanceId):
+        if str(item['key']['PlayerUId']['value']) == player_uid \
+                and 'IsPlayer' in player and player['IsPlayer']['value'] \
+                and (InstanceId is None or str(item['key']['InstanceId']['value']) == InstanceId):
             remove_items.append(item)
             remove_instance_id.append(item['key']['InstanceId']['value'])
             print(
