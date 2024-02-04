@@ -46,6 +46,8 @@
 
 - 清理捕捉日志及不存在玩家数据 - `python palworld-cleanup-tools.py --fix-missing --fix-capture Level.sav`
 
+- 使用GUI修改 `Level.sav` 文件 - `python -i palworld-cleanup-tools.py -g -o Level.sav Level.sav`
+
 - 修改 `Level.sav` 文件 - `python -i palworld-cleanup-tools.py -o Level.sav Level.sav`
 
 	- `ShowPlayers()` - 列出玩家
@@ -57,6 +59,7 @@
 	- `RenamePlayer(uid,new_name)` - 修改玩家名字为 `new_name`
 	- `DeletePlayer(uid,InstanceId=None, dry_run=False)` - 删除玩家数据 `InstanceId: 删除指定InstanceId`
 	- `EditPlayer(uid)` - 快速指定玩家数据至变量`player`
+	- `MoveToGuild(uid,guild_id)` - 移动玩家至公会`guild_id`
 	- `OpenBackup(filename)` - 打开备份`Level.sav`文件并指向变量`backup_wsd`
 	- `MigratePlayer(old_uid,new_uid)` - 从`old_uid`向`new_uid`迁移玩家数据
 	- `CopyPlayer(old_uid,new_uid, backup_wsd)` - 复制玩家数据 `backup_wsd` 为OpenBackup备份文件 `wsd`为当前主文件

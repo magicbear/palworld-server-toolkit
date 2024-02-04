@@ -12,6 +12,9 @@ import threading
 import tkinter as tk
 from tkinter import ttk
 from tkinter import font as TkFont
+from tkinter import messagebox
+from tkinter import filedialog
+from tkinter import simpledialog
 from tkinter.constants import *
 
 module_dir = os.path.dirname(os.path.abspath(__file__))
@@ -185,7 +188,7 @@ SKP_PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.DynamicItemSaveData"] = (skip_dec
 SKP_PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.CharacterContainerSaveData"] = (skip_decode, skip_encode)
 
 def main():
-    global output_file, output_path, args, gui
+    global output_file, output_path, args, gui, playerMapping, instanceMapping
 
     parser = argparse.ArgumentParser(
         prog="palworld-cleanup-tools",
@@ -223,8 +226,22 @@ def main():
         action="store_true",
         help="Open GUI",
     )
-
-    args = parser.parse_args()
+    
+    if len(sys.argv) == 1:
+        bk_f = filedialog.askopenfilename(filetypes=[("Level.sav file", "*.sav")], title="Open Level.sav")
+        if bk_f:
+            args = type('', (), {})()
+            args.filename = bk_f
+            args.gui = True
+            args.statistics = False
+            args.fix_missing = False
+            args.fix_capture = False
+            args.fix_duplicate = False
+            args.output = None
+        else:
+            args = parser.parse_args()
+    else:
+        args = parser.parse_args()
 
     if not os.path.exists(args.filename):
         print(f"{args.filename} does not exist")
@@ -245,7 +262,8 @@ def main():
         output_path = args.output
 
     ShowGuild()
-    ShowPlayers(data_source=wsd)
+    playerMapping, instanceMapping = LoadPlayers(data_source=wsd)
+    ShowPlayers()
 
     if args.fix_missing:
         FixMissing()
@@ -255,7 +273,7 @@ def main():
         FixDuplicateUser()
 
     if args.gui:
-        build_gui()
+        GUI()
 
     if sys.flags.interactive:
         print("Go To Interactive Mode (no auto save), we have follow command:")
@@ -294,39 +312,249 @@ def main():
     if args.fix_missing or args.fix_capture:
         Save()
 
-def build_gui():
-    global gui, gui_src_player, gui_taret_player
-    #
-    if gui is not None:
-        gui.destroy()
-    gui = tk.Tk()
-    gui.title('PalWorld Save Editor')
-    gui.geometry('640x400')
-    #
-    font = TkFont.Font(family="Courier New")
-    gui.option_add('*TCombobox*Listbox.font', font)
-    # window.resizable(False, False)
-    f_src_player = tk.Frame()
-    tk.Label(master=f_src_player, text="Source Player", font=font).pack(side="left")
-    gui_src_player = ttk.Combobox(master=f_src_player, font=font, width=50)
-    gui_src_player.pack(side="left")
-    #
-    f_target_player = tk.Frame()
-    tk.Label(master=f_target_player, text="Target Player", font=font).pack(side="left")
-    gui_taret_player = ttk.Combobox(master=f_target_player, font=font, width=50)
-    gui_taret_player.pack(side="left")
-    #
-    if playerMapping is not None:
-        value_lists = []
+class GUI():
+    def __init__(self):
+        global gui
+        if gui is not None:
+            gui.gui.destroy()
+        gui = self
+        self.src_player = None
+        self.target_player = None
+        self.data_source = None
+        self.btn_migrate = None
+        self.build_gui()
+    
+    def mainloop(self):
+        self.gui.mainloop()
+    
+    def gui_parse_uuid(self):
+        src_uuid = self.src_player.get().split(" - ")[0]+"-0000-0000-0000-000000000000"
+        target_uuid = self.target_player.get().split(" - ")[0]+"-0000-0000-0000-000000000000"
+        try:
+            uuid.UUID(src_uuid)
+        except Exception as e:
+            messagebox.showerror("Src Player Error", str(e))
+            return None, None
+        
+        try:
+            uuid.UUID(target_uuid)
+        except Exception as e:
+            messagebox.showerror("Target Player Error", str(e))
+            return None, None
+        
+        return src_uuid, target_uuid
+    
+    def migrate(self):
+        src_uuid, target_uuid = self.gui_parse_uuid()
+        if src_uuid is None:
+            return
+        if src_uuid == target_uuid:
+            messagebox.showerror("Error", "Src == Target ")
+            return
+        try:
+            MigratePlayer(src_uuid, target_uuid)
+            messagebox.showinfo("Result", "Migrate success")
+            self.load_players()
+        except Exception as e:
+            messagebox.showerror("Migrate Error", str(e))
+    
+    def open_file(self):
+        bk_f = filedialog.askopenfilename(filetypes=[("Level.sav file", "*.sav")], title="Open Level.sav")
+        if bk_f:
+            if self.data_source.current() == 0:
+                LoadFile(bk_f)
+            else:
+                OpenBackup(bk_f)
+            self.change_datasource(None)
+            self.load_guilds()
+    
+    def copy_player(self):
+        src_uuid, target_uuid = self.gui_parse_uuid()
+        if src_uuid is None:
+            return
+        if src_uuid == target_uuid and self.data_source.current() == 0:
+            messagebox.showerror("Error", "Src == Target ")
+            return
+        if self.data_source.current() == 1 and backup_wsd is None:
+            messagebox.showerror("Error", "Backup file is not loaded")
+            return
+        try:
+            CopyPlayer(src_uuid, target_uuid, wsd if self.data_source.current() == 0 else backup_wsd)
+            messagebox.showinfo("Result", "Copy success")
+            self.load_players()
+        except Exception as e:
+            messagebox.showerror("Copy Error", str(e))
+    
+    def load_players(self):
+        playerMapping, _ = LoadPlayers(wsd if self.data_source.current() == 0 else backup_wsd)
+        src_value_lists = []
         for player_uid in playerMapping:
             player = playerMapping[player_uid]
-            value_lists.append(player_uid[0:8] + " - "+player['NickName'])
-        gui_src_player['value'] = value_lists
-        gui_taret_player['value'] = value_lists
-    f_src_player.pack(anchor=W)
-    f_target_player.pack(anchor=W)
+            src_value_lists.append(player_uid[0:8] + " - "+player['NickName'])
+        
+        self.src_player.set("")
+        self.src_player['value'] = src_value_lists
+        
+        playerMapping, _ = LoadPlayers(wsd)
+        target_value_lists = []
+        for player_uid in playerMapping:
+            player = playerMapping[player_uid]
+            target_value_lists.append(player_uid[0:8] + " - "+player['NickName'])
+        
+        self.target_player['value'] = target_value_lists
+    
+    def load_guilds(self):
+        guild_list = []
+        for group_data in wsd['GroupSaveDataMap']['value']:
+            if str(group_data['value']['GroupType']['value']['value']) == "EPalGroupType::Guild":
+                group_info = group_data['value']['RawData']['value']
+                guild_list.append("%s - %s" % (group_info['group_id'], group_info['guild_name']))
+        self.target_guild['value'] = guild_list
+        self.target_guild.set("")
+    
+    def change_datasource(self, x):
+        if self.data_source.current() == 0:
+            self.btn_migrate["state"] = "normal"
+        else:
+            self.btn_migrate["state"] = "disabled"
+        self.load_players()
+    
+    def parse_target_uuid(self):
+        target_uuid = self.target_player.get().split(" - ")[0] + "-0000-0000-0000-000000000000"
+        try:
+            uuid.UUID(target_uuid)
+        except Exception as e:
+            messagebox.showerror("Target Player Error", str(e))
+            return None
+        if target_uuid not in playerMapping:
+            messagebox.showerror("Target Player Not exists", str(e))
+            return None
+        return target_uuid
+    
+    def rename_player(self):
+        target_uuid = self.parse_target_uuid()
+        if target_uuid is None:
+            return
+        new_player_name = simpledialog.askstring(title="Rename Player", prompt="New player name", initialvalue=playerMapping[target_uuid]['NickName'])
+        if new_player_name:
+            try:
+                RenamePlayer(target_uuid, new_player_name)
+                messagebox.showinfo("Result", "Rename success")
+                self.load_players()
+            except Exception as e:
+                messagebox.showerror("Rename Error", str(e))
+    
+    def delete_player(self):
+        target_uuid = self.parse_target_uuid()
+        if target_uuid is None:
+            return
+        if 'yes' == messagebox.showwarning("Delete Player", "Confirm to delete player %s" % target_uuid, type=messagebox.YESNO):
+            try:
+                DeletePlayer(target_uuid)
+                messagebox.showinfo("Result", "Delete success")
+                self.load_players()
+            except Exception as e:
+                messagebox.showerror("Delete Error", str(e))
+    
+    def move_guild(self):
+        target_uuid = self.parse_target_uuid()
+        if target_uuid is None:
+            return
+        target_guild_uuid = self.target_guild.get().split(" - ")[0]
+        try:
+            uuid.UUID(target_guild_uuid)
+        except Exception as e:
+            messagebox.showerror("Target Guild Error", str(e))
+            return None
+        
+        target_guild = None
+        for group_data in wsd['GroupSaveDataMap']['value']:
+            if str(group_data['value']['GroupType']['value']['value']) == "EPalGroupType::Guild":
+                group_info = group_data['value']['RawData']['value']
+                if group_info['group_id'] == target_guild_uuid:
+                    target_guild = group_info
+                    break
+        if target_guild is None:
+            messagebox.showerror("Target Guild is not found")
+            return None
+        try:
+            MoveToGuild(target_uuid, target_guild_uuid)
+            messagebox.showinfo("Result", "Move Guild success")
+            self.load_players()
+            self.load_guilds()
+        except Exception as e:
+            messagebox.showerror("Move Guild Error", str(e))
+    
+    def save(self):
+        if 'yes' == messagebox.showwarning("Save", "Confirm to save file?", type=messagebox.YESNO):
+            try:
+                Save(False)
+                messagebox.showinfo("Result", "Save to %s success" % output_path)
+                sys.exit(0)
+            except Exception as e:
+                messagebox.showerror("Save Error", str(e))
+    
+    def build_gui(self):
+        #
+        self.gui = tk.Tk()
+        self.gui.parent = self
+        self.gui.title('PalWorld Save Editor - Author by MagicBear')
+        # self.gui.geometry('640x200')
+        #
+        font = TkFont.Font(family="Courier New")
+        self.gui.option_add('*TCombobox*Listbox.font', font)
+        # window.resizable(False, False)
+        f_src = tk.Frame()
+        tk.Label(master=f_src, text="Data Source", font=font).pack(side="left")
+        self.data_source = ttk.Combobox(master=f_src, font=font, width=20, values=['Main File', 'Backup File'], state="readonly")
+        self.data_source.pack(side="left")
+        self.data_source.current(0)
+        self.data_source.bind("<<ComboboxSelected>>", self.change_datasource)
+        g_open_file = tk.Button(master=f_src, font=font, text="Open File", command=self.open_file)
+        g_open_file.pack(side="left")
+        #
+        f_src_player = tk.Frame()
+        tk.Label(master=f_src_player, text="Source Player", font=font).pack(side="left")
+        self.src_player = ttk.Combobox(master=f_src_player, font=font, width=50)
+        self.src_player.pack(side="left")
+        #
+        f_target_player = tk.Frame()
+        tk.Label(master=f_target_player, text="Target Player", font=font).pack(side="left")
+        self.target_player = ttk.Combobox(master=f_target_player, font=font, width=50)
+        self.target_player.pack(side="left")
+        
+        f_target_guild = tk.Frame()
+        tk.Label(master=f_target_guild, text="Target Guild", font=font).pack(side="left")
+        self.target_guild = ttk.Combobox(master=f_target_guild, font=font, width=80)
+        self.target_guild.pack(side="left")
+        #
+        f_src.pack(anchor=W)
+        f_src_player.pack(anchor=W)
+        f_target_player.pack(anchor=W)
+        f_target_guild.pack(anchor=W)
+        g_button_frame = tk.Frame()
+        self.btn_migrate = tk.Button(master=g_button_frame, text="Migrate Player", font=font, command=self.migrate)
+        self.btn_migrate.pack(side="left")
+        g_copy = tk.Button(master=g_button_frame, text="Copy Player", font=font, command=self.copy_player)
+        g_copy.pack(side="left")
+        g_button_frame.pack()
+        
+        g_button_frame = tk.Frame()
+        tk.Label(master=g_button_frame, text="Operate for Target Player", font=font).pack(fill="x",side="top")
+        g_move = tk.Button(master=g_button_frame, text="Move To Guild", font=font, command=self.move_guild)
+        g_move.pack(side="left")
+        g_rename = tk.Button(master=g_button_frame, text="Rename", font=font, command=self.rename_player)
+        g_rename.pack(side="left")
+        g_delete = tk.Button(master=g_button_frame, text="Delete", font=font, command=self.delete_player)
+        g_delete.pack(side="left")
+        g_button_frame.pack()
+        
+        g_save = tk.Button(text="Save & Exit", font=font, command=self.save)
+        g_save.pack()
+        
+        self.load_players()
+        self.load_guilds()
 
-# build_gui()
 
 def LoadFile(filename):
     global filetime, gvas_file, wsd
@@ -593,6 +821,80 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
             sav_file = compress_gvas_to_sav(player_gvas_file.write(PALWORLD_CUSTOM_PROPERTIES), save_type)
             f.write(sav_file)
 
+def MoveToGuild(player_uid, group_id):
+    target_group = None
+    for group_data in wsd['GroupSaveDataMap']['value']:
+        if str(group_data['value']['GroupType']['value']['value']) == "EPalGroupType::Guild":
+            group_info = group_data['value']['RawData']['value']
+            if group_info['group_id'] == group_id:
+                target_group = group_info
+    if target_group is None:
+        print("\033[31mError: cannot found target guild")
+        return
+    
+    instances = []
+    remove_instance_ids = []
+    playerInstance = None
+    
+    for item in wsd['CharacterSaveParameterMap']['value']:
+        player = item['value']['RawData']['value']['object']['SaveParameter']['value']
+        if str(item['key']['PlayerUId']['value']) == player_uid and 'IsPlayer' in player and player['IsPlayer']['value']:
+            playerInstance = player
+            instances.append({
+                'guid': item['key']['PlayerUId']['value'],
+                'instance_id': item['key']['InstanceId']['value']
+            })
+            remove_instance_ids.append(item['key']['InstanceId']['value'])
+        elif 'OwnerPlayerUId' in player and str(player['OwnerPlayerUId']['value']) == player_uid:
+            instances.append({
+                'guid': to_storage_uuid(uuid.UUID("00000000-0000-0000-0000-000000000000")),
+                'instance_id': item['key']['InstanceId']['value']
+            })
+            remove_instance_ids.append(item['key']['InstanceId']['value'])
+    
+    remove_guilds = []
+    for group_data in wsd['GroupSaveDataMap']['value']:
+        if str(group_data['value']['GroupType']['value']['value']) == "EPalGroupType::Guild":
+            group_info = group_data['value']['RawData']['value']
+            delete_g_players = []
+            for g_player in group_info['players']:
+                if str(g_player['player_uid']) == player_uid:
+                    delete_g_players.append(g_player)
+                    print("\033[31mDelete player \033[93m %s \033[31m on guild \033[93m %s \033[0m [\033[92m %s \033[0m] " % (
+                                g_player['player_info']['player_name'], group_info['guild_name'], group_info['group_id']))
+            
+            for g_player in delete_g_players:
+                group_info['players'].remove(g_player)
+            
+            if len(group_info['players']) == 0:
+                remove_guilds.append(group_data)
+                print("\033[31mDelete Guild\033[0m \033[93m %s \033[0m  UUID: %s" % (
+                    group_info['guild_name'], str(group_info['group_id'])))
+            
+            remove_items = []
+            for ind_id in group_info['individual_character_handle_ids']:
+                if ind_id['instance_id'] in remove_instance_ids:
+                    remove_items.append(ind_id)
+                    print(
+                        "\033[31mDelete guild [\033[92m %s \033[31m] character handle GUID \033[92m %s \033[0m [InstanceID \033[92m %s \033[0m] " % (
+                            group_info['group_id'], ind_id['guid'], ind_id['instance_id']))
+            for item in remove_items:
+                group_info['individual_character_handle_ids'].remove(item)
+    
+    for guild in remove_guilds:
+        wsd['GroupSaveDataMap']['value'].remove(guild)
+        
+    print("\033[32mAppend character and players to guild\033[0m")
+    target_group['players'].append({
+        'player_uid': to_storage_uuid(uuid.UUID(player_uid)),
+        'player_info': {
+            'last_online_real_time': 0,
+            'player_name':
+                playerInstance['NickName']['value']
+        }
+    })
+    target_group['individual_character_handle_ids'] += instances
+
 def MigratePlayer(player_uid, new_player_uid):
     load_skiped_decode(wsd, ['MapObjectSaveData'])
 
@@ -842,16 +1144,15 @@ def search_values(dicts, key, level=""):
     return isFound
 
 
-def ShowPlayers(data_source=None):
-    global playerMapping, instanceMapping, wsd
+def LoadPlayers(data_source=None):
+    global wsd, playerMapping, instanceMapping
     if data_source is None:
         data_source = wsd
-    if data_source == wsd:
-        playerMapping = {}
-        instanceMapping = {}
+    
+    l_playerMapping = {}
+    l_instanceMapping = {}
     for item in data_source['CharacterSaveParameterMap']['value']:
-        if data_source == wsd:
-            instanceMapping[str(item['key']['InstanceId']['value'])] = item
+        l_instanceMapping[str(item['key']['InstanceId']['value'])] = item
         player = item['value']['RawData']['value']['object']['SaveParameter']
         # if "00000000-0000-0000-0000-000000000000" != str(item['key']['PlayerUId']['value']):
         if 'IsPlayer' in player['value'] and player['value']['IsPlayer']['value']:
@@ -861,18 +1162,7 @@ def ShowPlayers(data_source=None):
                 for player_k in playerParams:
                     playerMeta[player_k] = playerParams[player_k]['value']
                 playerMeta['InstanceId'] = item['key']['InstanceId']['value']
-                if data_source == wsd:
-                    playerMapping[str(item['key']['PlayerUId']['value'])] = playerMeta
-            try:
-                print("PlayerUId \033[32m %s \033[0m [InstanceID %s %s \033[0m] -> Level %2d  %s" % (
-                    item['key']['PlayerUId']['value'], "\033[33m" if str(item['key']['PlayerUId']['value']) in guildInstanceMapping and
-                    str(playerMeta['InstanceId']) == guildInstanceMapping[str(item['key']['PlayerUId']['value'])] else "\033[31m", playerMeta['InstanceId'],
-                    playerMeta['Level'] if 'Level' in playerMeta else -1, playerMeta['NickName']))
-            except KeyError:
-                print("PlayerUId \033[32m %s \033[0m [InstanceID %s %s \033[0m] -> Level %2d" % (
-                    item['key']['PlayerUId']['value'], "\033[33m" if str(item['key']['PlayerUId']['value']) in guildInstanceMapping and
-                    str(playerMeta['InstanceId']) == guildInstanceMapping[str(item['key']['PlayerUId']['value'])] else "\033[31m", playerMeta['InstanceId'],
-                    playerMeta['Level'] if 'Level' in playerMeta else -1))
+                l_playerMapping[str(item['key']['PlayerUId']['value'])] = playerMeta
         else:
             # Non Player
             player = item['value']['RawData']['value']['object']['SaveParameter']
@@ -881,7 +1171,31 @@ def ShowPlayers(data_source=None):
                 playerMeta = {}
                 for player_k in playerParams:
                     playerMeta[player_k] = playerParams[player_k]['value']
+    if data_source == wsd:
+        playerMapping = l_playerMapping
+        l_instanceMapping = instanceMapping
+    return l_playerMapping, l_instanceMapping
 
+
+def ShowPlayers(data_source=None):
+    global guildInstanceMapping
+    playerMapping, _ = LoadPlayers(data_source)
+    for playerUId in playerMapping:
+        playerMeta = playerMapping[playerUId]
+        try:
+            print("PlayerUId \033[32m %s \033[0m [InstanceID %s %s \033[0m] -> Level %2d  %s" % (
+                playerUId,
+                "\033[33m" if str(playerUId) in guildInstanceMapping and
+                              str(playerMeta['InstanceId']) == guildInstanceMapping[
+                                  str(playerUId)] else "\033[31m", playerMeta['InstanceId'],
+                playerMeta['Level'] if 'Level' in playerMeta else -1, playerMeta['NickName']))
+        except KeyError:
+            print("PlayerUId \033[32m %s \033[0m [InstanceID %s %s \033[0m] -> Level %2d" % (
+                playerUId,
+                "\033[33m" if str(playerUId) in guildInstanceMapping and
+                              str(playerMeta['InstanceId']) == guildInstanceMapping[
+                                  str(playerUId)] else "\033[31m", playerMeta['InstanceId'],
+                playerMeta['Level'] if 'Level' in playerMeta else -1))
 
 def FixMissing(dry_run=False):
     # Remove Unused in CharacterSaveParameterMap
@@ -1055,7 +1369,7 @@ def PrettyPrint(data, level = 0):
                 PrettyPrint(data[key], level + 1)
                 print("%s</%s>" % ("  " * level, key))
 
-def Save():
+def Save(exit_now=True):
     print("processing GVAS to Sav file...", end="", flush=True)
     if "Pal.PalWorldSaveGame" in gvas_file.header.save_game_class_name or "Pal.PalLocalWorldSaveGame" in gvas_file.header.save_game_class_name:
         save_type = 0x32
@@ -1069,8 +1383,8 @@ def Save():
         f.write(sav_file)
     print("Done")
     print("File saved to %s" % output_path)
-
-    sys.exit(0)
+    if exit_now:
+        sys.exit(0)
 
 
 if __name__ == "__main__":

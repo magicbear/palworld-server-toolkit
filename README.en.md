@@ -48,6 +48,8 @@ This tools is for cleanup the unreference item, rename the player name, migrate 
 
 - For cleaning the capture log in guild, use the follow command `python palworld-cleanup-tools.py --fix-missing --fix-capture Level.sav`
 
+- For GUI to modify `Level.sav` file - `python -i palworld-cleanup-tools.py -g -o Level.sav Level.sav`
+
 - For modifiy the `Level.sav` file, use the follow command
 `python -i palworld-cleanup-tools.py -o Level.sav Level.sav`
 
@@ -60,6 +62,7 @@ This tools is for cleanup the unreference item, rename the player name, migrate 
 	- `RenamePlayer(uid,new_name)` - Rename player to new_name
 	- `DeletePlayer(uid,InstanceId=None, dry_run=False)` - Wipe player data from save InstanceId: delete specified InstanceId
 	- `EditPlayer(uid)` - Allocate player base meta data to variable `player`
+	- `MoveToGuild(uid,guild_id)` - Move player to guild `guild_id`
 	- `OpenBackup(filename)` - Open Backup Level.sav file and assign to `backup_wsd`
 	- `MigratePlayer(old_uid,new_uid)` - Migrate the player from old PlayerUId to new PlayerUId
 	- `CopyPlayer(old_uid,new_uid, backup_wsd)` - Copy the player from old PlayerUId to new PlayerUId `backup_wsd` is the OpenBackup file, `wsd` is current file
