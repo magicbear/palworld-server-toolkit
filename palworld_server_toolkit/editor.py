@@ -1184,24 +1184,21 @@ def LoadPlayers(data_source=None):
     l_instanceMapping = {}
     for item in data_source['CharacterSaveParameterMap']['value']:
         l_instanceMapping[str(item['key']['InstanceId']['value'])] = item
-        player = item['value']['RawData']['value']['object']['SaveParameter']
+        playerStruct = item['value']['RawData']['value']['object']['SaveParameter']
+        playerParams = playerStruct['value']
         # if "00000000-0000-0000-0000-000000000000" != str(item['key']['PlayerUId']['value']):
-        if 'IsPlayer' in player['value'] and player['value']['IsPlayer']['value']:
-            if player['struct_type'] == 'PalIndividualCharacterSaveParameter':
-                playerParams = player['value']
+        if 'IsPlayer' in playerParams and playerParams['IsPlayer']['value']:
+            if playerStruct['struct_type'] == 'PalIndividualCharacterSaveParameter':
+                if 'OwnerPlayerUId' in playerParams:
+                    print("\033[33mWarning: Corrupted player struct\033[0m UUID \033[32m %s \033[0m Owner \033[32m %s \033[0m" % (
+                        str(item['key']['PlayerUId']['value']), str(playerParams['OwnerPlayerUId']['value'])))
+                    pp.pprint(playerParams)
+                    playerParams['IsPlayer']['value'] = False
                 playerMeta = {}
                 for player_k in playerParams:
                     playerMeta[player_k] = playerParams[player_k]['value']
                 playerMeta['InstanceId'] = item['key']['InstanceId']['value']
                 l_playerMapping[str(item['key']['PlayerUId']['value'])] = playerMeta
-        else:
-            # Non Player
-            player = item['value']['RawData']['value']['object']['SaveParameter']
-            if player['struct_type'] == 'PalIndividualCharacterSaveParameter':
-                playerParams = player['value']
-                playerMeta = {}
-                for player_k in playerParams:
-                    playerMeta[player_k] = playerParams[player_k]['value']
     if data_source == wsd:
         playerMapping = l_playerMapping
         instanceMapping = l_instanceMapping
