@@ -18,8 +18,9 @@ from tkinter import simpledialog
 from tkinter.constants import *
 
 module_dir = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.join(module_dir, "save_tools"))
-sys.path.insert(0, os.path.join(module_dir, "palworld-save-tools"))
+sys.path.insert(0, module_dir)
+sys.path.insert(0, os.path.join(module_dir, "../save_tools"))
+sys.path.insert(0, os.path.join(module_dir, "../palworld-save-tools"))
 
 from palworld_save_tools.gvas import GvasFile
 from palworld_save_tools.palsav import compress_gvas_to_sav, decompress_sav_to_gvas

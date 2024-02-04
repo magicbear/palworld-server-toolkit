@@ -7,6 +7,8 @@ from operator import itemgetter, attrgetter
 
 module_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, module_dir)
+sys.path.insert(0, os.path.join(module_dir, "../save_tools"))
+sys.path.insert(0, os.path.join(module_dir, "../palworld-save-tools"))
 
 from .rcon.source import Client
 import argparse
