@@ -314,21 +314,48 @@ def main():
         Save()
 
 
-class PlayerEditGUI(tk.Tk):
-    def __init__(self, player_uid):
+class EntryPopup(tk.Entry):
+    def __init__(self, parent, iid, column, **kw):
+        ''' If relwidth is set, then width is ignored '''
+        super().__init__(parent, **kw)
+        self._textvariable = kw['textvariable']
+        self.tv = parent
+        self.iid = iid
+        self.column = column
+        global cc
+        cc = self
+        # self['state'] = 'readonly'
+        # self['readonlybackground'] = 'white'
+        # self['selectbackground'] = '#1BA1E2'
+        self['exportselection'] = False
+        self.focus_force()
+        self.bind("<Return>", self.on_return)
+        self.bind("<Control-a>", self.select_all)
+        self.bind("<Escape>", lambda *ignore: self.destroy())
+
+    def destroy(self) -> None:
+        super().destroy()
+        self.tv.set(self.iid, column=self.column, value=self._textvariable.get())
+
+    def on_return(self, event):
+        self.tv.item(self.iid, text=self.get())
+        self.destroy()
+
+    def select_all(self, *ignore):
+        ''' Set selection on the whole text '''
+        self.selection_range(0, 'end')
+        # returns 'break' to interrupt default key-bindings
+        return 'break'
+
+
+class ParamEditor(tk.Tk):
+    def __init__(self):
         super().__init__()
         self.gui = self
         self.parent = self
-        self.player_uid = player_uid
-        self.player = instanceMapping[str(playerMapping[player_uid]['InstanceId'])]['value']['RawData']['value']['object']['SaveParameter']['value']
-        self.gui.title("Player Edit - %s" % player_uid)
-        self.gui_attribute = {}
         #
         self.font = TkFont.Font(family="Courier New")
-        self.build_variable_gui(self.gui, self.gui_attribute, self.player)
-        btn_save = tk.Button(master=self.gui, font=self.font, text="Save", command=self.saveplayer)
-        btn_save.pack(fill=X)
-    
+
     def build_subgui(self, g_frame, attribute_key, attrib_var, attrib):
         sub_frame = ttk.Frame(master=g_frame)
         sub_frame.pack(side="right")
@@ -343,7 +370,6 @@ class PlayerEditGUI(tk.Tk):
         sub_frame_c.pack(side="top")
 
     def valid_int(self, value):
-        print("valid int ", value)
         try:
             int(value)
             return True
@@ -351,76 +377,152 @@ class PlayerEditGUI(tk.Tk):
             return False
 
     def valid_float(self, value):
-        print("valid float ", value)
         try:
             float(value)
             return True
         except ValueError as e:
             return False
-
-    def build_variable_gui(self, parent, attrib_var, attribs):
+    
+    def make_attrib_var(self, master, attrib):
+        if attrib['type'] in ["IntProperty", "StrProperty", "NameProperty", "FloatProperty", "EnumProperty"]:
+            return tk.StringVar(master)
+        elif attrib['type'] == "StructProperty" and attrib['struct_type'] == "FixedPoint64" and \
+                attrib['value']['Value']['type'] == "Int64Property":
+            return tk.StringVar(master)
+        elif attrib['type'] == "BoolProperty":
+            return tk.BooleanVar(master=master)
+        elif attrib['type'] == "ArrayProperty":
+            attrib_var = []
+            for x in range(len(attrib['value']['values'])):
+                attrib_var.append({})
+            return attrib_var
+    
+    def assign_attrib_var(self, var, attrib):
+        if attrib['type'] in ["IntProperty", "StrProperty", "NameProperty", "FloatProperty"]:
+            var.set(str(attrib['value']))
+        elif attrib['type'] == "StructProperty" and attrib['struct_type'] == "FixedPoint64" and \
+                attrib['value']['Value']['type'] == "Int64Property":
+            var.set(str(attrib['value']['Value']['value']))
+        elif attrib['type'] == "BoolProperty":
+            var.set(attrib['value'])
+        elif attrib['type'] == "EnumProperty":
+            var.set(attrib['value']['value'])
+        
+    def build_variable_gui(self, parent, attrib_var, attribs, with_labelframe = True):
         font = self.font
         for attribute_key in attribs:
             attrib = attribs[attribute_key]
             if 'type' in attrib:
-                g_frame = tk.Frame(master=parent)
-                g_frame.pack(anchor=W, fill=X, expand=True)
-                tk.Label(master=g_frame, text=attribute_key, font=font).pack(side="left")
-                if attrib['type'] in ["IntProperty", "StrProperty", "NameProperty", "FloatProperty"] or \
-                        (attrib['type'] == "StructProperty" and attrib['struct_type'] == "FixedPoint64"):
-                    attrib_var[attribute_key] = tk.StringVar(master=parent)
-                    valid_cmd = None
-                    if attrib['type'] in ["IntProperty"] or \
-                        (attrib['type'] == "StructProperty" and attrib['struct_type'] == "FixedPoint64" and
-                        attrib['value']['Value']['type'] == "Int64Property"):
-                        valid_cmd = (self.register(self.valid_int), '%P')
-                    elif attrib['type'] == "FloatProperty":
-                        valid_cmd = (self.register(self.valid_float), '%P')
-                    tk.Entry(font=font, master=g_frame, 
-                             validate='all', validatecommand=valid_cmd, 
-                             textvariable=attrib_var[attribute_key]).pack(
-                        side="right")
-                    if attrib['type'] in ["IntProperty", "StrProperty", "NameProperty", "FloatProperty"]:
-                        attrib_var[attribute_key].set(str(attrib['value']))
-                    elif attrib['type'] == "StructProperty" and attrib['struct_type'] == "FixedPoint64" and \
-                        attrib['value']['Value']['type'] == "Int64Property":
-                        attrib_var[attribute_key].set(str(attrib['value']['Value']['value']))
-                elif attrib['type'] == "BoolProperty":
-                    attrib_var[attribute_key] = tk.BooleanVar(master=parent)
+                if with_labelframe:
+                    g_frame = tk.Frame(master=parent)
+                    g_frame.pack(anchor=W, fill=X, expand=True)
+                    tk.Label(master=g_frame, text=attribute_key, font=font).pack(side="left")
+                else:
+                    g_frame = parent
+
+                attrib_var[attribute_key] = self.make_attrib_var(master=parent, attrib=attrib)
+                if attrib['type'] == "BoolProperty":
                     tk.Checkbutton(master=g_frame, text="Enabled", variable=attrib_var[attribute_key]).pack(
                         side="left")
-                    attrib_var[attribute_key].set(attrib['value'])
-                elif attrib['type'] == "ArrayProperty":
-                    attrib_var[attribute_key] = []
-                    for x in range(len(attrib['value']['values'])):
-                        attrib_var[attribute_key].append({})
-                    self.build_subgui(g_frame, attribute_key, attrib_var[attribute_key], attrib)
+                    self.assign_attrib_var(attrib_var[attribute_key], attrib)
                 elif attrib['type'] == "EnumProperty" and attrib['value']['type'] == "EPalWorkSuitability":
-                    attrib_var[attribute_key] = tk.StringVar(master=parent)
-                    enum_options = ['EPalWorkSuitability::EmitFlame', 'EPalWorkSuitability::Watering', 'EPalWorkSuitability::Seeding',
-                     'EPalWorkSuitability::GenerateElectricity', 'EPalWorkSuitability::Handcraft',
-                     'EPalWorkSuitability::Collection', 'EPalWorkSuitability::Deforest', 'EPalWorkSuitability::Mining',
-                     'EPalWorkSuitability::OilExtraction', 'EPalWorkSuitability::ProductMedicine',
-                     'EPalWorkSuitability::Cool', 'EPalWorkSuitability::Transport', 'EPalWorkSuitability::MonsterFarm']
+                    enum_options = ['EPalWorkSuitability::EmitFlame', 'EPalWorkSuitability::Watering',
+                                    'EPalWorkSuitability::Seeding',
+                                    'EPalWorkSuitability::GenerateElectricity', 'EPalWorkSuitability::Handcraft',
+                                    'EPalWorkSuitability::Collection', 'EPalWorkSuitability::Deforest',
+                                    'EPalWorkSuitability::Mining',
+                                    'EPalWorkSuitability::OilExtraction', 'EPalWorkSuitability::ProductMedicine',
+                                    'EPalWorkSuitability::Cool', 'EPalWorkSuitability::Transport',
+                                    'EPalWorkSuitability::MonsterFarm']
                     if attrib['value']['value'] not in enum_options:
                         enum_options.append(attrib['value']['value'])
                     ttk.Combobox(master=g_frame, font=self.font, state="readonly",
                                  textvariable=attrib_var[attribute_key],
-                                    values=enum_options).pack(side="right")
-                    attrib_var[attribute_key].set(attrib['value']['value'])
+                                 values=enum_options).pack(side="right")
+                    self.assign_attrib_var(attrib_var[attribute_key], attrib)
+                elif attrib['type'] == "ArrayProperty":
+                    self.build_subgui(g_frame, attribute_key, attrib_var[attribute_key], attrib)
+                elif attrib_var[attribute_key] is not None:                    
+                    valid_cmd = None
+                    if attrib['type'] in ["IntProperty"] or \
+                            (attrib['type'] == "StructProperty" and attrib['struct_type'] == "FixedPoint64" and
+                             attrib['value']['Value']['type'] == "Int64Property"):
+                        valid_cmd = (self.register(self.valid_int), '%P')
+                    elif attrib['type'] == "FloatProperty":
+                        valid_cmd = (self.register(self.valid_float), '%P')
+                    tk.Entry(font=font, master=g_frame,
+                             validate='all', validatecommand=valid_cmd,
+                             textvariable=attrib_var[attribute_key]).pack(
+                        side="right")
+                    self.assign_attrib_var(attrib_var[attribute_key], attrib)
                 else:
                     print("  ", attribute_key, attrib['type'], attrib['value'])
             else:
                 print(attribute_key, self.player[attribute_key])
                 continue
-    
+
     def cmb_array_selected(self, evt, g_frame, attribute_key, attrib_var, attrib):
         for item in g_frame.winfo_children():
             item.destroy()
         print("Binding to %s[%d]" % (attribute_key, evt.widget.current()))
         self.build_variable_gui(g_frame, attrib_var[evt.widget.current()],
                                 attrib['value']['values'][evt.widget.current()])
-    
+
+    def on_table_gui_dblclk(self, event, popup_set, columns, attrib_var):
+        ''' Executed, when a row is double-clicked. Opens 
+        read-only EntryPopup above the item's column, so it is possible
+        to select text '''
+        if popup_set.entryPopup is not None:
+            popup_set.entryPopup.destroy()
+            popup_set.entryPopup = None
+        # what row and column was clicked on
+        rowid = event.widget.identify_row(event.y)
+        column = event.widget.identify_column(event.x)
+        col_name = columns[int(column[1:]) - 1]
+        # get column position info
+        x, y, width, height = event.widget.bbox(rowid, column)
+        # y-axis offset
+        # pady = height // 2
+        pady = height // 2
+        popup_set.entryPopup = EntryPopup(event.widget, rowid, column, textvariable=attrib_var[int(rowid)][col_name])
+        popup_set.entryPopup.place(x=x, y=y + pady, anchor=W, width=width)
+
+    def build_array_gui_item(self, tables, idx, attrib_var, attrib_list):
+        values = []
+        for key in attrib_list:
+            attrib = attrib_list[key]
+            attrib_var[key] = self.make_attrib_var(tables, attrib)
+            if attrib_var[key] is not None:
+                self.assign_attrib_var(attrib_var[key], attrib)
+                values.append(attrib_var[key].get())
+        tables.insert(parent='', index='end', iid=idx, text='',
+                      values=values)
+
+    def build_array_gui(self, master, columns, attrib_var):
+        popup_set = type('', (), {})()
+        popup_set.entryPopup = None
+        y_scroll = tk.Scrollbar(master)
+        y_scroll.pack(side=RIGHT, fill=Y)
+        x_scroll = tk.Scrollbar(master, orient='horizontal')
+        x_scroll.pack(side=BOTTOM, fill=X)
+        tables = ttk.Treeview(master, yscrollcommand=y_scroll.set, xscrollcommand=x_scroll.set)
+        tables.pack(fill=BOTH)
+        y_scroll.config(command=tables.yview)
+        x_scroll.config(command=tables.xview)
+        tables['columns'] = columns
+        # format our column
+        tables.column("#0", width=0, stretch=NO)
+        for col in columns:
+            tables.column(col, anchor=CENTER, width=10)
+        # Create Headings 
+        tables.heading("#0", text="", anchor=CENTER)
+        for col in columns:
+            tables.heading(col, text=col, anchor=CENTER)
+        tables.bind("<Double-1>", lambda event: self.on_table_gui_dblclk(event, popup_set, columns, attrib_var))
+        global table
+        table = tables
+        return tables
+
     def save(self, attribs, attrib_var, path=""):
         for attribute_key in attribs:
             attrib = attribs[attribute_key]
@@ -428,31 +530,39 @@ class PlayerEditGUI(tk.Tk):
                 continue
             if 'type' in attrib:
                 if attrib['type'] == "IntProperty":
-                    print("%s%s [%s] = %d -> %d" % (path, attribute_key, attrib['type'], attribs[attribute_key]['value'], int(attrib_var[attribute_key].get())))
+                    print("%s%s [%s] = %d -> %d" % (
+                    path, attribute_key, attrib['type'], attribs[attribute_key]['value'],
+                    int(attrib_var[attribute_key].get())))
                     attribs[attribute_key]['value'] = int(attrib_var[attribute_key].get())
                 elif attrib['type'] == "FloatProperty":
-                    print("%s%s [%s] = %f -> %f" % (path, attribute_key, attrib['type'],attribs[attribute_key]['value'], float(attrib_var[attribute_key].get())))
+                    print("%s%s [%s] = %f -> %f" % (
+                    path, attribute_key, attrib['type'], attribs[attribute_key]['value'],
+                    float(attrib_var[attribute_key].get())))
                     attribs[attribute_key]['value'] = float(attrib_var[attribute_key].get())
                 elif attrib['type'] == "BoolProperty":
-                    print("%s%s [%s] = %d -> %d" % (path, attribute_key, attrib['type'], attribs[attribute_key]['value'],
-                                                 attrib_var[attribute_key].get()))
+                    print(
+                        "%s%s [%s] = %d -> %d" % (path, attribute_key, attrib['type'], attribs[attribute_key]['value'],
+                                                  attrib_var[attribute_key].get()))
                     attribs[attribute_key]['value'] = attrib_var[attribute_key].get()
                 elif attrib['type'] == "StructProperty" and attrib['struct_type'] == "FixedPoint64":
                     if attrib['value']['Value']['type'] == "Int64Property":
-                        print("%s%s [%s.%s] = %d -> %d" % (path, attribute_key, attrib['type'], attrib['value']['Value']['type'],
-                                                        attribs[attribute_key]['value']['Value']['value'],
-                                                        int(attrib_var[attribute_key].get())))
+                        print("%s%s [%s.%s] = %d -> %d" % (
+                        path, attribute_key, attrib['type'], attrib['value']['Value']['type'],
+                        attribs[attribute_key]['value']['Value']['value'],
+                        int(attrib_var[attribute_key].get())))
                         attribs[attribute_key]['value']['Value']['value'] = int(attrib_var[attribute_key].get())
                     else:
-                        print("Error: unsupported property type -> %s[%s.%s]" % (attribute_key, attrib['type'], attrib['value']['Value']['type']))
+                        print("Error: unsupported property type -> %s[%s.%s]" % (
+                        attribute_key, attrib['type'], attrib['value']['Value']['type']))
                 elif attrib['type'] in ["StrProperty", "NameProperty"]:
-                    print("%s%s [%s] = %s -> %s" % (path, attribute_key, attrib['type'], attribs[attribute_key]['value'],
-                                                 attrib_var[attribute_key].get()))
+                    print(
+                        "%s%s [%s] = %s -> %s" % (path, attribute_key, attrib['type'], attribs[attribute_key]['value'],
+                                                  attrib_var[attribute_key].get()))
                     attribs[attribute_key]['value'] = attrib_var[attribute_key].get()
                 elif attrib['type'] == "EnumProperty":
                     print("%s%s [%s - %s] = %s -> %s" % (path, attribute_key, attrib['type'], attrib['value']['type'],
                                                          attribs[attribute_key]['value']['value'],
-                                                 attrib_var[attribute_key].get()))
+                                                         attrib_var[attribute_key].get()))
                     attribs[attribute_key]['value']['value'] = attrib_var[attribute_key].get()
                 elif attrib['type'] == "ArrayProperty":
                     for idx, item in enumerate(attrib['value']['values']):
@@ -460,8 +570,74 @@ class PlayerEditGUI(tk.Tk):
                         self.save(item, attrib_var[attribute_key][idx], "%s[%d]." % (attribute_key, idx))
                 else:
                     print("Error: unsupported property type -> %s[%s]" % (attribute_key, attrib['type']))
+
+class PlayerItemEdit(ParamEditor):
+    def __init__(self, player_uid):
+        load_skiped_decode(wsd, ['ItemContainerSaveData'])
+        item_containers = {}
+        for item_container in wsd["ItemContainerSaveData"]['value']:
+            item_containers[str(item_container['key']['ID']['value'])] = item_container
+        
+        self.item_containers = {}
+        self.item_container_vars = {}
+        
+        player_sav_file = os.path.dirname(os.path.abspath(args.filename)) + "/Players/" + player_uid.upper().replace(
+            "-",
+            "") + ".sav"
+        if not os.path.exists(player_sav_file):
+            messagebox.showerror("Player Itme Editor", "Player Sav file Not exists: %s" % player_sav_file)
+            return
+        else:
+            with open(player_sav_file, "rb") as f:
+                raw_gvas, _ = decompress_sav_to_gvas(f.read())
+                player_gvas_file = GvasFile.read(raw_gvas, PALWORLD_TYPE_HINTS, PALWORLD_CUSTOM_PROPERTIES)
+            player_gvas = player_gvas_file.properties['SaveData']['value']
+        super().__init__()
+        self.player_uid = player_uid
+        self.player = \
+        instanceMapping[str(playerMapping[player_uid]['InstanceId'])]['value']['RawData']['value']['object'][
+            'SaveParameter']['value']
+        self.gui.title("Player Item Edit - %s" % player_uid)
+        tabs = ttk.Notebook(master=self)
+        for idx_key in ['CommonContainerId', 'DropSlotContainerId', 'EssentialContainerId', 'FoodEquipContainerId',
+                        'PlayerEquipArmorContainerId', 'WeaponLoadOutContainerId']:
+            if str(player_gvas['inventoryInfo']['value'][idx_key]['value']['ID']['value']) in item_containers:
+                tab = tk.Frame(tabs)
+                tabs.add(tab, text=idx_key[:-11])
+                self.item_container_vars[idx_key[:-11]] = []
+                item_container = item_containers[str(player_gvas['inventoryInfo']['value'][idx_key]['value']['ID']['value'])]
+                self.item_containers[idx_key[:-11]] = [{
+                    'SlotIndex': item['SlotIndex'],
+                    'ItemId': item['ItemId']['value']['StaticId'],
+                    'StackCount': item['StackCount']
+                } for item in item_container['value']['Slots']['value']['values']]
+                tables = self.build_array_gui(tab, ("SlotIndex", "ItemId", "StackCount"), self.item_container_vars[idx_key[:-11]])
+                for idx, item in enumerate(self.item_containers[idx_key[:-11]]):
+                    self.item_container_vars[idx_key[:-11]].append({})
+                    self.build_array_gui_item(tables, idx, self.item_container_vars[idx_key[:-11]][idx], item)
+        # 
+        tabs.pack(side="top")
+        tk.Button(master=self.gui, font=self.font, text="Save", command=self.savedata).pack(fill=X)
     
-    def saveplayer(self):
+    def savedata(self):
+        for idx_key in self.item_containers:
+            for idx, item in enumerate(self.item_containers[idx_key]):
+                self.save(self.item_containers[idx_key][idx], self.item_container_vars[idx_key][idx])
+        self.destroy()
+
+class PlayerEditGUI(ParamEditor):
+    def __init__(self, player_uid):
+        super().__init__()
+        self.player_uid = player_uid
+        self.player = \
+        instanceMapping[str(playerMapping[player_uid]['InstanceId'])]['value']['RawData']['value']['object'][
+            'SaveParameter']['value']
+        self.gui.title("Player Edit - %s" % player_uid)
+        self.gui_attribute = {}
+        self.build_variable_gui(self.gui, self.gui_attribute, self.player)
+        tk.Button(master=self.gui, font=self.font, text="Save", command=self.savedata).pack(fill=X)
+    
+    def savedata(self):
         self.save(self.player, self.gui_attribute)
         self.destroy()
 
@@ -643,6 +819,7 @@ class GUI():
             try:
                 Save(False)
                 messagebox.showinfo("Result", "Save to %s success" % output_path)
+                print()
                 sys.exit(0)
             except Exception as e:
                 messagebox.showerror("Save Error", str(e))
@@ -652,8 +829,15 @@ class GUI():
         if target_uuid is None:
             return
 
-        player_gui = PlayerEditGUI(target_uuid)
-    
+        PlayerEditGUI(target_uuid)
+
+    def edit_player_item(self):
+        target_uuid = self.parse_target_uuid()
+        if target_uuid is None:
+            return
+
+        PlayerItemEdit(target_uuid)
+
     def build_gui(self):
         #
         self.gui = tk.Tk()
@@ -709,6 +893,8 @@ class GUI():
         g_delete.pack(side="left")
         g_edit = tk.Button(master=g_button_frame, text="Edit", font=font, command=self.edit_player)
         g_edit.pack(side="left")
+        g_edit_item = tk.Button(master=g_button_frame, text="Edit Item", font=font, command=self.edit_player_item)
+        g_edit_item.pack(side="left")
         g_button_frame.pack()
         
         g_save = tk.Button(text="Save & Exit", font=font, command=self.save)

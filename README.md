@@ -15,7 +15,6 @@
 ### GUI
 
 ![](./docs/img/GUI.png)
-![](./docs/img/PlayerEdit.png)
 
 ### 安装
 
