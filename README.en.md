@@ -13,6 +13,11 @@
 </p>
 
 
+### GUI
+
+![](./docs/img/GUI.png)
+
+
 ### Prerequisites
 
 1. Python 3.9 or newer.
