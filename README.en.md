@@ -38,7 +38,7 @@ Tool for list player's nickname, steam id on server
 
 ---
 
-## palworld-cleanup-tools.py
+## palworld-save-editor.py
 
 This tools is for cleanup the unreference item, rename the player name, migrate player and delete the player.
 

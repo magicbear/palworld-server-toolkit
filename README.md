@@ -32,7 +32,7 @@
 - 玩家详细 - `python3 list.py <PLAYER HEX UID>`
 
 ---
-## palworld-cleanup-tools.py
+## palworld-save-editor.py
 
 清理捕捉日志，改名，合并不同服务器玩家，删除玩家，迁移坏档等工具包
 

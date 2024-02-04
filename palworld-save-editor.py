@@ -191,8 +191,8 @@ def main():
     global output_file, output_path, args, gui, playerMapping, instanceMapping
 
     parser = argparse.ArgumentParser(
-        prog="palworld-cleanup-tools",
-        description="Cleanup the Level.sav",
+        prog="palworld-save-editor",
+        description="Editor for the Level.sav",
     )
     parser.add_argument("filename")
     parser.add_argument(
