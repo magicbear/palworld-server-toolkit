@@ -23,8 +23,8 @@ dependencies = [
 dynamic = ["version"]
 
 [project.urls]
-Homepage = "https://github.com/magicbear/palworld-server-tool"
-Issues = "https://github.com/magicbear/palworld-server-tool/issues"
+Homepage = "https://github.com/magicbear/palworld-server-toolkits"
+Issues = "https://github.com/magicbear/palworld-server-toolkits/issues"
 
 [project.scripts]
 palworld-save-editor = "palworld_server_toolkit.editor:main"
