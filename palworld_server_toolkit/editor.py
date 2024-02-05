@@ -891,7 +891,6 @@ class GUI():
 
         self.src_player.set("")
         self.src_player['value'] = src_value_lists
-        print(src_value_lists)
 
         _playerMapping, _ = LoadPlayers(wsd)
         target_value_lists = []

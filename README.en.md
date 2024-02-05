@@ -40,7 +40,7 @@ The world fastest PalWorld server save editor, parse Level.sav in 1.1s for JSON 
 
 ### Question?
 
-[Discord](https://discord.com/channels/1200798336916144188/1200803146407096341)
+[Discord](https://discord.com/channels/1200798336916144188/1203683616488685698)
 
 
 ---
