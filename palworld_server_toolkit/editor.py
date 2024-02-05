@@ -2,34 +2,32 @@
 # Author: MagicBear
 # License: MIT License
 
-import glob, os, datetime, time, zlib, subprocess
-from operator import itemgetter, attrgetter
-import json
-import os
+import os, datetime, time
 import sys
 import threading
+import pprint
+import uuid
+import argparse
+import copy
 
 import tkinter as tk
 from tkinter import ttk
-from tkinter import font as TkFont
+from tkinter import font
 from tkinter import messagebox
 from tkinter import filedialog
 from tkinter import simpledialog
-from tkinter.constants import *
+from PIL import ImageTk, Image
 
 module_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, module_dir)
 sys.path.insert(0, os.path.join(module_dir, "../save_tools"))
+sys.path.insert(0, os.path.join(module_dir, "../PalEdit"))
 sys.path.insert(0, os.path.join(module_dir, "../palworld-save-tools"))
 
 from palworld_save_tools.gvas import GvasFile
 from palworld_save_tools.palsav import compress_gvas_to_sav, decompress_sav_to_gvas
 from palworld_save_tools.paltypes import PALWORLD_CUSTOM_PROPERTIES, PALWORLD_TYPE_HINTS
 from palworld_save_tools.archive import *
-import pprint
-import uuid
-import argparse
-import copy
 
 pp = pprint.PrettyPrinter(width=80, compact=True, depth=4)
 wsd = None
@@ -43,11 +41,12 @@ instanceMapping = None
 output_path = None
 args = None
 player = None
-filetime = None
+filetime = -1
 gui = None
 
+
 def skip_decode(
-    reader: FArchiveReader, type_name: str, size: int, path: str
+        reader: FArchiveReader, type_name: str, size: int, path: str
 ) -> dict[str, Any]:
     if type_name == "ArrayProperty":
         array_type = reader.fstring()
@@ -82,8 +81,9 @@ def skip_decode(
         )
     return value
 
+
 def skip_encode(
-    writer: FArchiveWriter, property_type: str, properties: dict[str, Any]
+        writer: FArchiveWriter, property_type: str, properties: dict[str, Any]
 ) -> int:
     if property_type == "ArrayProperty":
         del properties["custom_type"]
@@ -113,6 +113,7 @@ def skip_encode(
             f"Expected ArrayProperty or MapProperty or StructProperty, got {property_type}"
         )
 
+
 class skip_loading_progress(threading.Thread):
     def __init__(self, reader, size):
         super().__init__()
@@ -139,10 +140,11 @@ def load_skiped_decode(wsd, skip_paths):
         print("Parsing worldSaveData.%s..." % skip_path, end="", flush=True)
         with FArchiveReader(
                 properties['value'], PALWORLD_TYPE_HINTS, PALWORLD_CUSTOM_PROPERTIES
-            ) as reader:
+        ) as reader:
             skip_loading_progress(reader, len(properties['value'])).start()
             if properties["skip_type"] == "ArrayProperty":
-                properties['value'] = reader.array_property(properties["array_type"], len(properties['value']) - 4, ".worldSaveData.%s" % skip_path)
+                properties['value'] = reader.array_property(properties["array_type"], len(properties['value']) - 4,
+                                                            ".worldSaveData.%s" % skip_path)
             elif properties["skip_type"] == "StructProperty":
                 properties['value'] = reader.struct_value(properties['struct_type'], ".worldSaveData.%s" % skip_path)
             elif properties["skip_type"] == "MapProperty":
@@ -180,6 +182,7 @@ def load_skiped_decode(wsd, skip_paths):
             del SKP_PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.%s" % skip_path]
         print("Done")
 
+
 SKP_PALWORLD_CUSTOM_PROPERTIES = copy.deepcopy(PALWORLD_CUSTOM_PROPERTIES)
 SKP_PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.MapObjectSaveData"] = (skip_decode, skip_encode)
 SKP_PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.FoliageGridSaveDataMap"] = (skip_decode, skip_encode)
@@ -187,6 +190,7 @@ SKP_PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.MapObjectSpawnerInStageSaveData"]
 SKP_PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.ItemContainerSaveData"] = (skip_decode, skip_encode)
 SKP_PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.DynamicItemSaveData"] = (skip_decode, skip_encode)
 SKP_PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.CharacterContainerSaveData"] = (skip_decode, skip_encode)
+
 
 def main():
     global output_file, output_path, args, gui, playerMapping, instanceMapping
@@ -227,7 +231,7 @@ def main():
         action="store_true",
         help="Open GUI",
     )
-    
+
     if len(sys.argv) == 1:
         bk_f = filedialog.askopenfilename(filetypes=[("Level.sav file", "*.sav")], title="Open Level.sav")
         if bk_f:
@@ -348,13 +352,13 @@ class EntryPopup(tk.Entry):
         return 'break'
 
 
-class ParamEditor(tk.Tk):
+class ParamEditor(tk.Toplevel):
     def __init__(self):
         super().__init__()
         self.gui = self
         self.parent = self
         #
-        self.font = TkFont.Font(family="Courier New")
+        self.font = tk.font.Font(family="Courier New")
 
     def build_subgui(self, g_frame, attribute_key, attrib_var, attrib):
         sub_frame = ttk.Frame(master=g_frame)
@@ -364,8 +368,6 @@ class ParamEditor(tk.Tk):
                             values=["Item %d" % i for i in range(len(attrib['value']['values']))])
         cmbx.bind("<<ComboboxSelected>>",
                   lambda evt: self.cmb_array_selected(evt, sub_frame_c, attribute_key, attrib_var, attrib))
-        # , attribute_key, attrib_var[attribute_key],
-        #                                                                 attrib['value']['values']
         cmbx.pack(side="top")
         sub_frame_c.pack(side="top")
 
@@ -382,8 +384,9 @@ class ParamEditor(tk.Tk):
             return True
         except ValueError as e:
             return False
-    
-    def make_attrib_var(self, master, attrib):
+
+    @staticmethod
+    def make_attrib_var(master, attrib):
         if not isinstance(attrib, dict):
             return None
         if attrib['type'] in ["IntProperty", "StrProperty", "NameProperty", "FloatProperty", "EnumProperty"]:
@@ -403,7 +406,7 @@ class ParamEditor(tk.Tk):
         # elif attrib['type'] == "ArrayProperty" and attrib['array_type'] == "NameProperty":
         #     attrib_var = []
         #     return attrib_var
-    
+
     def assign_attrib_var(self, var, attrib):
         if attrib['type'] in ["IntProperty", "StrProperty", "NameProperty", "FloatProperty"]:
             var.set(str(attrib['value']))
@@ -438,8 +441,8 @@ class ParamEditor(tk.Tk):
                 elif attrib['type'] == "BoolProperty":
                     print(
                         "%s%s [%s] = %d -> %d" % (
-                        path, attribute_key, attrib['type'], attribs[attribute_key]['value'],
-                        attrib_var[attribute_key].get()))
+                            path, attribute_key, attrib['type'], attribs[attribute_key]['value'],
+                            attrib_var[attribute_key].get()))
                     attribs[attribute_key]['value'] = attrib_var[attribute_key].get()
                 elif attrib['type'] == "StructProperty" and attrib['struct_type'] == "FixedPoint64":
                     if attrib['value']['Value']['type'] == "Int64Property":
@@ -460,8 +463,8 @@ class ParamEditor(tk.Tk):
                 elif attrib['type'] in ["StrProperty", "NameProperty"]:
                     print(
                         "%s%s [%s] = %s -> %s" % (
-                        path, attribute_key, attrib['type'], attribs[attribute_key]['value'],
-                        attrib_var[attribute_key].get()))
+                            path, attribute_key, attrib['type'], attribs[attribute_key]['value'],
+                            attrib_var[attribute_key].get()))
                     attribs[attribute_key]['value'] = attrib_var[attribute_key].get()
                 elif attrib['type'] == "EnumProperty":
                     print(
@@ -477,12 +480,12 @@ class ParamEditor(tk.Tk):
                     if attrib_var[attribute_key] is None:
                         continue
                     for key in attrib['value']:
-                        self.save({ key: attrib['value'][key] }, attrib_var[attribute_key], "%s[\"%s\"]." % (attribute_key, key))
+                        self.save({key: attrib['value'][key]}, attrib_var[attribute_key],
+                                  "%s[\"%s\"]." % (attribute_key, key))
                 else:
                     print("Error: unsupported property type -> %s[%s]" % (attribute_key, attrib['type']))
 
-    def build_variable_gui(self, parent, attrib_var, attribs, with_labelframe = True):
-        font = self.font
+    def build_variable_gui(self, parent, attrib_var, attribs, with_labelframe=True):
         for attribute_key in attribs:
             attrib = attribs[attribute_key]
             if not isinstance(attrib, dict):
@@ -490,8 +493,8 @@ class ParamEditor(tk.Tk):
             if 'type' in attrib:
                 if with_labelframe:
                     g_frame = tk.Frame(master=parent)
-                    g_frame.pack(anchor=W, fill=X, expand=True)
-                    tk.Label(master=g_frame, text=attribute_key, font=font).pack(side="left")
+                    g_frame.pack(anchor=tk.constants.W, fill=tk.constants.X, expand=True)
+                    tk.Label(master=g_frame, text=attribute_key, font=self.font).pack(side="left")
                 else:
                     g_frame = parent
 
@@ -518,9 +521,9 @@ class ParamEditor(tk.Tk):
                 elif attrib['type'] == "ArrayProperty" and attrib['array_type'] == "StructProperty":
                     self.build_subgui(g_frame, attribute_key, attrib_var[attribute_key], attrib)
                 elif attrib['type'] == "StructProperty" and attrib['struct_type'] == "Guid":
-                    tk.Entry(font=font, master=g_frame, width=50,
+                    tk.Entry(font=self.font, master=g_frame, width=50,
                              textvariable=attrib_var[attribute_key]).pack(
-                        side="right", fill=X)
+                        side="right", fill=tk.constants.X)
                     self.assign_attrib_var(attrib_var[attribute_key], attrib)
                 elif attrib_var[attribute_key] is not None:
                     valid_cmd = None
@@ -530,27 +533,29 @@ class ParamEditor(tk.Tk):
                         valid_cmd = (self.register(self.valid_int), '%P')
                     elif attrib['type'] == "FloatProperty":
                         valid_cmd = (self.register(self.valid_float), '%P')
-                        
-                    tk.Entry(font=font, master=g_frame,
+
+                    tk.Entry(font=self.font, master=g_frame,
                              validate='all', validatecommand=valid_cmd,
                              textvariable=attrib_var[attribute_key],
                              width=50).pack(
-                        side="right",fill=X)
+                        side="right", fill=tk.constants.X)
                     self.assign_attrib_var(attrib_var[attribute_key], attrib)
                 elif attrib['type'] == "StructProperty":
                     attrib_var[attribute_key] = {}
                     sub_f = tk.Frame(master=g_frame)
-                    sub_f.pack(side="right",fill=X)
+                    sub_f.pack(side="right", fill=tk.constants.X)
                     for key in attrib['value']:
                         try:
-                            attrib_var[attribute_key][key] = self.make_attrib_var(master=sub_f, attrib=attrib['value'][key])
+                            attrib_var[attribute_key][key] = self.make_attrib_var(master=sub_f,
+                                                                                  attrib=attrib['value'][key])
                             if attrib_var[attribute_key][key] is not None:
                                 self.build_variable_gui(sub_f, attrib_var[attribute_key],
                                                         {key: attrib['value'][key]})
                         except TypeError as e:
                             print("Error attribute [%s]->%s " % (key, attribute_key), attrib)
                 else:
-                    print("  ", attribute_key, attrib['type']+(".%s" % attrib['struct_type'] if attrib['type'] == "StructProperty" else ""), attrib['value'])
+                    print("  ", attribute_key, attrib['type'] + (
+                        ".%s" % attrib['struct_type'] if attrib['type'] == "StructProperty" else ""), attrib['value'])
             else:
                 print(attribute_key, attribs[attribute_key])
                 continue
@@ -562,10 +567,11 @@ class ParamEditor(tk.Tk):
         self.build_variable_gui(g_frame, attrib_var[evt.widget.current()],
                                 attrib['value']['values'][evt.widget.current()])
 
-    def on_table_gui_dblclk(self, event, popup_set, columns, attrib_var):
-        ''' Executed, when a row is double-clicked. Opens 
+    @staticmethod
+    def on_table_gui_dblclk(event, popup_set, columns, attrib_var):
+        """ Executed, when a row is double-clicked. Opens 
         read-only EntryPopup above the item's column, so it is possible
-        to select text '''
+        to select text """
         if popup_set.entryPopup is not None:
             popup_set.entryPopup.destroy()
             popup_set.entryPopup = None
@@ -579,7 +585,7 @@ class ParamEditor(tk.Tk):
         # pady = height // 2
         pady = height // 2
         popup_set.entryPopup = EntryPopup(event.widget, rowid, column, textvariable=attrib_var[int(rowid)][col_name])
-        popup_set.entryPopup.place(x=x, y=y + pady, anchor=W, width=width)
+        popup_set.entryPopup.place(x=x, y=y + pady, anchor=tk.constants.W, width=width)
 
     def build_array_gui_item(self, tables, idx, attrib_var, attrib_list):
         values = []
@@ -596,26 +602,25 @@ class ParamEditor(tk.Tk):
         popup_set = type('', (), {})()
         popup_set.entryPopup = None
         y_scroll = tk.Scrollbar(master)
-        y_scroll.pack(side=RIGHT, fill=Y)
+        y_scroll.pack(side=tk.constants.RIGHT, fill=tk.constants.Y)
         x_scroll = tk.Scrollbar(master, orient='horizontal')
-        x_scroll.pack(side=BOTTOM, fill=X)
+        x_scroll.pack(side=tk.constants.BOTTOM, fill=tk.constants.X)
         tables = ttk.Treeview(master, yscrollcommand=y_scroll.set, xscrollcommand=x_scroll.set)
-        tables.pack(fill=BOTH)
+        tables.pack(fill=tk.constants.BOTH)
         y_scroll.config(command=tables.yview)
         x_scroll.config(command=tables.xview)
         tables['columns'] = columns
         # format our column
-        tables.column("#0", width=0, stretch=NO)
+        tables.column("#0", width=0, stretch=tk.constants.NO)
         for col in columns:
-            tables.column(col, anchor=CENTER, width=10)
-        # Create Headings 
-        tables.heading("#0", text="", anchor=CENTER)
+            tables.column(col, anchor=tk.constants.CENTER, width=10)
+        # Create Headings
+        tables.heading("#0", text="", anchor=tk.constants.CENTER)
         for col in columns:
-            tables.heading(col, text=col, anchor=CENTER)
+            tables.heading(col, text=col, anchor=tk.constants.CENTER)
         tables.bind("<Double-1>", lambda event: self.on_table_gui_dblclk(event, popup_set, columns, attrib_var))
-        global table
-        table = tables
         return tables
+
 
 class PlayerItemEdit(ParamEditor):
     def __init__(self, player_uid):
@@ -623,10 +628,10 @@ class PlayerItemEdit(ParamEditor):
         item_containers = {}
         for item_container in wsd["ItemContainerSaveData"]['value']:
             item_containers[str(item_container['key']['ID']['value'])] = item_container
-        
+
         self.item_containers = {}
         self.item_container_vars = {}
-        
+
         player_sav_file = os.path.dirname(os.path.abspath(args.filename)) + "/Players/" + player_uid.upper().replace(
             "-",
             "") + ".sav"
@@ -641,8 +646,8 @@ class PlayerItemEdit(ParamEditor):
         super().__init__()
         self.player_uid = player_uid
         self.player = \
-        instanceMapping[str(playerMapping[player_uid]['InstanceId'])]['value']['RawData']['value']['object'][
-            'SaveParameter']['value']
+            instanceMapping[str(playerMapping[player_uid]['InstanceId'])]['value']['RawData']['value']['object'][
+                'SaveParameter']['value']
         self.gui.title("Player Item Edit - %s" % player_uid)
         tabs = ttk.Notebook(master=self)
         for idx_key in ['CommonContainerId', 'DropSlotContainerId', 'EssentialContainerId', 'FoodEquipContainerId',
@@ -651,20 +656,22 @@ class PlayerItemEdit(ParamEditor):
                 tab = tk.Frame(tabs)
                 tabs.add(tab, text=idx_key[:-11])
                 self.item_container_vars[idx_key[:-11]] = []
-                item_container = item_containers[str(player_gvas['inventoryInfo']['value'][idx_key]['value']['ID']['value'])]
+                item_container = item_containers[
+                    str(player_gvas['inventoryInfo']['value'][idx_key]['value']['ID']['value'])]
                 self.item_containers[idx_key[:-11]] = [{
                     'SlotIndex': item['SlotIndex'],
                     'ItemId': item['ItemId']['value']['StaticId'],
                     'StackCount': item['StackCount']
                 } for item in item_container['value']['Slots']['value']['values']]
-                tables = self.build_array_gui(tab, ("SlotIndex", "ItemId", "StackCount"), self.item_container_vars[idx_key[:-11]])
+                tables = self.build_array_gui(tab, ("SlotIndex", "ItemId", "StackCount"),
+                                              self.item_container_vars[idx_key[:-11]])
                 for idx, item in enumerate(self.item_containers[idx_key[:-11]]):
                     self.item_container_vars[idx_key[:-11]].append({})
                     self.build_array_gui_item(tables, idx, self.item_container_vars[idx_key[:-11]][idx], item)
         # 
         tabs.pack(side="top")
-        tk.Button(master=self.gui, font=self.font, text="Save", command=self.savedata).pack(fill=X)
-    
+        tk.Button(master=self.gui, font=self.font, text="Save", command=self.savedata).pack(fill=tk.constants.X)
+
     def savedata(self):
         for idx_key in self.item_containers:
             for idx, item in enumerate(self.item_containers[idx_key]):
@@ -674,7 +681,8 @@ class PlayerItemEdit(ParamEditor):
 
 class PlayerSaveEdit(ParamEditor):
     def __init__(self, player_uid):
-        self.player_sav_file = os.path.dirname(os.path.abspath(args.filename)) + "/Players/" + player_uid.upper().replace(
+        self.player_sav_file = os.path.dirname(
+            os.path.abspath(args.filename)) + "/Players/" + player_uid.upper().replace(
             "-",
             "") + ".sav"
         if not os.path.exists(self.player_sav_file):
@@ -691,12 +699,13 @@ class PlayerSaveEdit(ParamEditor):
         self.gui_attribute = {}
         self.gui.title("Player Save Edit - %s" % player_uid)
         self.build_variable_gui(self.gui, self.gui_attribute, self.player)
-        tk.Button(master=self.gui, font=self.font, text="Save", command=self.savedata).pack(fill=X)
-    
+        tk.Button(master=self.gui, font=self.font, text="Save", command=self.savedata).pack(fill=tk.constants.X)
+
     def savedata(self):
         self.save(self.player, self.gui_attribute)
         with open(self.player_sav_file, "wb") as f:
-            if "Pal.PalWorldSaveGame" in self.player_gvas_file.header.save_game_class_name or "Pal.PalLocalWorldSaveGame" in self.player_gvas_file.header.save_game_class_name:
+            if "Pal.PalWorldSaveGame" in self.player_gvas_file.header.save_game_class_name or \
+                    "Pal.PalLocalWorldSaveGame" in self.player_gvas_file.header.save_game_class_name:
                 save_type = 0x32
             else:
                 save_type = 0x31
@@ -705,20 +714,18 @@ class PlayerSaveEdit(ParamEditor):
         self.destroy()
 
 
-# edit = PlayerSaveEdit("fce2d6c8-0000-0000-0000-000000000000")
-
 class PlayerEditGUI(ParamEditor):
     def __init__(self, player_uid):
         super().__init__()
         self.player_uid = player_uid
         self.player = \
-        instanceMapping[str(playerMapping[player_uid]['InstanceId'])]['value']['RawData']['value']['object'][
-            'SaveParameter']['value']
+            instanceMapping[str(playerMapping[player_uid]['InstanceId'])]['value']['RawData']['value']['object'][
+                'SaveParameter']['value']
         self.gui.title("Player Edit - %s" % player_uid)
         self.gui_attribute = {}
         self.build_variable_gui(self.gui, self.gui_attribute, self.player)
-        tk.Button(master=self.gui, font=self.font, text="Save", command=self.savedata).pack(fill=X)
-    
+        tk.Button(master=self.gui, font=self.font, text="Save", command=self.savedata).pack(fill=tk.constants.X)
+
     def savedata(self):
         self.save(self.player, self.gui_attribute)
         self.destroy()
@@ -729,32 +736,38 @@ class GUI():
         if gui is not None:
             gui.gui.destroy()
         gui = self
+        self.gui = None
         self.src_player = None
         self.target_player = None
         self.data_source = None
         self.btn_migrate = None
+        self.font = None
         self.build_gui()
-    
+
     def mainloop(self):
         self.gui.mainloop()
-    
+
     def gui_parse_uuid(self):
-        src_uuid = self.src_player.get().split(" - ")[0]+"-0000-0000-0000-000000000000"
-        target_uuid = self.target_player.get().split(" - ")[0]+"-0000-0000-0000-000000000000"
+        src_uuid = self.src_player.get().split(" - ")[0]
+        target_uuid = self.target_player.get().split(" - ")[0]
+        if len(src_uuid) == 8:
+            src_uuid += "-0000-0000-0000-000000000000"
+        if len(target_uuid) == 8:
+            target_uuid += "-0000-0000-0000-000000000000"
         try:
             uuid.UUID(src_uuid)
         except Exception as e:
-            messagebox.showerror("Src Player Error", str(e))
+            messagebox.showerror("Src Player Error",  "UUID: \"%s\"\n%s" % (target_uuid, str(e)))
             return None, None
-        
+
         try:
             uuid.UUID(target_uuid)
         except Exception as e:
-            messagebox.showerror("Target Player Error", str(e))
+            messagebox.showerror("Target Player Error",  "UUID: \"%s\"\n%s" % (target_uuid, str(e)))
             return None, None
-        
+
         return src_uuid, target_uuid
-    
+
     def migrate(self):
         src_uuid, target_uuid = self.gui_parse_uuid()
         if src_uuid is None:
@@ -768,7 +781,7 @@ class GUI():
             self.load_players()
         except Exception as e:
             messagebox.showerror("Migrate Error", str(e))
-    
+
     def open_file(self):
         bk_f = filedialog.askopenfilename(filetypes=[("Level.sav file", "*.sav")], title="Open Level.sav")
         if bk_f:
@@ -778,7 +791,7 @@ class GUI():
                 OpenBackup(bk_f)
             self.change_datasource(None)
             self.load_guilds()
-    
+
     def copy_player(self):
         src_uuid, target_uuid = self.gui_parse_uuid()
         if src_uuid is None:
@@ -795,25 +808,26 @@ class GUI():
             self.load_players()
         except Exception as e:
             messagebox.showerror("Copy Error", str(e))
-    
+
     def load_players(self):
-        playerMapping, _ = LoadPlayers(wsd if self.data_source.current() == 0 else backup_wsd)
+        _playerMapping, _ = LoadPlayers(wsd if self.data_source.current() == 0 else backup_wsd)
         src_value_lists = []
-        for player_uid in playerMapping:
-            player = playerMapping[player_uid]
-            src_value_lists.append(player_uid[0:8] + " - "+player['NickName'])
-        
+        for player_uid in _playerMapping:
+            _player = _playerMapping[player_uid]
+            src_value_lists.append(player_uid[0:8] + " - " + _player['NickName'])
+
         self.src_player.set("")
         self.src_player['value'] = src_value_lists
-        
-        playerMapping, _ = LoadPlayers(wsd)
+        print(src_value_lists)
+
+        _playerMapping, _ = LoadPlayers(wsd)
         target_value_lists = []
-        for player_uid in playerMapping:
-            player = playerMapping[player_uid]
-            target_value_lists.append(player_uid[0:8] + " - "+player['NickName'])
-        
+        for player_uid in _playerMapping:
+            _player = _playerMapping[player_uid]
+            target_value_lists.append(player_uid[0:8] + " - " + _player['NickName'])
+
         self.target_player['value'] = target_value_lists
-    
+
     def load_guilds(self):
         guild_list = []
         for group_data in wsd['GroupSaveDataMap']['value']:
@@ -822,31 +836,34 @@ class GUI():
                 guild_list.append("%s - %s" % (group_info['group_id'], group_info['guild_name']))
         self.target_guild['value'] = guild_list
         self.target_guild.set("")
-    
+
     def change_datasource(self, x):
         if self.data_source.current() == 0:
             self.btn_migrate["state"] = "normal"
         else:
             self.btn_migrate["state"] = "disabled"
         self.load_players()
-    
+
     def parse_target_uuid(self):
-        target_uuid = self.target_player.get().split(" - ")[0] + "-0000-0000-0000-000000000000"
+        target_uuid = self.target_player.get().split(" - ")[0]
+        if len(target_uuid) == 8:
+            target_uuid += "-0000-0000-0000-000000000000"
         try:
             uuid.UUID(target_uuid)
         except Exception as e:
-            messagebox.showerror("Target Player Error", str(e))
+            messagebox.showerror("Target Player Error",  "UUID: \"%s\"\n%s" % (target_uuid, str(e)))
             return None
         if target_uuid not in playerMapping:
-            messagebox.showerror("Target Player Not exists", str(e))
+            messagebox.showerror("Target Player Not exists")
             return None
         return target_uuid
-    
+
     def rename_player(self):
         target_uuid = self.parse_target_uuid()
         if target_uuid is None:
             return
-        new_player_name = simpledialog.askstring(title="Rename Player", prompt="New player name", initialvalue=playerMapping[target_uuid]['NickName'])
+        new_player_name = simpledialog.askstring(title="Rename Player", prompt="New player name",
+                                                 initialvalue=playerMapping[target_uuid]['NickName'])
         if new_player_name:
             try:
                 RenamePlayer(target_uuid, new_player_name)
@@ -854,19 +871,20 @@ class GUI():
                 self.load_players()
             except Exception as e:
                 messagebox.showerror("Rename Error", str(e))
-    
+
     def delete_player(self):
         target_uuid = self.parse_target_uuid()
         if target_uuid is None:
             return
-        if 'yes' == messagebox.showwarning("Delete Player", "Confirm to delete player %s" % target_uuid, type=messagebox.YESNO):
+        if 'yes' == messagebox.showwarning("Delete Player", "Confirm to delete player %s" % target_uuid,
+                                           type=messagebox.YESNO):
             try:
                 DeletePlayer(target_uuid)
                 messagebox.showinfo("Result", "Delete success")
                 self.load_players()
             except Exception as e:
                 messagebox.showerror("Delete Error", str(e))
-    
+
     def move_guild(self):
         target_uuid = self.parse_target_uuid()
         if target_uuid is None:
@@ -877,7 +895,7 @@ class GUI():
         except Exception as e:
             messagebox.showerror("Target Guild Error", str(e))
             return None
-        
+
         target_guild = None
         for group_data in wsd['GroupSaveDataMap']['value']:
             if str(group_data['value']['GroupType']['value']['value']) == "EPalGroupType::Guild":
@@ -895,7 +913,7 @@ class GUI():
             self.load_guilds()
         except Exception as e:
             messagebox.showerror("Move Guild Error", str(e))
-    
+
     def save(self):
         if 'yes' == messagebox.showwarning("Save", "Confirm to save file?", type=messagebox.YESNO):
             try:
@@ -931,65 +949,67 @@ class GUI():
         self.gui.title('PalWorld Save Editor - Author by MagicBear')
         # self.gui.geometry('640x200')
         #
-        font = TkFont.Font(family="Courier New")
-        self.gui.option_add('*TCombobox*Listbox.font', font)
+        self.font = tk.font.Font(family="Courier New")
+        self.gui.option_add('*TCombobox*Listbox.font', self.font)
         # window.resizable(False, False)
         f_src = tk.Frame()
-        tk.Label(master=f_src, text="Data Source", font=font).pack(side="left")
-        self.data_source = ttk.Combobox(master=f_src, font=font, width=20, values=['Main File', 'Backup File'], state="readonly")
+        tk.Label(master=f_src, text="Data Source", font=self.font).pack(side="left")
+        self.data_source = ttk.Combobox(master=f_src, font=self.font, width=20, values=['Main File', 'Backup File'],
+                                        state="readonly")
         self.data_source.pack(side="left")
         self.data_source.current(0)
         self.data_source.bind("<<ComboboxSelected>>", self.change_datasource)
-        g_open_file = tk.Button(master=f_src, font=font, text="Open File", command=self.open_file)
+        g_open_file = tk.Button(master=f_src, font=self.font, text="Open File", command=self.open_file)
         g_open_file.pack(side="left")
         #
         f_src_player = tk.Frame()
-        tk.Label(master=f_src_player, text="Source Player", font=font).pack(side="left")
-        self.src_player = ttk.Combobox(master=f_src_player, font=font, width=50)
+        tk.Label(master=f_src_player, text="Source Player", font=self.font).pack(side="left")
+        self.src_player = ttk.Combobox(master=f_src_player, font=self.font, width=50)
         self.src_player.pack(side="left")
         #
         f_target_player = tk.Frame()
-        tk.Label(master=f_target_player, text="Target Player", font=font).pack(side="left")
-        self.target_player = ttk.Combobox(master=f_target_player, font=font, width=50)
+        tk.Label(master=f_target_player, text="Target Player", font=self.font).pack(side="left")
+        self.target_player = ttk.Combobox(master=f_target_player, font=self.font, width=50)
         self.target_player.pack(side="left")
-        
+
         f_target_guild = tk.Frame()
-        tk.Label(master=f_target_guild, text="Target Guild", font=font).pack(side="left")
-        self.target_guild = ttk.Combobox(master=f_target_guild, font=font, width=80)
+        tk.Label(master=f_target_guild, text="Target Guild", font=self.font).pack(side="left")
+        self.target_guild = ttk.Combobox(master=f_target_guild, font=self.font, width=80)
         self.target_guild.pack(side="left")
         #
-        f_src.pack(anchor=W)
-        f_src_player.pack(anchor=W)
-        f_target_player.pack(anchor=W)
-        f_target_guild.pack(anchor=W)
+        f_src.pack(anchor=tk.constants.W)
+        f_src_player.pack(anchor=tk.constants.W)
+        f_target_player.pack(anchor=tk.constants.W)
+        f_target_guild.pack(anchor=tk.constants.W)
         g_button_frame = tk.Frame()
-        self.btn_migrate = tk.Button(master=g_button_frame, text="Migrate Player", font=font, command=self.migrate)
+        self.btn_migrate = tk.Button(master=g_button_frame, text="Migrate Player", font=self.font, command=self.migrate)
         self.btn_migrate.pack(side="left")
-        g_copy = tk.Button(master=g_button_frame, text="Copy Player", font=font, command=self.copy_player)
+        g_copy = tk.Button(master=g_button_frame, text="Copy Player", font=self.font, command=self.copy_player)
         g_copy.pack(side="left")
         g_button_frame.pack()
-        
+
         g_button_frame = tk.Frame()
-        tk.Label(master=g_button_frame, text="Operate for Target Player", font=font).pack(fill="x",side="top")
-        g_move = tk.Button(master=g_button_frame, text="Move To Guild", font=font, command=self.move_guild)
+        tk.Label(master=g_button_frame, text="Operate for Target Player", font=self.font).pack(fill="x", side="top")
+        g_move = tk.Button(master=g_button_frame, text="Move To Guild", font=self.font, command=self.move_guild)
         g_move.pack(side="left")
-        g_rename = tk.Button(master=g_button_frame, text="Rename", font=font, command=self.rename_player)
+        g_rename = tk.Button(master=g_button_frame, text="Rename", font=self.font, command=self.rename_player)
         g_rename.pack(side="left")
-        g_delete = tk.Button(master=g_button_frame, text="Delete", font=font, command=self.delete_player)
+        g_delete = tk.Button(master=g_button_frame, text="Delete", font=self.font, command=self.delete_player)
         g_delete.pack(side="left")
-        g_edit = tk.Button(master=g_button_frame, text="Edit", font=font, command=self.edit_player)
+        g_edit = tk.Button(master=g_button_frame, text="Edit", font=self.font, command=self.edit_player)
         g_edit.pack(side="left")
-        g_edit_item = tk.Button(master=g_button_frame, text="Edit Item", font=font, command=self.edit_player_item)
+        g_edit_item = tk.Button(master=g_button_frame, text="Edit Item", font=self.font, command=self.edit_player_item)
         g_edit_item.pack(side="left")
-        g_edit_save = tk.Button(master=g_button_frame, text="Edit Save", font=font, command=self.edit_player_save)
+        g_edit_save = tk.Button(master=g_button_frame, text="Edit Save", font=self.font, command=self.edit_player_save)
         g_edit_save.pack(side="left")
         g_button_frame.pack()
-        
-        g_save = tk.Button(text="Save & Exit", font=font, command=self.save)
+
+        g_save = tk.Button(text="Save & Exit", font=self.font, command=self.save)
         g_save.pack()
-        
+
         self.load_players()
         self.load_guilds()
+
 
 def LoadFile(filename):
     global filetime, gvas_file, wsd
@@ -1007,9 +1027,11 @@ def LoadFile(filename):
 
     wsd = gvas_file.properties['worldSaveData']['value']
 
+
 def Statistics():
     for key in wsd:
         print("%40s\t%.3f MB\tKey: %d" % (key, len(str(wsd[key])) / 1048576, len(wsd[key]['value'])))
+
 
 def EditPlayer(player_uid):
     global player
@@ -1018,6 +1040,7 @@ def EditPlayer(player_uid):
             player = item['value']['RawData']['value']['object']['SaveParameter']['value']
             print("Player has allocated to 'player' variable, you can use player['Property']['value'] = xxx to modify")
             pp.pprint(player)
+
 
 def RenamePlayer(player_uid, new_name):
     for item in wsd['CharacterSaveParameterMap']['value']:
@@ -1045,10 +1068,10 @@ def GetPlayerItems(player_uid):
     item_containers = {}
     for item_container in wsd["ItemContainerSaveData"]['value']:
         item_containers[str(item_container['key']['ID']['value'])] = [{
-                'ItemId': x['ItemId']['value']['StaticId']['value'],
-                'SlotIndex': x['SlotIndex']['value'],
-                'StackCount': x['StackCount']['value']
-            }
+            'ItemId': x['ItemId']['value']['StaticId']['value'],
+            'SlotIndex': x['SlotIndex']['value'],
+            'StackCount': x['StackCount']['value']
+        }
             for x in item_container['value']['Slots']['value']['values']
         ]
     player_sav_file = os.path.dirname(os.path.abspath(args.filename)) + "/Players/" + player_uid.upper().replace("-",
@@ -1083,8 +1106,10 @@ def OpenBackup(filename):
     backup_wsd = backup_gvas_file.properties['worldSaveData']['value']
     ShowPlayers(backup_wsd)
 
+
 def to_storage_uuid(uuid_str):
     return UUID.from_str(str(uuid_str))
+
 
 def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
     load_skiped_decode(wsd, ['ItemContainerSaveData', 'CharacterContainerSaveData'])
@@ -1124,22 +1149,28 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
                 if IsFound:
                     print(
                         "\033[32mCopy Character Container\033[0m %s UUID: %s -> %s" % (idx_key,
-                            str(container['key']['ID']['value']), str(new_item['key']['ID']['value'])))
+                                                                                       str(container['key']['ID'][
+                                                                                               'value']), str(
+                            new_item['key']['ID']['value'])))
                 else:
                     print(
                         "\033[32mCopy Character Container\033[0m %s UUID: %s" % (idx_key,
-                            str(container['key']['ID']['value'])))
+                                                                                 str(container['key']['ID']['value'])))
                 break
     for idx_key in ['CommonContainerId', 'DropSlotContainerId', 'EssentialContainerId', 'FoodEquipContainerId',
-                        'PlayerEquipArmorContainerId', 'WeaponLoadOutContainerId']:
+                    'PlayerEquipArmorContainerId', 'WeaponLoadOutContainerId']:
         for container in old_wsd['ItemContainerSaveData']['value']:
-            if container['key']['ID']['value'] == player_gvas['inventoryInfo']['value'][idx_key]['value']['ID']['value']:
+            if container['key']['ID']['value'] == player_gvas['inventoryInfo']['value'][idx_key]['value']['ID'][
+                'value']:
                 new_item = copy.deepcopy(container)
                 IsFound = False
                 for idx, insert_item in enumerate(wsd['ItemContainerSaveData']['value']):
-                    if insert_item['key']['ID']['value'] == player_gvas['inventoryInfo']['value'][idx_key]['value']['ID']['value']:
-                        player_gvas['inventoryInfo']['value'][idx_key]['value']['ID']['value'] = to_storage_uuid(uuid.uuid4())
-                        new_item['key']['ID']['value'] = player_gvas['inventoryInfo']['value'][idx_key]['value']['ID']['value']
+                    if insert_item['key']['ID']['value'] == \
+                            player_gvas['inventoryInfo']['value'][idx_key]['value']['ID']['value']:
+                        player_gvas['inventoryInfo']['value'][idx_key]['value']['ID']['value'] = to_storage_uuid(
+                            uuid.uuid4())
+                        new_item['key']['ID']['value'] = player_gvas['inventoryInfo']['value'][idx_key]['value']['ID'][
+                            'value']
                         IsFound = True
                         break
                 container_mapping[idx_key] = new_item
@@ -1148,42 +1179,47 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
                 if IsFound:
                     print(
                         "\033[32mCopy Item Container\033[0m %s UUID: %s -> %s" % (idx_key,
-                            str(container['key']['ID']['value']), str(new_item['key']['ID']['value'])))
+                                                                                  str(container['key']['ID']['value']),
+                                                                                  str(new_item['key']['ID']['value'])))
                 else:
                     print(
                         "\033[32mCopy Item Container\033[0m %s UUID: %s" % (idx_key,
-                            str(container['key']['ID']['value'])))
+                                                                            str(container['key']['ID']['value'])))
                 break
     IsFoundUser = None
     copy_user_params = None
-    playerMapping, instanceMapping = LoadPlayers(wsd)
-    
+    _playerMapping, _instanceMapping = LoadPlayers(wsd)
+
     for idx, insert_item in enumerate(wsd['CharacterSaveParameterMap']['value']):
         if str(insert_item['key']['PlayerUId']['value']) == new_player_uid:
             IsFoundUser = idx
             break
     for item in old_wsd['CharacterSaveParameterMap']['value']:
         player = item['value']['RawData']['value']['object']['SaveParameter']['value']
-        if str(item['key']['PlayerUId']['value']) == player_uid and 'IsPlayer' in player and player['IsPlayer']['value']:
+        if str(item['key']['PlayerUId']['value']) == player_uid and 'IsPlayer' in player and player['IsPlayer'][
+            'value']:
             # if not IsFoundUser:
             copy_user_params = copy.deepcopy(item)
             copy_user_params['key']['PlayerUId']['value'] = to_storage_uuid(uuid.UUID(new_player_uid))
-            copy_user_params['key']['InstanceId']['value'] = to_storage_uuid(uuid.UUID(str(player_gvas['IndividualId']['value']['InstanceId']['value'])))
+            copy_user_params['key']['InstanceId']['value'] = to_storage_uuid(
+                uuid.UUID(str(player_gvas['IndividualId']['value']['InstanceId']['value'])))
             instances.append(
-                {'guid': to_storage_uuid(uuid.UUID(new_player_uid)), 'instance_id': to_storage_uuid(uuid.UUID(str(player_gvas['IndividualId']['value']['InstanceId']['value'])))})
+                {'guid': to_storage_uuid(uuid.UUID(new_player_uid)), 'instance_id': to_storage_uuid(
+                    uuid.UUID(str(player_gvas['IndividualId']['value']['InstanceId']['value'])))})
         elif 'OwnerPlayerUId' in player and str(player['OwnerPlayerUId']['value']) == player_uid:
-            IsFound = str(item['key']['InstanceId']['value']) in instanceMapping
+            IsFound = str(item['key']['InstanceId']['value']) in _instanceMapping
             new_item = copy.deepcopy(item)
-            new_item['value']['RawData']['value']['object']['SaveParameter']['value']['OwnerPlayerUId']['value'] = player_gvas['PlayerUId']['value']
-            new_item['value']['RawData']['value']['object']['SaveParameter']['value']['SlotID']['value']['ContainerId']['value']['ID'][
+            new_item['value']['RawData']['value']['object']['SaveParameter']['value']['OwnerPlayerUId']['value'] = \
+            player_gvas['PlayerUId']['value']
+            new_item['value']['RawData']['value']['object']['SaveParameter']['value']['SlotID']['value']['ContainerId'][
+                'value']['ID'][
                 'value'] = player_gvas['PalStorageContainerId']['value']['ID']['value']
-            # for slot in container_mapping['PalStorageContainerId']['value']['Slots']['value']['values']:
-            #     print(slot['IndividualId']['value']['InstanceId']['value'], slot['IndividualId']['value']['PlayerUId']['value'])
             if IsFound:
                 new_item['key']['InstanceId']['value'] = to_storage_uuid(uuid.uuid4())
                 print(
                     "\033[32mCopy Pal\033[0m  UUID: %s -> %s  Owner: %s  CharacterID: %s" % (
-                        str(item['key']['InstanceId']['value']), str(new_item['key']['InstanceId']['value']), str(player['OwnerPlayerUId']['value']),
+                        str(item['key']['InstanceId']['value']), str(new_item['key']['InstanceId']['value']),
+                        str(player['OwnerPlayerUId']['value']),
                         player['CharacterID']['value']))
             else:
                 print(
@@ -1192,7 +1228,8 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
                         player['CharacterID']['value']))
             if not dry_run:
                 wsd['CharacterSaveParameterMap']['value'].append(new_item)
-            instances.append({'guid':player_gvas['PlayerUId']['value'], 'instance_id': new_item['key']['InstanceId']['value']})
+            instances.append(
+                {'guid': player_gvas['PlayerUId']['value'], 'instance_id': new_item['key']['InstanceId']['value']})
     if IsFoundUser is None:
         if not dry_run:
             wsd['CharacterSaveParameterMap']['value'].append(copy_user_params)
@@ -1200,7 +1237,7 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
     else:
         wsd['CharacterSaveParameterMap']['value'][IsFoundUser] = copy_user_params
         print("\033[32mUpdate exists user to %s\033[0m" % copy_user_params['value']['RawData']['value']['object']
-            ['SaveParameter']['value']['NickName']['value'])
+        ['SaveParameter']['value']['NickName']['value'])
     # Copy Item from GroupSaveDataMap
     player_group = None
     for group_data in wsd['GroupSaveDataMap']['value']:
@@ -1217,7 +1254,8 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
                             copy_user_params['value']['RawData']['value']['object']['SaveParameter']['value'][
                                 'NickName']['value'],
                             item['guild_name']))
-                    copy_user_params['value']['RawData']['value']['group_id'] = group_data['value']['RawData']['value']['group_id']
+                    copy_user_params['value']['RawData']['value']['group_id'] = group_data['value']['RawData']['value'][
+                        'group_id']
                     break
     if player_group is None:
         for group_data in old_wsd['GroupSaveDataMap']['value']:
@@ -1238,7 +1276,7 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
                                     g_player['player_info']['player_name'], str(g_player['player_uid']),
                                     g_player['player_info']['last_online_real_time']))
                             copy_user_params['value']['RawData']['value']['group_id'] = \
-                            group_data['value']['RawData']['value']['group_id']
+                                group_data['value']['RawData']['value']['group_id']
                             player_group = copy.deepcopy(group_data)
                             wsd['GroupSaveDataMap']['value'].append(player_group)
                             n_item = player_group['value']['RawData']['value']
@@ -1253,23 +1291,26 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
                             group_info = group_data['value']['RawData']['value']
                             print(
                                 "\033[32mGuild \033[93m %s \033[0m exists\033[0m  Group ID \033[92m %s \033[0m   " % (
-                                group_info['guild_name'], group_info['group_id']))
+                                    group_info['guild_name'], group_info['group_id']))
                             copy_user_params['value']['RawData']['value']['group_id'] = group_info['group_id']
                             n_item = player_group['value']['RawData']['value']
                             is_player_found = False
                             for n_player_info in n_item['players']:
                                 if str(n_player_info['player_uid']) == new_player_uid:
-                                    n_player_info['player_info'] = copy.deepcopy(player_info['player_info'])
+                                    n_player_info['player_info'] = copy.deepcopy(n_player_info['player_info'])
                                     is_player_found = True
                                     break
                             if not is_player_found:
                                 print("\033[32mAdd User to Guild\033[0m  \033[93m%s\033[0m" % (
-                                copy_user_params['value']['RawData']['value']['object']['SaveParameter']['value']['NickName']['value']))
+                                    copy_user_params['value']['RawData']['value']['object']['SaveParameter']['value'][
+                                        'NickName']['value']))
                                 n_item['players'].append({
                                     'player_uid': to_storage_uuid(uuid.UUID(new_player_uid)),
                                     'player_info': {
                                         'last_online_real_time': 0,
-                                        'player_name': copy_user_params['value']['RawData']['value']['object']['SaveParameter']['value']['NickName']['value']
+                                        'player_name':
+                                            copy_user_params['value']['RawData']['value']['object']['SaveParameter'][
+                                                'value']['NickName']['value']
                                     }
                                 })
                             n_item['individual_character_handle_ids'] = instances
@@ -1286,6 +1327,7 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
             sav_file = compress_gvas_to_sav(player_gvas_file.write(PALWORLD_CUSTOM_PROPERTIES), save_type)
             f.write(sav_file)
 
+
 def MoveToGuild(player_uid, group_id):
     target_group = None
     for group_data in wsd['GroupSaveDataMap']['value']:
@@ -1296,14 +1338,15 @@ def MoveToGuild(player_uid, group_id):
     if target_group is None:
         print("\033[31mError: cannot found target guild")
         return
-    
+
     instances = []
     remove_instance_ids = []
     playerInstance = None
-    
+
     for item in wsd['CharacterSaveParameterMap']['value']:
         player = item['value']['RawData']['value']['object']['SaveParameter']['value']
-        if str(item['key']['PlayerUId']['value']) == player_uid and 'IsPlayer' in player and player['IsPlayer']['value']:
+        if str(item['key']['PlayerUId']['value']) == player_uid and 'IsPlayer' in player and player['IsPlayer'][
+            'value']:
             playerInstance = player
             instances.append({
                 'guid': item['key']['PlayerUId']['value'],
@@ -1316,7 +1359,7 @@ def MoveToGuild(player_uid, group_id):
                 'instance_id': item['key']['InstanceId']['value']
             })
             remove_instance_ids.append(item['key']['InstanceId']['value'])
-    
+
     remove_guilds = []
     for group_data in wsd['GroupSaveDataMap']['value']:
         if str(group_data['value']['GroupType']['value']['value']) == "EPalGroupType::Guild":
@@ -1325,17 +1368,18 @@ def MoveToGuild(player_uid, group_id):
             for g_player in group_info['players']:
                 if str(g_player['player_uid']) == player_uid:
                     delete_g_players.append(g_player)
-                    print("\033[31mDelete player \033[93m %s \033[31m on guild \033[93m %s \033[0m [\033[92m %s \033[0m] " % (
-                                g_player['player_info']['player_name'], group_info['guild_name'], group_info['group_id']))
-            
+                    print(
+                        "\033[31mDelete player \033[93m %s \033[31m on guild \033[93m %s \033[0m [\033[92m %s \033[0m] " % (
+                            g_player['player_info']['player_name'], group_info['guild_name'], group_info['group_id']))
+
             for g_player in delete_g_players:
                 group_info['players'].remove(g_player)
-            
+
             if len(group_info['players']) == 0:
                 remove_guilds.append(group_data)
                 print("\033[31mDelete Guild\033[0m \033[93m %s \033[0m  UUID: %s" % (
                     group_info['guild_name'], str(group_info['group_id'])))
-            
+
             remove_items = []
             for ind_id in group_info['individual_character_handle_ids']:
                 if ind_id['instance_id'] in remove_instance_ids:
@@ -1345,10 +1389,10 @@ def MoveToGuild(player_uid, group_id):
                             group_info['group_id'], ind_id['guid'], ind_id['instance_id']))
             for item in remove_items:
                 group_info['individual_character_handle_ids'].remove(item)
-    
+
     for guild in remove_guilds:
         wsd['GroupSaveDataMap']['value'].remove(guild)
-        
+
     print("\033[32mAppend character and players to guild\033[0m")
     target_group['players'].append({
         'player_uid': to_storage_uuid(uuid.UUID(player_uid)),
@@ -1360,11 +1404,14 @@ def MoveToGuild(player_uid, group_id):
     })
     target_group['individual_character_handle_ids'] += instances
 
+
 def MigratePlayer(player_uid, new_player_uid):
     load_skiped_decode(wsd, ['MapObjectSaveData'])
 
-    player_sav_file = os.path.dirname(os.path.abspath(args.filename)) + "/Players/" + player_uid.upper().replace("-","") + ".sav"
-    new_player_sav_file = os.path.dirname(os.path.abspath(args.filename)) + "/Players/" + new_player_uid.upper().replace("-","") + ".sav"
+    player_sav_file = os.path.dirname(os.path.abspath(args.filename)) + "/Players/" + player_uid.upper().replace("-",
+                                                                                                                 "") + ".sav"
+    new_player_sav_file = os.path.dirname(
+        os.path.abspath(args.filename)) + "/Players/" + new_player_uid.upper().replace("-", "") + ".sav"
     DeletePlayer(new_player_uid)
     if not os.path.exists(player_sav_file):
         print("\033[33mWarning: Player Sav file Not exists: %s\033[0m" % player_sav_file)
@@ -1424,10 +1471,11 @@ def MigratePlayer(player_uid, new_player_uid):
                         'guid': player_gvas['PlayerUId']['value'],
                         'instance_id': player_gvas['IndividualId']['value']['InstanceId']['value']
                     })
-                    print("\033[32mAppend Guild Character InstanceID %s \033[0m" % (str(player_gvas['IndividualId']['value']['InstanceId']['value'])))
+                    print("\033[32mAppend Guild Character InstanceID %s \033[0m" % (
+                        str(player_gvas['IndividualId']['value']['InstanceId']['value'])))
                     break
             if str(item['admin_player_uid']) == str(player_uid):
-                item['admin_player_uid'] =  player_gvas['PlayerUId']['value']
+                item['admin_player_uid'] = player_gvas['PlayerUId']['value']
                 print("\033[32mMigrate Guild Admin \033[0m")
     for map_data in wsd['MapObjectSaveData']['value']['values']:
         if str(map_data['Model']['value']['RawData']['value']['build_player_uid']) == str(player_uid):
@@ -1437,7 +1485,8 @@ def MigratePlayer(player_uid, new_player_uid):
                     str(map_data['MapObjectInstanceId']['value'])))
     print("Finish to migrate player from Save, please delete this file manually: %s" % player_sav_file)
 
-def DeletePlayer(player_uid, InstanceId = None, dry_run=False):
+
+def DeletePlayer(player_uid, InstanceId=None, dry_run=False):
     load_skiped_decode(wsd, ['ItemContainerSaveData', 'CharacterContainerSaveData'])
     if isinstance(player_uid, int):
         player_uid = str(uuid.UUID("%08x-0000-0000-0000-000000000000" % player_uid))
@@ -1563,6 +1612,7 @@ def DeletePlayer(player_uid, InstanceId = None, dry_run=False):
     if InstanceId is None:
         print("Finish to remove player from Save, please delete this file manually: %s" % player_sav_file)
 
+
 def search_keys(dicts, key, level=""):
     if isinstance(dicts, dict):
         if key in dicts:
@@ -1613,7 +1663,7 @@ def LoadPlayers(data_source=None):
     global wsd, playerMapping, instanceMapping
     if data_source is None:
         data_source = wsd
-    
+
     l_playerMapping = {}
     l_instanceMapping = {}
     for item in data_source['CharacterSaveParameterMap']['value']:
@@ -1624,8 +1674,9 @@ def LoadPlayers(data_source=None):
         if 'IsPlayer' in playerParams and playerParams['IsPlayer']['value']:
             if playerStruct['struct_type'] == 'PalIndividualCharacterSaveParameter':
                 if 'OwnerPlayerUId' in playerParams:
-                    print("\033[33mWarning: Corrupted player struct\033[0m UUID \033[32m %s \033[0m Owner \033[32m %s \033[0m" % (
-                        str(item['key']['PlayerUId']['value']), str(playerParams['OwnerPlayerUId']['value'])))
+                    print(
+                        "\033[33mWarning: Corrupted player struct\033[0m UUID \033[32m %s \033[0m Owner \033[32m %s \033[0m" % (
+                            str(item['key']['PlayerUId']['value']), str(playerParams['OwnerPlayerUId']['value'])))
                     pp.pprint(playerParams)
                     playerParams['IsPlayer']['value'] = False
                 playerMeta = {}
@@ -1659,6 +1710,7 @@ def ShowPlayers(data_source=None):
                                   str(playerUId)] else "\033[31m", playerMeta['InstanceId'],
                 playerMeta['Level'] if 'Level' in playerMeta else -1))
 
+
 def FixMissing(dry_run=False):
     # Remove Unused in CharacterSaveParameterMap
     removeItems = []
@@ -1678,7 +1730,7 @@ def FixMissing(dry_run=False):
 
 def FixCaptureLog(dry_run=False):
     global instanceMapping
-    
+
     for group_data in wsd['GroupSaveDataMap']['value']:
         if str(group_data['value']['GroupType']['value']['value']) == "EPalGroupType::Guild":
             item = group_data['value']['RawData']['value']
@@ -1704,13 +1756,14 @@ def FixDuplicateUser(dry_run=False):
                 print(
                     "\033[31mInvalid player on CharacterSaveParameterMap\033[0m  PlayerUId: %s  InstanceID: %s  Nick: %s" % (
                         str(item['key']['PlayerUId']['value']), str(item['key']['InstanceId']['value']),
-                    str(player_meta['NickName']['value'])))
+                        str(player_meta['NickName']['value'])))
                 removeItems.append(item)
-            elif str(item['key']['InstanceId']['value']) != guildInstanceMapping[str(item['key']['PlayerUId']['value'])]:
+            elif str(item['key']['InstanceId']['value']) != guildInstanceMapping[
+                str(item['key']['PlayerUId']['value'])]:
                 print(
                     "\033[31mDuplicate player on CharacterSaveParameterMap\033[0m  PlayerUId: %s  InstanceID: %s  Nick: %s" % (
                         str(item['key']['PlayerUId']['value']), str(item['key']['InstanceId']['value']),
-                    str(player_meta['NickName']['value'])))
+                        str(player_meta['NickName']['value'])))
                 removeItems.append(item)
     if not dry_run:
         for item in removeItems:
@@ -1732,10 +1785,12 @@ def TickToHuman(tick):
     s += " %d s" % seconds
     return s
 
+
 def TickToLocal(tick):
     ts = filetime + (tick - wsd['GameTimeSaveData']['value']['RealDateTimeTicks']['value']) / 1e7
     t = datetime.datetime.fromtimestamp(ts)
     return t.strftime("%Y-%m-%d %H:%M:%S")
+
 
 def BindGuildInstanceId(uid, instance_id):
     for group_data in wsd['GroupSaveDataMap']['value']:
@@ -1743,10 +1798,12 @@ def BindGuildInstanceId(uid, instance_id):
             item = group_data['value']['RawData']['value']
             for ind_char in item['individual_character_handle_ids']:
                 if str(ind_char['guid']) == uid:
-                    print("Update Guild %s binding guild UID %s  %s -> %s" % (item['guild_name'], uid, ind_char['instance_id'], instance_id))
+                    print("Update Guild %s binding guild UID %s  %s -> %s" % (
+                    item['guild_name'], uid, ind_char['instance_id'], instance_id))
                     ind_char['instance_id'] = to_storage_uuid(uuid.UUID(instance_id))
                     guildInstanceMapping[str(ind_char['guid'])] = str(ind_char['instance_id'])
             print()
+
 
 def ShowGuild():
     global guildInstanceMapping
@@ -1780,7 +1837,7 @@ def ShowGuild():
         #             print("    \033[31mInvalid Character %s\033[0m" % (str(ind_char['instance_id'])))
 
 
-def PrettyPrint(data, level = 0):
+def PrettyPrint(data, level=0):
     simpleType = ['DateTime', 'Guid', 'LinearColor', 'Quat', 'Vector', 'PalContainerId']
     if 'struct_type' in data:
         if data['struct_type'] == 'DateTime':
@@ -1789,18 +1846,18 @@ def PrettyPrint(data, level = 0):
             print("\033[96m%s\033[0m" % (data['value']), end="")
         elif data['struct_type'] == "LinearColor":
             print("%.f %.f %.f %.f" % (data['value']['r'],
-                                                                           data['value']['g'],
-                                                                           data['value']['b'],
-                                                                           data['value']['a']), end="")
+                                       data['value']['g'],
+                                       data['value']['b'],
+                                       data['value']['a']), end="")
         elif data['struct_type'] == "Quat":
             print("%.f %.f %.f %.f" % (data['value']['x'],
-                                                                           data['value']['y'],
-                                                                           data['value']['z'],
-                                                                           data['value']['w']), end="")
+                                       data['value']['y'],
+                                       data['value']['z'],
+                                       data['value']['w']), end="")
         elif data['struct_type'] == "Vector":
             print("%.f %.f %.f" % (data['value']['x'],
-                                                                           data['value']['y'],
-                                                                           data['value']['z']), end="")
+                                   data['value']['y'],
+                                   data['value']['z']), end="")
         elif data['struct_type'] == "PalContainerId":
             print("\033[96m%s\033[0m" % (data['value']['ID']['value']), end="")
         elif isinstance(data['struct_type'], dict):
@@ -1820,18 +1877,23 @@ def PrettyPrint(data, level = 0):
                 PrettyPrint(data[key], level + 1)
                 print("</%s>" % (key))
             elif 'type' in data[key] and data[key]['type'] in ["IntProperty", "Int64Property", "BoolProperty"]:
-                print("%s<%s Type='%s'>\033[95m%d\033[0m</%s>" % ("  " * level, key, data[key]['type'], data[key]['value'], key))
+                print("%s<%s Type='%s'>\033[95m%d\033[0m</%s>" % (
+                "  " * level, key, data[key]['type'], data[key]['value'], key))
             elif 'type' in data[key] and data[key]['type'] == "FloatProperty":
-                print("%s<%s Type='%s'>\033[95m%f\033[0m</%s>" % ("  " * level, key, data[key]['type'], data[key]['value'], key))
+                print("%s<%s Type='%s'>\033[95m%f\033[0m</%s>" % (
+                "  " * level, key, data[key]['type'], data[key]['value'], key))
             elif 'type' in data[key] and data[key]['type'] in ["StrProperty", "ArrayProperty", "NameProperty"]:
-                print("%s<%s Type='%s'>\033[95m%s\033[0m</%s>" % ("  " * level, key, data[key]['type'], data[key]['value'], key))
+                print("%s<%s Type='%s'>\033[95m%s\033[0m</%s>" % (
+                "  " * level, key, data[key]['type'], data[key]['value'], key))
             elif isinstance(data[key], list):
                 print("%s<%s Type='%s'>%s</%s>" % ("  " * level, key, data[key]['struct_type'] if 'struct_type' in data[
                     key] else "\033[31munknow struct\033[0m", str(data[key]), key))
             else:
-                print("%s<%s Type='%s'>" % ("  " * level, key, data[key]['struct_type'] if 'struct_type' in data[key] else "\033[31munknow struct\033[0m"))
+                print("%s<%s Type='%s'>" % ("  " * level, key, data[key]['struct_type'] if 'struct_type' in data[
+                    key] else "\033[31munknow struct\033[0m"))
                 PrettyPrint(data[key], level + 1)
                 print("%s</%s>" % ("  " * level, key))
+
 
 def Save(exit_now=True):
     print("processing GVAS to Sav file...", end="", flush=True)
