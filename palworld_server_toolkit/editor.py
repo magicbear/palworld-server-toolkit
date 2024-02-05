@@ -9,6 +9,7 @@ import pprint
 import uuid
 import argparse
 import copy
+import importlib.metadata
 
 import tkinter as tk
 from tkinter import ttk
@@ -1026,7 +1027,11 @@ class GUI():
         #
         self.gui = tk.Tk()
         self.gui.parent = self
-        self.gui.title('PalWorld Save Editor - Author by MagicBear')
+        try:
+            __version__ = importlib.metadata.version('palworld-server-toolkit')
+        except importlib.metadata.PackageNotFoundError:
+            __version__ = "0.0.1"
+        self.gui.title(f'PalWorld Save Editor v{__version__} - Author by MagicBear')
         # self.gui.geometry('640x200')
         #
         self.font = tk.font.Font(family="Courier New")
