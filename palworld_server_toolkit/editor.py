@@ -90,6 +90,11 @@ def skip_decode(
 def skip_encode(
         writer: FArchiveWriter, property_type: str, properties: dict[str, Any]
 ) -> int:
+    if "skip_type" not in properties:
+        if properties['custom_type'] in PALWORLD_CUSTOM_PROPERTIES is not None:
+            return PALWORLD_CUSTOM_PROPERTIES[properties["custom_type"]][1](
+                    writer, property_type, properties
+                )
     if property_type == "ArrayProperty":
         del properties["custom_type"]
         del properties["skip_type"]
@@ -211,7 +216,7 @@ def load_skiped_decode(wsd, skip_paths, recursive=True):
         properties = wsd[skip_path]
 
         if "skip_type" not in properties:
-            return
+            continue
         print("Parsing worldSaveData.%s..." % skip_path, end="", flush=True)
         t1 = time.time()
         parse_skiped_item(properties, skip_path, True, recursive)
@@ -785,53 +790,13 @@ class PalEditGUI(PalEdit):
         return root
 
     def load(self, file=None):
-        paldata = wsd['CharacterSaveParameterMap']['value']
-
-        nullmoves = []
-        for i in paldata:
-            try:
-                p = PalInfo.PalEntity(i)
-                if not str(p.owner) in self.palbox:
-                    self.palbox[str(p.owner)] = []
-                self.palbox[str(p.owner)].append(p)
-                n = p.GetFullName()
-                for m in p.GetLearntMoves():
-                    if not m in nullmoves:
-                        if not m in PalInfo.PalAttacks:
-                            nullmoves.append(m)
-            except Exception as e:
-                if str(e) == "This is a player character":
-                    print("Found Player Character")
-                    # print(f"\nDebug: Data \n{i}\n\n")
-                    o = i['value']['RawData']['value']['object']['SaveParameter']['value']
-                    pl = "No Name"
-                    if "NickName" in o:
-                        pl = o['NickName']['value']
-                    plguid = str(i['key']['PlayerUId']['value'])
-                    print(f"{pl} - {plguid}")
-                    self.players[pl] = plguid
-                else:
-                    self.unknown.append(i)
-                    print(f"Error occured: {str(e)}")
-                # print(f"Debug: Data {i}")
-
-        print(self.palbox.keys())
-        self.current.set(next(iter(self.players)))
-        print(f"Defaulted selection to {self.current.get()}")
-        self.updateDisplay()
-        print(f"Unknown list contains {len(self.unknown)} entries")
-        print(f"{len(self.players)} players found:")
-        for i in self.players:
-            print(f"{i} = {self.players[i]}")
-        self.playerdrop['values'] = list(self.players.keys())
-        self.playerdrop.current(0)
-        nullmoves.sort()
-        for i in nullmoves:
-            print(f"{i} was not found in Attack Database")
-
-        self.refresh()
-        self.changetext(-1)
-        self.jump()
+        self.data = {
+            'gvas_file': gvas_file,
+            'properties': gvas_file.properties
+        }
+        paldata = self.data['properties']['worldSaveData']['value']['CharacterSaveParameterMap']['value']
+        self.palguidmanager = PalInfo.PalGuid(self.data)
+        self.loadpal(paldata)
 
     def build_menu(self):
         self.menu = tk.Menu(self.gui)
@@ -1252,7 +1217,7 @@ def to_storage_uuid(uuid_str):
 
 
 def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
-    load_skiped_decode(wsd, ['ItemContainerSaveData', 'CharacterContainerSaveData'], False)
+    load_skiped_decode(wsd, ['ItemContainerSaveData', 'CharacterContainerSaveData'])
     player_sav_file = os.path.dirname(os.path.abspath(args.filename)) + "/Players/" + player_uid.upper().replace("-",
                                                                                                                  "") + ".sav"
     new_player_sav_file = os.path.dirname(
