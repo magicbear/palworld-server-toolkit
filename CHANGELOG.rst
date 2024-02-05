@@ -14,6 +14,17 @@ Changelog
     Note that they these tags will not actually close the issue/PR until they
     are merged into the "default" branch.
 
+v0.2.8
+-------
+
+Major:
+
+- Copy Player: Target allow custom enter UUID
+
+Fixes:
+
+- GUI Copy Player from Local (UUID 00000000-0000-0000-0000-000000000001 will not work)
+
 v0.2.7
 -------
 

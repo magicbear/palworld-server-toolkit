@@ -850,6 +850,14 @@ class GUI():
         src_uuid, target_uuid = self.gui_parse_uuid()
         if src_uuid is None:
             return
+        _playerMapping, _ = LoadPlayers(wsd if self.data_source.current() == 0 else backup_wsd)
+        for player_uid in _playerMapping:
+            if player_uid[0:8] == src_uuid[0:8]:
+                src_uuid = player_uid
+                break
+        if src_uuid not in _playerMapping:
+            messagebox.showerror("Copy Error", "Source Player not exists")
+            return
         if src_uuid == target_uuid:
             messagebox.showerror("Error", "Src == Target ")
             return
@@ -873,6 +881,14 @@ class GUI():
     def copy_player(self):
         src_uuid, target_uuid = self.gui_parse_uuid()
         if src_uuid is None:
+            return
+        _playerMapping, _ = LoadPlayers(wsd if self.data_source.current() == 0 else backup_wsd)
+        for player_uid in _playerMapping:
+            if player_uid[0:8] == src_uuid[0:8]:
+                src_uuid = player_uid
+                break
+        if src_uuid not in _playerMapping:
+            messagebox.showerror("Copy Error", "Source Player not exists")
             return
         if src_uuid == target_uuid and self.data_source.current() == 0:
             messagebox.showerror("Error", "Src == Target ")
@@ -929,7 +945,7 @@ class GUI():
             self.btn_migrate["state"] = "disabled"
         self.load_players()
 
-    def parse_target_uuid(self):
+    def parse_target_uuid(self, checkExists=True):
         target_uuid = self.target_player.get().split(" - ")[0]
         if len(target_uuid) == 8:
             target_uuid += "-0000-0000-0000-000000000000"
@@ -938,9 +954,14 @@ class GUI():
         except Exception as e:
             messagebox.showerror("Target Player Error", "UUID: \"%s\"\n%s" % (target_uuid, str(e)))
             return None
-        if target_uuid not in playerMapping:
-            messagebox.showerror("Target Player Error", "Target Player Not exists")
-            return None
+        if checkExists:
+            for player_uid in playerMapping:
+                if player_uid[0:8] == target_uuid[0:8]:
+                    target_uuid = player_uid
+                    break
+            if target_uuid not in playerMapping:
+                messagebox.showerror("Target Player Error", "Target Player Not exists")
+                return None
         return target_uuid
 
     def rename_player(self):
