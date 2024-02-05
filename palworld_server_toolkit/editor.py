@@ -6,21 +6,23 @@ import os, datetime, time
 import sys
 import threading
 import pprint
+import tkinter.font
 import uuid
 import argparse
 import copy
 import importlib.metadata
 
 import tkinter as tk
+import tkinter.font
 from tkinter import ttk
-from tkinter import font
 from tkinter import messagebox
 from tkinter import filedialog
 from tkinter import simpledialog
 
 module_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, module_dir)
-sys.path.insert(0, os.path.join(module_dir, "PalEdit/"))
+sys.path.insert(0, os.path.join(module_dir, "../"))
+sys.path.insert(0, os.path.join(module_dir, "PalEdit"))
 # sys.path.insert(0, os.path.join(module_dir, "../save_tools"))
 # sys.path.insert(0, os.path.join(module_dir, "../palworld-save-tools"))
 
@@ -28,6 +30,9 @@ from palworld_save_tools.gvas import GvasFile
 from palworld_save_tools.palsav import compress_gvas_to_sav, decompress_sav_to_gvas
 from palworld_save_tools.paltypes import PALWORLD_CUSTOM_PROPERTIES, PALWORLD_TYPE_HINTS
 from palworld_save_tools.archive import *
+
+from palworld_server_toolkit.PalEdit import PalInfo
+from palworld_server_toolkit.PalEdit.PalEdit import PalEditConfig, PalEdit
 
 pp = pprint.PrettyPrinter(width=80, compact=True, depth=4)
 wsd = None
@@ -358,7 +363,7 @@ class ParamEditor(tk.Toplevel):
         self.gui = self
         self.parent = self
         #
-        self.font = font.Font(family="Courier New")
+        self.font = tk.font.Font(family="Courier New")
 
     def build_subgui(self, g_frame, attribute_key, attrib_var, attrib):
         sub_frame = ttk.Frame(master=g_frame)
@@ -730,10 +735,6 @@ class PlayerEditGUI(ParamEditor):
         self.save(self.player, self.gui_attribute)
         self.destroy()
 
-
-from PalEdit import PalEditConfig, PalEdit
-import PalInfo
-
 class PalEditGUI(PalEdit):
     def createWindow(self):
         root = tk.Toplevel()
@@ -1019,6 +1020,11 @@ class GUI():
         PlayerSaveEdit(target_uuid)
     
     def pal_edit(self):
+        font_list = ('微软雅黑', 'Courier New', 'Arial')
+        for font in font_list:
+            if font in tkinter.font.families():
+                PalEditConfig.font = font
+                break
         pal = PalEditGUI()
         pal.load(None)
         pal.mainloop()
