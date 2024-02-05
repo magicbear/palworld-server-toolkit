@@ -163,3 +163,4 @@ options:
 # 感谢
 
 - [palworld-save-tools](https://github.com/cheahjs/palworld-save-tools) 提供了存档解析工具实现
+- [PalEdit](https://github.com/EternalWraith/PalEdit) - 提供了帕鲁编辑器

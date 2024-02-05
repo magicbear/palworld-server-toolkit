@@ -170,3 +170,4 @@ Tools for set cpu affinity to CPU performance core (Linux only)
 ## Acknowledgements
 
 - [palworld-save-tools](https://github.com/cheahjs/palworld-save-tools) for providing save file parsing tool implementation
+- [PalEdit](https://github.com/EternalWraith/PalEdit) - GUI for editing Pals
