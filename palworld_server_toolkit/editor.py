@@ -384,18 +384,25 @@ class ParamEditor(tk.Tk):
             return False
     
     def make_attrib_var(self, master, attrib):
+        if not isinstance(attrib, dict):
+            return None
         if attrib['type'] in ["IntProperty", "StrProperty", "NameProperty", "FloatProperty", "EnumProperty"]:
             return tk.StringVar(master)
         elif attrib['type'] == "StructProperty" and attrib['struct_type'] == "FixedPoint64" and \
                 attrib['value']['Value']['type'] == "Int64Property":
             return tk.StringVar(master)
+        elif attrib['type'] == "StructProperty" and attrib['struct_type'] == "Guid":
+            return tk.StringVar(master)
         elif attrib['type'] == "BoolProperty":
             return tk.BooleanVar(master=master)
-        elif attrib['type'] == "ArrayProperty":
+        elif attrib['type'] == "ArrayProperty" and attrib['array_type'] == "StructProperty":
             attrib_var = []
             for x in range(len(attrib['value']['values'])):
                 attrib_var.append({})
             return attrib_var
+        # elif attrib['type'] == "ArrayProperty" and attrib['array_type'] == "NameProperty":
+        #     attrib_var = []
+        #     return attrib_var
     
     def assign_attrib_var(self, var, attrib):
         if attrib['type'] in ["IntProperty", "StrProperty", "NameProperty", "FloatProperty"]:
@@ -403,15 +410,83 @@ class ParamEditor(tk.Tk):
         elif attrib['type'] == "StructProperty" and attrib['struct_type'] == "FixedPoint64" and \
                 attrib['value']['Value']['type'] == "Int64Property":
             var.set(str(attrib['value']['Value']['value']))
+        elif attrib['type'] == "StructProperty" and attrib['struct_type'] == "Guid":
+            var.set(str(attrib['value']))
         elif attrib['type'] == "BoolProperty":
             var.set(attrib['value'])
         elif attrib['type'] == "EnumProperty":
             var.set(attrib['value']['value'])
-        
+
+    def save(self, attribs, attrib_var, path=""):
+        for attribute_key in attribs:
+            attrib = attribs[attribute_key]
+            if attribute_key not in attrib_var:
+                continue
+            if not isinstance(attrib, dict):
+                continue
+            if 'type' in attrib:
+                if attrib['type'] == "IntProperty":
+                    print("%s%s [%s] = %d -> %d" % (
+                        path, attribute_key, attrib['type'], attribs[attribute_key]['value'],
+                        int(attrib_var[attribute_key].get())))
+                    attribs[attribute_key]['value'] = int(attrib_var[attribute_key].get())
+                elif attrib['type'] == "FloatProperty":
+                    print("%s%s [%s] = %f -> %f" % (
+                        path, attribute_key, attrib['type'], attribs[attribute_key]['value'],
+                        float(attrib_var[attribute_key].get())))
+                    attribs[attribute_key]['value'] = float(attrib_var[attribute_key].get())
+                elif attrib['type'] == "BoolProperty":
+                    print(
+                        "%s%s [%s] = %d -> %d" % (
+                        path, attribute_key, attrib['type'], attribs[attribute_key]['value'],
+                        attrib_var[attribute_key].get()))
+                    attribs[attribute_key]['value'] = attrib_var[attribute_key].get()
+                elif attrib['type'] == "StructProperty" and attrib['struct_type'] == "FixedPoint64":
+                    if attrib['value']['Value']['type'] == "Int64Property":
+                        print("%s%s [%s.%s] = %d -> %d" % (
+                            path, attribute_key, attrib['type'], attrib['value']['Value']['type'],
+                            attribs[attribute_key]['value']['Value']['value'],
+                            int(attrib_var[attribute_key].get())))
+                        attribs[attribute_key]['value']['Value']['value'] = int(attrib_var[attribute_key].get())
+                    else:
+                        print("Error: unsupported property type -> %s[%s.%s]" % (
+                            attribute_key, attrib['type'], attrib['value']['Value']['type']))
+                elif attrib['type'] == "StructProperty" and attrib['struct_type'] == "Guid":
+                    print("%s%s [%s.%s] = %s -> %s" % (
+                        path, attribute_key, attrib['type'], attrib['struct_type'],
+                        str(attribs[attribute_key]['value']),
+                        str(attrib_var[attribute_key].get())))
+                    attribs[attribute_key]['value'] = to_storage_uuid(uuid.UUID(attrib_var[attribute_key].get()))
+                elif attrib['type'] in ["StrProperty", "NameProperty"]:
+                    print(
+                        "%s%s [%s] = %s -> %s" % (
+                        path, attribute_key, attrib['type'], attribs[attribute_key]['value'],
+                        attrib_var[attribute_key].get()))
+                    attribs[attribute_key]['value'] = attrib_var[attribute_key].get()
+                elif attrib['type'] == "EnumProperty":
+                    print(
+                        "%s%s [%s - %s] = %s -> %s" % (path, attribute_key, attrib['type'], attrib['value']['type'],
+                                                       attribs[attribute_key]['value']['value'],
+                                                       attrib_var[attribute_key].get()))
+                    attribs[attribute_key]['value']['value'] = attrib_var[attribute_key].get()
+                elif attrib['type'] == "ArrayProperty" and attrib['array_type'] == "StructProperty":
+                    for idx, item in enumerate(attrib['value']['values']):
+                        print("%s%s [%s] = " % (path, attribute_key, attrib['type']))
+                        self.save(item, attrib_var[attribute_key][idx], "%s[%d]." % (attribute_key, idx))
+                elif attrib['type'] == "StructProperty":
+                    if attrib_var[attribute_key] is None:
+                        continue
+                    for key in attrib['value']:
+                        self.save({ key: attrib['value'][key] }, attrib_var[attribute_key], "%s[\"%s\"]." % (attribute_key, key))
+                else:
+                    print("Error: unsupported property type -> %s[%s]" % (attribute_key, attrib['type']))
+
     def build_variable_gui(self, parent, attrib_var, attribs, with_labelframe = True):
         font = self.font
         for attribute_key in attribs:
             attrib = attribs[attribute_key]
+            if not isinstance(attrib, dict):
+                continue
             if 'type' in attrib:
                 if with_labelframe:
                     g_frame = tk.Frame(master=parent)
@@ -440,9 +515,14 @@ class ParamEditor(tk.Tk):
                                  textvariable=attrib_var[attribute_key],
                                  values=enum_options).pack(side="right")
                     self.assign_attrib_var(attrib_var[attribute_key], attrib)
-                elif attrib['type'] == "ArrayProperty":
+                elif attrib['type'] == "ArrayProperty" and attrib['array_type'] == "StructProperty":
                     self.build_subgui(g_frame, attribute_key, attrib_var[attribute_key], attrib)
-                elif attrib_var[attribute_key] is not None:                    
+                elif attrib['type'] == "StructProperty" and attrib['struct_type'] == "Guid":
+                    tk.Entry(font=font, master=g_frame, width=50,
+                             textvariable=attrib_var[attribute_key]).pack(
+                        side="right", fill=X)
+                    self.assign_attrib_var(attrib_var[attribute_key], attrib)
+                elif attrib_var[attribute_key] is not None:
                     valid_cmd = None
                     if attrib['type'] in ["IntProperty"] or \
                             (attrib['type'] == "StructProperty" and attrib['struct_type'] == "FixedPoint64" and
@@ -450,15 +530,29 @@ class ParamEditor(tk.Tk):
                         valid_cmd = (self.register(self.valid_int), '%P')
                     elif attrib['type'] == "FloatProperty":
                         valid_cmd = (self.register(self.valid_float), '%P')
+                        
                     tk.Entry(font=font, master=g_frame,
                              validate='all', validatecommand=valid_cmd,
-                             textvariable=attrib_var[attribute_key]).pack(
-                        side="right")
+                             textvariable=attrib_var[attribute_key],
+                             width=50).pack(
+                        side="right",fill=X)
                     self.assign_attrib_var(attrib_var[attribute_key], attrib)
+                elif attrib['type'] == "StructProperty":
+                    attrib_var[attribute_key] = {}
+                    sub_f = tk.Frame(master=g_frame)
+                    sub_f.pack(side="right",fill=X)
+                    for key in attrib['value']:
+                        try:
+                            attrib_var[attribute_key][key] = self.make_attrib_var(master=sub_f, attrib=attrib['value'][key])
+                            if attrib_var[attribute_key][key] is not None:
+                                self.build_variable_gui(sub_f, attrib_var[attribute_key],
+                                                        {key: attrib['value'][key]})
+                        except TypeError as e:
+                            print("Error attribute [%s]->%s " % (key, attribute_key), attrib)
                 else:
-                    print("  ", attribute_key, attrib['type'], attrib['value'])
+                    print("  ", attribute_key, attrib['type']+(".%s" % attrib['struct_type'] if attrib['type'] == "StructProperty" else ""), attrib['value'])
             else:
-                print(attribute_key, self.player[attribute_key])
+                print(attribute_key, attribs[attribute_key])
                 continue
 
     def cmb_array_selected(self, evt, g_frame, attribute_key, attrib_var, attrib):
@@ -523,54 +617,6 @@ class ParamEditor(tk.Tk):
         table = tables
         return tables
 
-    def save(self, attribs, attrib_var, path=""):
-        for attribute_key in attribs:
-            attrib = attribs[attribute_key]
-            if attribute_key not in attrib_var:
-                continue
-            if 'type' in attrib:
-                if attrib['type'] == "IntProperty":
-                    print("%s%s [%s] = %d -> %d" % (
-                    path, attribute_key, attrib['type'], attribs[attribute_key]['value'],
-                    int(attrib_var[attribute_key].get())))
-                    attribs[attribute_key]['value'] = int(attrib_var[attribute_key].get())
-                elif attrib['type'] == "FloatProperty":
-                    print("%s%s [%s] = %f -> %f" % (
-                    path, attribute_key, attrib['type'], attribs[attribute_key]['value'],
-                    float(attrib_var[attribute_key].get())))
-                    attribs[attribute_key]['value'] = float(attrib_var[attribute_key].get())
-                elif attrib['type'] == "BoolProperty":
-                    print(
-                        "%s%s [%s] = %d -> %d" % (path, attribute_key, attrib['type'], attribs[attribute_key]['value'],
-                                                  attrib_var[attribute_key].get()))
-                    attribs[attribute_key]['value'] = attrib_var[attribute_key].get()
-                elif attrib['type'] == "StructProperty" and attrib['struct_type'] == "FixedPoint64":
-                    if attrib['value']['Value']['type'] == "Int64Property":
-                        print("%s%s [%s.%s] = %d -> %d" % (
-                        path, attribute_key, attrib['type'], attrib['value']['Value']['type'],
-                        attribs[attribute_key]['value']['Value']['value'],
-                        int(attrib_var[attribute_key].get())))
-                        attribs[attribute_key]['value']['Value']['value'] = int(attrib_var[attribute_key].get())
-                    else:
-                        print("Error: unsupported property type -> %s[%s.%s]" % (
-                        attribute_key, attrib['type'], attrib['value']['Value']['type']))
-                elif attrib['type'] in ["StrProperty", "NameProperty"]:
-                    print(
-                        "%s%s [%s] = %s -> %s" % (path, attribute_key, attrib['type'], attribs[attribute_key]['value'],
-                                                  attrib_var[attribute_key].get()))
-                    attribs[attribute_key]['value'] = attrib_var[attribute_key].get()
-                elif attrib['type'] == "EnumProperty":
-                    print("%s%s [%s - %s] = %s -> %s" % (path, attribute_key, attrib['type'], attrib['value']['type'],
-                                                         attribs[attribute_key]['value']['value'],
-                                                         attrib_var[attribute_key].get()))
-                    attribs[attribute_key]['value']['value'] = attrib_var[attribute_key].get()
-                elif attrib['type'] == "ArrayProperty":
-                    for idx, item in enumerate(attrib['value']['values']):
-                        print("%s%s [%s] = " % (path, attribute_key, attrib['type']))
-                        self.save(item, attrib_var[attribute_key][idx], "%s[%d]." % (attribute_key, idx))
-                else:
-                    print("Error: unsupported property type -> %s[%s]" % (attribute_key, attrib['type']))
-
 class PlayerItemEdit(ParamEditor):
     def __init__(self, player_uid):
         load_skiped_decode(wsd, ['ItemContainerSaveData'])
@@ -624,6 +670,42 @@ class PlayerItemEdit(ParamEditor):
             for idx, item in enumerate(self.item_containers[idx_key]):
                 self.save(self.item_containers[idx_key][idx], self.item_container_vars[idx_key][idx])
         self.destroy()
+
+
+class PlayerSaveEdit(ParamEditor):
+    def __init__(self, player_uid):
+        self.player_sav_file = os.path.dirname(os.path.abspath(args.filename)) + "/Players/" + player_uid.upper().replace(
+            "-",
+            "") + ".sav"
+        if not os.path.exists(self.player_sav_file):
+            messagebox.showerror("Player Itme Editor", "Player Sav file Not exists: %s" % self.player_sav_file)
+            return
+        else:
+            with open(self.player_sav_file, "rb") as f:
+                raw_gvas, _ = decompress_sav_to_gvas(f.read())
+                self.player_gvas_file = GvasFile.read(raw_gvas, PALWORLD_TYPE_HINTS, PALWORLD_CUSTOM_PROPERTIES)
+            player_gvas = self.player_gvas_file.properties['SaveData']['value']
+        super().__init__()
+        self.player_uid = player_uid
+        self.player = player_gvas
+        self.gui_attribute = {}
+        self.gui.title("Player Save Edit - %s" % player_uid)
+        self.build_variable_gui(self.gui, self.gui_attribute, self.player)
+        tk.Button(master=self.gui, font=self.font, text="Save", command=self.savedata).pack(fill=X)
+    
+    def savedata(self):
+        self.save(self.player, self.gui_attribute)
+        with open(self.player_sav_file, "wb") as f:
+            if "Pal.PalWorldSaveGame" in self.player_gvas_file.header.save_game_class_name or "Pal.PalLocalWorldSaveGame" in self.player_gvas_file.header.save_game_class_name:
+                save_type = 0x32
+            else:
+                save_type = 0x31
+            sav_file = compress_gvas_to_sav(self.player_gvas_file.write(PALWORLD_CUSTOM_PROPERTIES), save_type)
+            f.write(sav_file)
+        self.destroy()
+
+
+# edit = PlayerSaveEdit("fce2d6c8-0000-0000-0000-000000000000")
 
 class PlayerEditGUI(ParamEditor):
     def __init__(self, player_uid):
@@ -828,15 +910,19 @@ class GUI():
         target_uuid = self.parse_target_uuid()
         if target_uuid is None:
             return
-
         PlayerEditGUI(target_uuid)
 
     def edit_player_item(self):
         target_uuid = self.parse_target_uuid()
         if target_uuid is None:
             return
-
         PlayerItemEdit(target_uuid)
+
+    def edit_player_save(self):
+        target_uuid = self.parse_target_uuid()
+        if target_uuid is None:
+            return
+        PlayerSaveEdit(target_uuid)
 
     def build_gui(self):
         #
@@ -895,6 +981,8 @@ class GUI():
         g_edit.pack(side="left")
         g_edit_item = tk.Button(master=g_button_frame, text="Edit Item", font=font, command=self.edit_player_item)
         g_edit_item.pack(side="left")
+        g_edit_save = tk.Button(master=g_button_frame, text="Edit Save", font=font, command=self.edit_player_save)
+        g_edit_save.pack(side="left")
         g_button_frame.pack()
         
         g_save = tk.Button(text="Save & Exit", font=font, command=self.save)
