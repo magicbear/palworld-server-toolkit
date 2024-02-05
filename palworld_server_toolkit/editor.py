@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Author: MagicBear
 # License: MIT License
-
+import json
 import os, datetime, time
 import sys
 import threading
@@ -16,7 +16,6 @@ from tkinter import font
 from tkinter import messagebox
 from tkinter import filedialog
 from tkinter import simpledialog
-from PIL import ImageTk, Image
 
 module_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, module_dir)
@@ -358,7 +357,7 @@ class ParamEditor(tk.Toplevel):
         self.gui = self
         self.parent = self
         #
-        self.font = tk.font.Font(family="Courier New")
+        self.font = font.Font(family="Courier New")
 
     def build_subgui(self, g_frame, attribute_key, attrib_var, attrib):
         sub_frame = ttk.Frame(master=g_frame)
@@ -730,6 +729,7 @@ class PlayerEditGUI(ParamEditor):
         self.save(self.player, self.gui_attribute)
         self.destroy()
 
+
 class GUI():
     def __init__(self):
         global gui
@@ -757,13 +757,13 @@ class GUI():
         try:
             uuid.UUID(src_uuid)
         except Exception as e:
-            messagebox.showerror("Src Player Error",  "UUID: \"%s\"\n%s" % (target_uuid, str(e)))
+            messagebox.showerror("Src Player Error", "UUID: \"%s\"\n%s" % (target_uuid, str(e)))
             return None, None
 
         try:
             uuid.UUID(target_uuid)
         except Exception as e:
-            messagebox.showerror("Target Player Error",  "UUID: \"%s\"\n%s" % (target_uuid, str(e)))
+            messagebox.showerror("Target Player Error", "UUID: \"%s\"\n%s" % (target_uuid, str(e)))
             return None, None
 
         return src_uuid, target_uuid
@@ -814,7 +814,11 @@ class GUI():
         src_value_lists = []
         for player_uid in _playerMapping:
             _player = _playerMapping[player_uid]
-            src_value_lists.append(player_uid[0:8] + " - " + _player['NickName'])
+            try:
+                _player['NickName'].encode('utf-8')
+                src_value_lists.append(player_uid[0:8] + " - " + _player['NickName'])
+            except UnicodeEncodeError:
+                src_value_lists.append(player_uid[0:8] + " - *** ERROR ***")
 
         self.src_player.set("")
         self.src_player['value'] = src_value_lists
@@ -824,7 +828,11 @@ class GUI():
         target_value_lists = []
         for player_uid in _playerMapping:
             _player = _playerMapping[player_uid]
-            target_value_lists.append(player_uid[0:8] + " - " + _player['NickName'])
+            try:
+                _player['NickName'].encode('utf-8')
+                target_value_lists.append(player_uid[0:8] + " - " + _player['NickName'])
+            except UnicodeEncodeError:
+                target_value_lists.append(player_uid[0:8] + " - *** ERROR ***")
 
         self.target_player['value'] = target_value_lists
 
@@ -851,7 +859,7 @@ class GUI():
         try:
             uuid.UUID(target_uuid)
         except Exception as e:
-            messagebox.showerror("Target Player Error",  "UUID: \"%s\"\n%s" % (target_uuid, str(e)))
+            messagebox.showerror("Target Player Error", "UUID: \"%s\"\n%s" % (target_uuid, str(e)))
             return None
         if target_uuid not in playerMapping:
             messagebox.showerror("Target Player Not exists")
@@ -1210,7 +1218,7 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
             IsFound = str(item['key']['InstanceId']['value']) in _instanceMapping
             new_item = copy.deepcopy(item)
             new_item['value']['RawData']['value']['object']['SaveParameter']['value']['OwnerPlayerUId']['value'] = \
-            player_gvas['PlayerUId']['value']
+                player_gvas['PlayerUId']['value']
             new_item['value']['RawData']['value']['object']['SaveParameter']['value']['SlotID']['value']['ContainerId'][
                 'value']['ID'][
                 'value'] = player_gvas['PalStorageContainerId']['value']['ID']['value']
@@ -1679,6 +1687,12 @@ def LoadPlayers(data_source=None):
                             str(item['key']['PlayerUId']['value']), str(playerParams['OwnerPlayerUId']['value'])))
                     pp.pprint(playerParams)
                     playerParams['IsPlayer']['value'] = False
+                elif 'NickName' in playerParams:
+                    try:
+                        playerParams['NickName']['value'].encode('utf-8')
+                    except UnicodeEncodeError as e:
+                        print("\033[33mWarning: Corrupted player name\033[0m UUID \033[32m %s \033[0m Player \033[32m %s \033[0m" % (
+                            str(item['key']['PlayerUId']['value']), repr(playerParams['NickName']['value'])))
                 playerMeta = {}
                 for player_k in playerParams:
                     playerMeta[player_k] = playerParams[player_k]['value']
@@ -1702,6 +1716,11 @@ def ShowPlayers(data_source=None):
                               str(playerMeta['InstanceId']) == guildInstanceMapping[
                                   str(playerUId)] else "\033[31m", playerMeta['InstanceId'],
                 playerMeta['Level'] if 'Level' in playerMeta else -1, playerMeta['NickName']))
+        except UnicodeEncodeError as e:
+            print("Corrupted Player Name \033[31m %s \033[0m PlayerUId \033[32m %s \033[0m [InstanceID %s %s \033[0m]" %
+                  (repr(playerMeta['NickName']), playerUId, "\033[33m" if str(playerUId) in guildInstanceMapping and
+                              str(playerMeta['InstanceId']) == guildInstanceMapping[
+                                  str(playerUId)] else "\033[31m", playerMeta['InstanceId']))
         except KeyError:
             print("PlayerUId \033[32m %s \033[0m [InstanceID %s %s \033[0m] -> Level %2d" % (
                 playerUId,
@@ -1799,7 +1818,7 @@ def BindGuildInstanceId(uid, instance_id):
             for ind_char in item['individual_character_handle_ids']:
                 if str(ind_char['guid']) == uid:
                     print("Update Guild %s binding guild UID %s  %s -> %s" % (
-                    item['guild_name'], uid, ind_char['instance_id'], instance_id))
+                        item['guild_name'], uid, ind_char['instance_id'], instance_id))
                     ind_char['instance_id'] = to_storage_uuid(uuid.UUID(instance_id))
                     guildInstanceMapping[str(ind_char['guid'])] = str(ind_char['instance_id'])
             print()
@@ -1822,10 +1841,16 @@ def ShowGuild():
                 mapObjectMeta['guild_name'], str(mapObjectMeta['admin_player_uid']), str(mapObjectMeta['group_id']),
                 len(mapObjectMeta['individual_character_handle_ids'])))
             for player in mapObjectMeta['players']:
-                print("    Player \033[93m %-30s \033[0m\t[\033[92m%s\033[0m] Last Online: %s - %s" % (
-                    player['player_info']['player_name'], str(player['player_uid']),
-                    TickToLocal(player['player_info']['last_online_real_time']),
-                    TickToHuman(player['player_info']['last_online_real_time'])))
+                try:
+                    print("    Player \033[93m %-30s \033[0m\t[\033[92m%s\033[0m] Last Online: %s - %s" % (
+                        player['player_info']['player_name'], str(player['player_uid']),
+                        TickToLocal(player['player_info']['last_online_real_time']),
+                        TickToHuman(player['player_info']['last_online_real_time'])))
+                except UnicodeEncodeError as e:
+                    print("    Player \033[93m %-30s \033[0m\t[\033[92m%s\033[0m] Last Online: %s - %s" % (
+                        repr(player['player_info']['player_name']), str(player['player_uid']),
+                        TickToLocal(player['player_info']['last_online_real_time']),
+                        TickToHuman(player['player_info']['last_online_real_time'])))
             for ind_char in mapObjectMeta['individual_character_handle_ids']:
                 guildInstanceMapping[str(ind_char['guid'])] = str(ind_char['instance_id'])
             print()
@@ -1878,13 +1903,13 @@ def PrettyPrint(data, level=0):
                 print("</%s>" % (key))
             elif 'type' in data[key] and data[key]['type'] in ["IntProperty", "Int64Property", "BoolProperty"]:
                 print("%s<%s Type='%s'>\033[95m%d\033[0m</%s>" % (
-                "  " * level, key, data[key]['type'], data[key]['value'], key))
+                    "  " * level, key, data[key]['type'], data[key]['value'], key))
             elif 'type' in data[key] and data[key]['type'] == "FloatProperty":
                 print("%s<%s Type='%s'>\033[95m%f\033[0m</%s>" % (
-                "  " * level, key, data[key]['type'], data[key]['value'], key))
+                    "  " * level, key, data[key]['type'], data[key]['value'], key))
             elif 'type' in data[key] and data[key]['type'] in ["StrProperty", "ArrayProperty", "NameProperty"]:
                 print("%s<%s Type='%s'>\033[95m%s\033[0m</%s>" % (
-                "  " * level, key, data[key]['type'], data[key]['value'], key))
+                    "  " * level, key, data[key]['type'], data[key]['value'], key))
             elif isinstance(data[key], list):
                 print("%s<%s Type='%s'>%s</%s>" % ("  " * level, key, data[key]['struct_type'] if 'struct_type' in data[
                     key] else "\033[31munknow struct\033[0m", str(data[key]), key))

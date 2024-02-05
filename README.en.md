@@ -16,7 +16,7 @@ The world fastest PalWorld server save editor, parse Level.sav in 1.1s for JSON 
 
 ### GUI
 
-![](./docs/img/GUI.png)
+![](./docs/img/GUI.png)	
 
 ### Install
 
