@@ -19,9 +19,9 @@ from tkinter import simpledialog
 
 module_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, module_dir)
-sys.path.insert(0, os.path.join(module_dir, "../save_tools"))
-sys.path.insert(0, os.path.join(module_dir, "../PalEdit"))
-sys.path.insert(0, os.path.join(module_dir, "../palworld-save-tools"))
+sys.path.insert(0, os.path.join(module_dir, "PalEdit/"))
+# sys.path.insert(0, os.path.join(module_dir, "../save_tools"))
+# sys.path.insert(0, os.path.join(module_dir, "../palworld-save-tools"))
 
 from palworld_save_tools.gvas import GvasFile
 from palworld_save_tools.palsav import compress_gvas_to_sav, decompress_sav_to_gvas
@@ -739,19 +739,17 @@ class PalEditGUI(PalEdit):
         root.title(f"PalEdit v{PalEditConfig.version}")
         return root
     
-    def load(self, file):
+    def load(self, file = None):
         paldata = wsd['CharacterSaveParameterMap']['value']
         
         nullmoves = []
         for i in paldata:
             try:
                 p = PalInfo.PalEntity(i)
-                if not p.owner in self.palbox:
-                    self.palbox[p.owner] = []
-                self.palbox[p.owner].append(p)
-
+                if not str(p.owner) in self.palbox:
+                    self.palbox[str(p.owner)] = []
+                self.palbox[str(p.owner)].append(p)
                 n = p.GetFullName()
-
                 for m in p.GetLearntMoves():
                     if not m in nullmoves:
                         if not m in PalInfo.PalAttacks:
@@ -764,38 +762,40 @@ class PalEditGUI(PalEdit):
                     pl = "No Name"
                     if "NickName" in o:
                         pl = o['NickName']['value']
-                    plguid = i['key']['PlayerUId']['value']
+                    plguid = str(i['key']['PlayerUId']['value'])
                     print(f"{pl} - {plguid}")
                     self.players[pl] = plguid
                 else:
                     self.unknown.append(i)
                     print(f"Error occured: {str(e)}")
                 # print(f"Debug: Data {i}")
-
+        
+        print(self.palbox.keys())
         self.current.set(next(iter(self.players)))
         print(f"Defaulted selection to {self.current.get()}")
-
         self.updateDisplay()
-
         print(f"Unknown list contains {len(self.unknown)} entries")
-        # for i in unknown:
-        # print (i)
-
         print(f"{len(self.players)} players found:")
         for i in self.players:
             print(f"{i} = {self.players[i]}")
         self.playerdrop['values'] = list(self.players.keys())
         self.playerdrop.current(0)
-
         nullmoves.sort()
         for i in nullmoves:
             print(f"{i} was not found in Attack Database")
             
         self.refresh()
-
         self.changetext(-1)
         self.jump()
-        messagebox.showinfo("Done", "Done loading!")
+        
+    def build_menu(self):
+        self.menu = tk.Menu(self.gui)
+        tools = self.menu
+        self.gui.config(menu=tools)
+        toolmenu = tk.Menu(tools, tearoff=0)
+        toolmenu.add_command(label="Debug", command=self.toggleDebug)
+        toolmenu.add_command(label="Generate GUID", command=self.generateguid)
+        tools.add_cascade(label="Tools", menu=toolmenu, underline=0)
 
 class GUI():
     def __init__(self):
@@ -1016,6 +1016,11 @@ class GUI():
         if target_uuid is None:
             return
         PlayerSaveEdit(target_uuid)
+    
+    def pal_edit(self):
+        pal = PalEditGUI()
+        pal.load(None)
+        pal.mainloop()
 
     def build_gui(self):
         #
@@ -1061,6 +1066,8 @@ class GUI():
         self.btn_migrate.pack(side="left")
         g_copy = tk.Button(master=g_button_frame, text="Copy Player", font=self.font, command=self.copy_player)
         g_copy.pack(side="left")
+        g_pal = tk.Button(master=g_button_frame, text="Pal Edit", font=self.font, command=self.pal_edit)
+        g_pal.pack(side="left")
         g_button_frame.pack()
 
         g_button_frame = tk.Frame()
