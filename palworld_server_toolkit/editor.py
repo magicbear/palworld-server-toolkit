@@ -730,6 +730,73 @@ class PlayerEditGUI(ParamEditor):
         self.destroy()
 
 
+from PalEdit import PalEditConfig, PalEdit
+import PalInfo
+
+class PalEditGUI(PalEdit):
+    def createWindow(self):
+        root = tk.Toplevel()
+        root.title(f"PalEdit v{PalEditConfig.version}")
+        return root
+    
+    def load(self, file):
+        paldata = wsd['CharacterSaveParameterMap']['value']
+        
+        nullmoves = []
+        for i in paldata:
+            try:
+                p = PalInfo.PalEntity(i)
+                if not p.owner in self.palbox:
+                    self.palbox[p.owner] = []
+                self.palbox[p.owner].append(p)
+
+                n = p.GetFullName()
+
+                for m in p.GetLearntMoves():
+                    if not m in nullmoves:
+                        if not m in PalInfo.PalAttacks:
+                            nullmoves.append(m)
+            except Exception as e:
+                if str(e) == "This is a player character":
+                    print("Found Player Character")
+                    # print(f"\nDebug: Data \n{i}\n\n")
+                    o = i['value']['RawData']['value']['object']['SaveParameter']['value']
+                    pl = "No Name"
+                    if "NickName" in o:
+                        pl = o['NickName']['value']
+                    plguid = i['key']['PlayerUId']['value']
+                    print(f"{pl} - {plguid}")
+                    self.players[pl] = plguid
+                else:
+                    self.unknown.append(i)
+                    print(f"Error occured: {str(e)}")
+                # print(f"Debug: Data {i}")
+
+        self.current.set(next(iter(self.players)))
+        print(f"Defaulted selection to {self.current.get()}")
+
+        self.updateDisplay()
+
+        print(f"Unknown list contains {len(self.unknown)} entries")
+        # for i in unknown:
+        # print (i)
+
+        print(f"{len(self.players)} players found:")
+        for i in self.players:
+            print(f"{i} = {self.players[i]}")
+        self.playerdrop['values'] = list(self.players.keys())
+        self.playerdrop.current(0)
+
+        nullmoves.sort()
+        for i in nullmoves:
+            print(f"{i} was not found in Attack Database")
+            
+        self.refresh()
+
+        self.changetext(-1)
+        self.jump()
+        messagebox.showinfo("Done", "Done loading!")
+
 class GUI():
     def __init__(self):
         global gui
