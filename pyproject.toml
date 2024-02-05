@@ -19,6 +19,8 @@ classifiers = [
 ]
 dependencies = [
     "palworld-save-tools",
+    "pillow",
+    "pyperclip"
 ]
 dynamic = ["version"]
 

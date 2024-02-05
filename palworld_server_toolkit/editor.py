@@ -134,68 +134,104 @@ class skip_loading_progress(threading.Thread):
             pass
 
 
-def load_skiped_decode(wsd, skip_paths):
+def parse_item(properties, skip_path):
+    if isinstance(properties, dict):
+        for key in properties:
+            call_skip_path = skip_path + "." + key[0].upper() + key[1:]
+            if isinstance(properties[key], dict) and \
+                    'type' in properties[key] and \
+                    properties[key]['type'] in ['StructProperty', 'ArrayProperty', 'MapProperty']:
+                if 'skip_type' in properties[key]:
+                    # print("Parsing worldSaveData.%s..." % call_skip_path, end="", flush=True)
+                    properties[key] = parse_skiped_item(properties[key], call_skip_path, False, True)
+                    # print("Done")
+                else:
+                    properties[key]['value'] = parse_item(properties[key]['value'], call_skip_path)
+            else:
+                properties[key] = parse_item(properties[key], call_skip_path)
+    elif isinstance(properties, list):
+        top_skip_path = ".".join(skip_path.split(".")[:-1])
+        for idx, item in enumerate(properties):
+            properties[idx] = parse_item(item, top_skip_path)
+    return properties
+
+
+def parse_skiped_item(properties, skip_path, progress=True, recursive=True):
+    if "skip_type" not in properties:
+        return properties
+
+    with FArchiveReader(
+            properties['value'], PALWORLD_TYPE_HINTS, SKP_PALWORLD_CUSTOM_PROPERTIES if recursive == False else PALWORLD_CUSTOM_PROPERTIES
+    ) as reader:
+        if progress:
+            skip_loading_progress(reader, len(properties['value'])).start()
+        if properties["skip_type"] == "ArrayProperty":
+            properties['value'] = reader.array_property(properties["array_type"], len(properties['value']) - 4,
+                                                        ".worldSaveData.%s" % skip_path)
+        elif properties["skip_type"] == "StructProperty":
+            properties['value'] = reader.struct_value(properties['struct_type'], ".worldSaveData.%s" % skip_path)
+        elif properties["skip_type"] == "MapProperty":
+            reader.u32()
+            count = reader.u32()
+            path = ".worldSaveData.%s" % skip_path
+            key_path = path + ".Key"
+            key_type = properties['key_type']
+            value_type = properties['value_type']
+            if key_type == "StructProperty":
+                key_struct_type = reader.get_type_or(key_path, "Guid")
+            else:
+                key_struct_type = None
+            value_path = path + ".Value"
+            if value_type == "StructProperty":
+                value_struct_type = reader.get_type_or(value_path, "StructProperty")
+            else:
+                value_struct_type = None
+            values: list[dict[str, Any]] = []
+            for _ in range(count):
+                key = reader.prop_value(key_type, key_struct_type, key_path)
+                value = reader.prop_value(value_type, value_struct_type, value_path)
+                values.append(
+                    {
+                        "key": key,
+                        "value": value,
+                    }
+                )
+            properties["key_struct_type"] = key_struct_type
+            properties["value_struct_type"] = value_struct_type
+            properties["value"] = values
+        del properties['custom_type']
+        del properties["skip_type"]
+    return properties
+
+
+def load_skiped_decode(wsd, skip_paths, recursive=True):
     if isinstance(skip_paths, str):
         skip_paths = [skip_paths]
     for skip_path in skip_paths:
         properties = wsd[skip_path]
+
         if "skip_type" not in properties:
             return
-
         print("Parsing worldSaveData.%s..." % skip_path, end="", flush=True)
-        with FArchiveReader(
-                properties['value'], PALWORLD_TYPE_HINTS, PALWORLD_CUSTOM_PROPERTIES
-        ) as reader:
-            skip_loading_progress(reader, len(properties['value'])).start()
-            if properties["skip_type"] == "ArrayProperty":
-                properties['value'] = reader.array_property(properties["array_type"], len(properties['value']) - 4,
-                                                            ".worldSaveData.%s" % skip_path)
-            elif properties["skip_type"] == "StructProperty":
-                properties['value'] = reader.struct_value(properties['struct_type'], ".worldSaveData.%s" % skip_path)
-            elif properties["skip_type"] == "MapProperty":
-                reader.u32()
-                count = reader.u32()
-                path = ".worldSaveData.%s" % skip_path
-                key_path = path + ".Key"
-                key_type = properties['key_type']
-                value_type = properties['value_type']
-                if key_type == "StructProperty":
-                    key_struct_type = reader.get_type_or(key_path, "Guid")
-                else:
-                    key_struct_type = None
-                value_path = path + ".Value"
-                if value_type == "StructProperty":
-                    value_struct_type = reader.get_type_or(value_path, "StructProperty")
-                else:
-                    value_struct_type = None
-                values: list[dict[str, Any]] = []
-                for _ in range(count):
-                    key = reader.prop_value(key_type, key_struct_type, key_path)
-                    value = reader.prop_value(value_type, value_struct_type, value_path)
-                    values.append(
-                        {
-                            "key": key,
-                            "value": value,
-                        }
-                    )
-                properties["key_struct_type"] = key_struct_type
-                properties["value_struct_type"] = value_struct_type
-                properties["value"] = values
-            del properties['custom_type']
-            del properties["skip_type"]
+        t1 = time.time()
+        parse_skiped_item(properties, skip_path, True, recursive)
+        print("Done in %.2fs" % (time.time() - t1))
         if ".worldSaveData.%s" % skip_path in SKP_PALWORLD_CUSTOM_PROPERTIES:
             del SKP_PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.%s" % skip_path]
-        print("Done")
 
 
 SKP_PALWORLD_CUSTOM_PROPERTIES = copy.deepcopy(PALWORLD_CUSTOM_PROPERTIES)
 SKP_PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.MapObjectSaveData"] = (skip_decode, skip_encode)
 SKP_PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.FoliageGridSaveDataMap"] = (skip_decode, skip_encode)
 SKP_PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.MapObjectSpawnerInStageSaveData"] = (skip_decode, skip_encode)
-SKP_PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.ItemContainerSaveData"] = (skip_decode, skip_encode)
 SKP_PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.DynamicItemSaveData"] = (skip_decode, skip_encode)
 SKP_PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.CharacterContainerSaveData"] = (skip_decode, skip_encode)
-
+SKP_PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.CharacterContainerSaveData.Value.Slots"] = (skip_decode, skip_encode)
+SKP_PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.CharacterContainerSaveData.Value.RawData"] = (skip_decode, skip_encode)
+SKP_PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.ItemContainerSaveData"] = (skip_decode, skip_encode)
+SKP_PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.ItemContainerSaveData.Value.BelongInfo"] = (skip_decode, skip_encode)
+SKP_PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.ItemContainerSaveData.Value.Slots"] = (skip_decode, skip_encode)
+SKP_PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.ItemContainerSaveData.Value.RawData"] = (skip_decode, skip_encode)
 
 def main():
     global output_file, output_path, args, gui, playerMapping, instanceMapping
@@ -414,7 +450,10 @@ class ParamEditor(tk.Toplevel):
 
     def assign_attrib_var(self, var, attrib):
         if attrib['type'] in ["IntProperty", "StrProperty", "NameProperty", "FloatProperty"]:
-            var.set(str(attrib['value']))
+            try:
+                var.set(str(attrib['value']))
+            except UnicodeEncodeError:
+                var.set(repr(attrib['value']))
         elif attrib['type'] == "StructProperty" and attrib['struct_type'] == "FixedPoint64" and \
                 attrib['value']['Value']['type'] == "Int64Property":
             var.set(str(attrib['value']['Value']['value']))
@@ -466,10 +505,13 @@ class ParamEditor(tk.Toplevel):
                         str(attrib_var[attribute_key].get())))
                     attribs[attribute_key]['value'] = to_storage_uuid(uuid.UUID(attrib_var[attribute_key].get()))
                 elif attrib['type'] in ["StrProperty", "NameProperty"]:
-                    print(
-                        "%s%s [%s] = %s -> %s" % (
-                            path, attribute_key, attrib['type'], attribs[attribute_key]['value'],
-                            attrib_var[attribute_key].get()))
+                    try:
+                        print(
+                            "%s%s [%s] = %s -> %s" % (
+                                path, attribute_key, attrib['type'], attribs[attribute_key]['value'],
+                                attrib_var[attribute_key].get()))
+                    except UnicodeEncodeError:
+                        pass
                     attribs[attribute_key]['value'] = attrib_var[attribute_key].get()
                 elif attrib['type'] == "EnumProperty":
                     print(
@@ -629,7 +671,7 @@ class ParamEditor(tk.Toplevel):
 
 class PlayerItemEdit(ParamEditor):
     def __init__(self, player_uid):
-        load_skiped_decode(wsd, ['ItemContainerSaveData'])
+        load_skiped_decode(wsd, ['ItemContainerSaveData'], False)
         item_containers = {}
         for item_container in wsd["ItemContainerSaveData"]['value']:
             item_containers[str(item_container['key']['ID']['value'])] = item_container
@@ -661,8 +703,8 @@ class PlayerItemEdit(ParamEditor):
                 tab = tk.Frame(tabs)
                 tabs.add(tab, text=idx_key[:-11])
                 self.item_container_vars[idx_key[:-11]] = []
-                item_container = item_containers[
-                    str(player_gvas['inventoryInfo']['value'][idx_key]['value']['ID']['value'])]
+                item_container = parse_item(item_containers[
+                    str(player_gvas['inventoryInfo']['value'][idx_key]['value']['ID']['value'])], "ItemContainerSaveData")
                 self.item_containers[idx_key[:-11]] = [{
                     'SlotIndex': item['SlotIndex'],
                     'ItemId': item['ItemId']['value']['StaticId'],
@@ -735,15 +777,16 @@ class PlayerEditGUI(ParamEditor):
         self.save(self.player, self.gui_attribute)
         self.destroy()
 
+
 class PalEditGUI(PalEdit):
     def createWindow(self):
         root = tk.Toplevel()
         root.title(f"PalEdit v{PalEditConfig.version}")
         return root
-    
-    def load(self, file = None):
+
+    def load(self, file=None):
         paldata = wsd['CharacterSaveParameterMap']['value']
-        
+
         nullmoves = []
         for i in paldata:
             try:
@@ -771,7 +814,7 @@ class PalEditGUI(PalEdit):
                     self.unknown.append(i)
                     print(f"Error occured: {str(e)}")
                 # print(f"Debug: Data {i}")
-        
+
         print(self.palbox.keys())
         self.current.set(next(iter(self.players)))
         print(f"Defaulted selection to {self.current.get()}")
@@ -785,11 +828,11 @@ class PalEditGUI(PalEdit):
         nullmoves.sort()
         for i in nullmoves:
             print(f"{i} was not found in Attack Database")
-            
+
         self.refresh()
         self.changetext(-1)
         self.jump()
-        
+
     def build_menu(self):
         self.menu = tk.Menu(self.gui)
         tools = self.menu
@@ -798,6 +841,7 @@ class PalEditGUI(PalEdit):
         toolmenu.add_command(label="Debug", command=self.toggleDebug)
         toolmenu.add_command(label="Generate GUID", command=self.generateguid)
         tools.add_cascade(label="Tools", menu=toolmenu, underline=0)
+
 
 class GUI():
     def __init__(self):
@@ -930,7 +974,7 @@ class GUI():
             messagebox.showerror("Target Player Error", "UUID: \"%s\"\n%s" % (target_uuid, str(e)))
             return None
         if target_uuid not in playerMapping:
-            messagebox.showerror("Target Player Not exists")
+            messagebox.showerror("Target Player Error", "Target Player Not exists")
             return None
         return target_uuid
 
@@ -938,8 +982,12 @@ class GUI():
         target_uuid = self.parse_target_uuid()
         if target_uuid is None:
             return
-        new_player_name = simpledialog.askstring(title="Rename Player", prompt="New player name",
-                                                 initialvalue=playerMapping[target_uuid]['NickName'])
+        try:
+            new_player_name = simpledialog.askstring(title="Rename Player", prompt="New player name",
+                                                     initialvalue=playerMapping[target_uuid]['NickName'])
+        except UnicodeEncodeError:
+            new_player_name = simpledialog.askstring(title="Rename Player", prompt="New player name",
+                                                     initialvalue=repr(playerMapping[target_uuid]['NickName']))
         if new_player_name:
             try:
                 RenamePlayer(target_uuid, new_player_name)
@@ -1017,7 +1065,7 @@ class GUI():
         if target_uuid is None:
             return
         PlayerSaveEdit(target_uuid)
-    
+
     def pal_edit(self):
         font_list = ('微软雅黑', 'Courier New', 'Arial')
         for font in font_list:
@@ -1115,7 +1163,7 @@ def LoadFile(filename):
         print(f"Parsing {filename}...", end="", flush=True)
         start_time = time.time()
         gvas_file = GvasFile.read(raw_gvas, PALWORLD_TYPE_HINTS, SKP_PALWORLD_CUSTOM_PROPERTIES)
-        print("Done in %.1fs." % (time.time() - start_time))
+        print("Done in %.2fs." % (time.time() - start_time))
 
     wsd = gvas_file.properties['worldSaveData']['value']
 
@@ -1141,7 +1189,7 @@ def RenamePlayer(player_uid, new_name):
             print(
                 "\033[32mRename User\033[0m  UUID: %s  Level: %d  CharacterID: \033[93m%s\033[0m -> %s" % (
                     str(item['key']['InstanceId']['value']), player['Level']['value'],
-                    player['NickName']['value'], new_name))
+                    repr(player['NickName']['value']), new_name))
             player['NickName']['value'] = new_name
     for group_data in wsd['GroupSaveDataMap']['value']:
         if str(group_data['value']['GroupType']['value']['value']) == "EPalGroupType::Guild":
@@ -1150,7 +1198,7 @@ def RenamePlayer(player_uid, new_name):
                 if str(g_player['player_uid']) == player_uid:
                     print(
                         "\033[32mRename Guild User\033[0m  \033[93m%s\033[0m  -> %s" % (
-                            g_player['player_info']['player_name'], new_name))
+                            repr(g_player['player_info']['player_name']), new_name))
                     g_player['player_info']['player_name'] = new_name
                     break
 
@@ -1194,7 +1242,7 @@ def OpenBackup(filename):
         print(f"Parsing {filename}...", end="", flush=True)
         start_time = time.time()
         backup_gvas_file = GvasFile.read(raw_gvas, PALWORLD_TYPE_HINTS, PALWORLD_CUSTOM_PROPERTIES)
-        print("Done in %.1fs." % (time.time() - start_time))
+        print("Done in %.2fs." % (time.time() - start_time))
     backup_wsd = backup_gvas_file.properties['worldSaveData']['value']
     ShowPlayers(backup_wsd)
 
@@ -1204,7 +1252,7 @@ def to_storage_uuid(uuid_str):
 
 
 def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
-    load_skiped_decode(wsd, ['ItemContainerSaveData', 'CharacterContainerSaveData'])
+    load_skiped_decode(wsd, ['ItemContainerSaveData', 'CharacterContainerSaveData'], False)
     player_sav_file = os.path.dirname(os.path.abspath(args.filename)) + "/Players/" + player_uid.upper().replace("-",
                                                                                                                  "") + ".sav"
     new_player_sav_file = os.path.dirname(
@@ -1579,7 +1627,7 @@ def MigratePlayer(player_uid, new_player_uid):
 
 
 def DeletePlayer(player_uid, InstanceId=None, dry_run=False):
-    load_skiped_decode(wsd, ['ItemContainerSaveData', 'CharacterContainerSaveData'])
+    load_skiped_decode(wsd, ['ItemContainerSaveData', 'CharacterContainerSaveData'], False)
     if isinstance(player_uid, int):
         player_uid = str(uuid.UUID("%08x-0000-0000-0000-000000000000" % player_uid))
     player_sav_file = os.path.dirname(os.path.abspath(args.filename)) + "/Players/" + player_uid.upper().replace("-",
@@ -1775,8 +1823,9 @@ def LoadPlayers(data_source=None):
                     try:
                         playerParams['NickName']['value'].encode('utf-8')
                     except UnicodeEncodeError as e:
-                        print("\033[33mWarning: Corrupted player name\033[0m UUID \033[32m %s \033[0m Player \033[32m %s \033[0m" % (
-                            str(item['key']['PlayerUId']['value']), repr(playerParams['NickName']['value'])))
+                        print(
+                            "\033[33mWarning: Corrupted player name\033[0m UUID \033[32m %s \033[0m Player \033[32m %s \033[0m" % (
+                                str(item['key']['PlayerUId']['value']), repr(playerParams['NickName']['value'])))
                 playerMeta = {}
                 for player_k in playerParams:
                     playerMeta[player_k] = playerParams[player_k]['value']
@@ -1803,8 +1852,10 @@ def ShowPlayers(data_source=None):
         except UnicodeEncodeError as e:
             print("Corrupted Player Name \033[31m %s \033[0m PlayerUId \033[32m %s \033[0m [InstanceID %s %s \033[0m]" %
                   (repr(playerMeta['NickName']), playerUId, "\033[33m" if str(playerUId) in guildInstanceMapping and
-                              str(playerMeta['InstanceId']) == guildInstanceMapping[
-                                  str(playerUId)] else "\033[31m", playerMeta['InstanceId']))
+                                                                          str(playerMeta['InstanceId']) ==
+                                                                          guildInstanceMapping[
+                                                                              str(playerUId)] else "\033[31m",
+                   playerMeta['InstanceId']))
         except KeyError:
             print("PlayerUId \033[32m %s \033[0m [InstanceID %s %s \033[0m] -> Level %2d" % (
                 playerUId,
