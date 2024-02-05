@@ -3,4 +3,4 @@
 	url = https://github.com/cheahjs/palworld-save-tools.git
 [submodule "PalEdit"]
 	path = palworld_server_toolkit/PalEdit
-	url = https://github.com/EternalWraith/PalEdit
+	url = https://github.com/magicbear/PalEdit.git
