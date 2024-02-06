@@ -1099,7 +1099,12 @@ class GUI():
         pal.mainloop()
     
     def delete_base(self):
-        if DeleteBaseCamp(self.target_base.get()):
+        target_guild_uuid = self.target_guild.get().split(" - ")[0]
+        try:
+            uuid.UUID(target_guild_uuid)
+        except Exception as e:
+            target_guild_uuid = None
+        if DeleteBaseCamp(self.target_base.get(), group_id=target_guild_uuid):
             messagebox.showinfo("Result", "Delete Base Camp Success")
         else:
             messagebox.showerror("Delete Base", "Failed to delete")
@@ -1499,6 +1504,8 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
                         # Same Guild is not exists in target save
                         if player_group is None:
                             player_group = copy.deepcopy(group_data)
+                            player_group['value']['RawData']['value']['base_ids'] = []
+                            player_group['value']['RawData']['value']['map_object_instance_ids_base_camp_points'] = []
                             player_group['value']['RawData']['value']['admin_player_uid'] = userInstance['key']['PlayerUId']['value']
                             print(
                                 "\033[32mCopy Guild\033[0m Group ID [\033[92m%s\033[0m]" % (
@@ -2066,10 +2073,20 @@ def DeleteCharacterByContainerId(containerId):
         wsd['CharacterSaveParameterMap']['value'].remove(item)
     return [x['key']['InstanceId']['value'] for x in removeItemList]
 
-def DeleteBaseCamp(base_id):
+def DeleteBaseCamp(base_id, group_id=None):
     baseCampMapping = {str(base['key']): base for base in wsd['BaseCampSaveData']['value']}
     groupMapping = {str(group['key']): group for group in wsd['GroupSaveDataMap']['value']}
     workDataMapping = {str(wrk['RawData']['value']['id']): wrk for wrk in wsd['WorkSaveData']['value']['values']}
+    if group_id is not None and str(group_id) in groupMapping:
+        group_data = groupMapping[str(group_id)]['value']['RawData']['value']
+        print(f"Delete Group UUID {group_id}  Base Camp ID {base_id}")
+        if base_id in group_data['base_ids']: 
+            idx = group_data['base_ids'].index(base_id)
+            if len(group_data['base_ids']) == len(group_data['map_object_instance_ids_base_camp_points']): 
+                group_data['base_ids'].remove(base_id)
+                group_data['map_object_instance_ids_base_camp_points'].pop(idx)
+            else:
+                group_data['base_ids'].remove(base_id)
     if str(base_id) not in baseCampMapping:
         print(f"Error: Base camp {base_id} not found")
         return False

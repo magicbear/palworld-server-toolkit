@@ -14,6 +14,14 @@ Changelog
     Note that they these tags will not actually close the issue/PR until they
     are merged into the "default" branch.
 
+v0.3.1
+-------
+
+Fix:
+
+- Delete Base Camp on GUI with selected Guide will force delete Base Camp
+- CopyPlayer Without copy base camp relative variable
+
 v0.3.0
 -------
 
