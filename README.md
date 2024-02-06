@@ -92,6 +92,8 @@ options:
 	- `BindGuildInstanceId(uid,instance_id)` - 修改公会成员绑定ID
 	- `RenamePlayer(uid,new_name)` - 修改玩家名字为 `new_name`
 	- `DeletePlayer(uid,InstanceId=None, dry_run=False)` - 删除玩家数据 `InstanceId: 删除指定InstanceId`
+	- `DeleteGuild(group_id)` - 删除公会
+	- `DeleteBaseCamp(base_id)` - 删除基地
 	- `EditPlayer(uid)` - 快速指定玩家数据至变量`player`
 	- `MoveToGuild(uid,guild_id)` - 移动玩家至公会`guild_id`
 	- `OpenBackup(filename)` - 打开备份`Level.sav`文件并指向变量`backup_wsd`

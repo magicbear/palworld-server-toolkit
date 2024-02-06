@@ -98,6 +98,8 @@ This tools is for cleanup the unreference item, rename the player name, migrate 
 	- `BindGuildInstanceId(uid,instance_id)` - Update Guild binding instance for user
 	- `RenamePlayer(uid,new_name)` - Rename player to new_name
 	- `DeletePlayer(uid,InstanceId=None, dry_run=False)` - Wipe player data from save InstanceId: delete specified InstanceId
+	- `DeleteGuild(group_id)` - Delete Guild
+	- `DeleteBaseCamp(base_id)` - Delete Base Camp
 	- `EditPlayer(uid)` - Allocate player base meta data to variable `player`
 	- `MoveToGuild(uid,guild_id)` - Move player to guild `guild_id`
 	- `OpenBackup(filename)` - Open Backup Level.sav file and assign to `backup_wsd`

@@ -339,6 +339,8 @@ def main():
         print("               dry_run=False)                - Wipe player data from save")
         print("                                               InstanceId: delete specified InstanceId")
         print("                                               dry_run: only show how to delete")
+        print("  DeleteGuild(gid)                           - Delete Guild")
+        print("  DeleteBaseCamp(base_id)                    - Delete Guild Base Camp")
         print("  EditPlayer(uid)                            - Allocate player base meta data to variable 'player'")
         print("  OpenBackup(filename)                       - Open Backup Level.sav file and assign to backup_wsd")
         print("  MigratePlayer(old_uid,new_uid)             - Migrate the player from old PlayerUId to new PlayerUId")
@@ -1621,9 +1623,7 @@ def MoveToGuild(player_uid, group_id):
                 group_info['players'].remove(g_player)
 
             if len(group_info['players']) == 0:
-                remove_guilds.append(group_data)
-                print("\033[31mDelete Guild\033[0m \033[93m %s \033[0m  UUID: %s" % (
-                    group_info['guild_name'], str(group_info['group_id'])))
+                DeleteGuild(group_info['group_id'])
 
             remove_items = []
             for ind_id in group_info['individual_character_handle_ids']:
@@ -1634,9 +1634,6 @@ def MoveToGuild(player_uid, group_id):
                             group_info['group_id'], ind_id['guid'], ind_id['instance_id']))
             for item in remove_items:
                 group_info['individual_character_handle_ids'].remove(item)
-
-    for guild in remove_guilds:
-        wsd['GroupSaveDataMap']['value'].remove(guild)
 
     print("\033[32mAppend character and players to guild\033[0m")
     target_group['players'].append({
@@ -1840,9 +1837,7 @@ def DeletePlayer(player_uid, InstanceId=None, dry_run=False):
                     if not dry_run:
                         item['players'].remove(player)
                         if len(item['players']) == 0:
-                            remove_guilds.append(group_data)
-                            print("\033[31mDelete Guild\033[0m \033[93m %s \033[0m  UUID: %s" % (
-                                item['guild_name'], str(item['group_id'])))
+                            DeleteGuild(item['group_id'])
                     break
             removeItems = []
             for ind_char in item['individual_character_handle_ids']:
@@ -2075,10 +2070,10 @@ def DeleteBaseCamp(base_id):
     baseCampMapping = {str(base['key']): base for base in wsd['BaseCampSaveData']['value']}
     groupMapping = {str(group['key']): group for group in wsd['GroupSaveDataMap']['value']}
     workDataMapping = {str(wrk['RawData']['value']['id']): wrk for wrk in wsd['WorkSaveData']['value']['values']}
-    if base_id not in baseCampMapping:
+    if str(base_id) not in baseCampMapping:
         print(f"Error: Base camp {base_id} not found")
         return False
-    baseCamp = baseCampMapping[base_id]['value']
+    baseCamp = baseCampMapping[str(base_id)]['value']
     group_data = None
     if str(baseCamp['RawData']['value']['group_id_belong_to']) in groupMapping:
         group_data = groupMapping[str(baseCamp['RawData']['value']['group_id_belong_to'])]['value']['RawData']['value']
@@ -2100,8 +2095,21 @@ def DeleteBaseCamp(base_id):
         for instance in list(filter(lambda x: x['instance_id'] in instanceIds, group_data['individual_character_handle_ids'])):
             print(f"Remove Character Instance {instance['guid']}  {instance['instance_id']} from Group individual_character_handle_ids")
             group_data['individual_character_handle_ids'].remove(instance)
-    wsd['BaseCampSaveData']['value'].remove(baseCampMapping[base_id])
+    wsd['BaseCampSaveData']['value'].remove(baseCampMapping[str(base_id)])
     return True
+
+def DeleteGuild(group_id):
+    groupMapping = {str(group['key']): group for group in wsd['GroupSaveDataMap']['value']}
+    if str(group_id) not in groupMapping:
+        return False
+    group_info = groupMapping[str(group_id)]['value']['RawData']['value']
+    for base_id in group_info['base_ids']:
+        DeleteBaseCamp(base_id)
+    print("\033[31mDelete Guild\033[0m \033[93m %s \033[0m  UUID: %s" % (
+        group_info['guild_name'], str(group_info['group_id'])))
+    wsd['GroupSaveDataMap']['value'].remove(groupMapping[str(group_id)])
+    return True
+
 
 def ShowGuild():
     global guildInstanceMapping

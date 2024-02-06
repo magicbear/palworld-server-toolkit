@@ -21,6 +21,7 @@ Feature:
 
 - Delete Guild Base Camp Feature
 - GUI Select Player auto locate the Guild
+- DeleteGuild
 
 v0.2.9
 -------
