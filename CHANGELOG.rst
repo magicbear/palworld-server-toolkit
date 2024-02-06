@@ -20,7 +20,7 @@ v0.2.9
 Major:
 
 - Player Save Editor: Add support for inventoryInfo
-
+- CopyPlayer: Add convert for the DynamicItemSaveData
 
 v0.2.8
 -------
