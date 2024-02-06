@@ -11,6 +11,7 @@ import uuid
 import argparse
 import copy
 import importlib.metadata
+import traceback
 
 import tkinter as tk
 import tkinter.font
@@ -26,7 +27,7 @@ sys.path.insert(0, os.path.join(module_dir, "PalEdit"))
 sys.path.insert(0, os.path.join(module_dir, "../save_tools"))
 # sys.path.insert(0, os.path.join(module_dir, "../palworld-save-tools"))
 
-from palworld_save_tools.gvas import GvasFile
+from palworld_save_tools.gvas import GvasFile, GvasHeader
 from palworld_save_tools.palsav import compress_gvas_to_sav, decompress_sav_to_gvas
 from palworld_save_tools.paltypes import PALWORLD_CUSTOM_PROPERTIES, PALWORLD_TYPE_HINTS
 from palworld_save_tools.archive import *
@@ -34,7 +35,60 @@ from palworld_save_tools.archive import *
 from palworld_server_toolkit.PalEdit import PalInfo
 from palworld_server_toolkit.PalEdit.PalEdit import PalEditConfig, PalEdit
 
+class GvasPrettyPrint(pprint.PrettyPrinter):
+    _dispatch = pprint.PrettyPrinter._dispatch.copy()
+    
+    def _pprint_dict(self, object, stream, indent, allowance, context, level):
+        write = stream.write
+        write('{')
+        if self._indent_per_level > 1:
+            write((self._indent_per_level - 1) * ' ')
+        length = len(object)
+        if length:
+            if self._sort_dicts:
+                items = sorted(object.items(), key=pprint._safe_tuple)
+            else:
+                items = object.items()
+            fmtValue = False
+            rep = ""
+            dict_type = set(object.keys())
+            if {'id', 'type', 'value'}.issubset(dict_type) and object['id'] is None:
+                dict_type -= {'id', 'type', 'value', 'custom_type'}
+                if dict_type == set() and object['type'] in ["Int64Property", "NameProperty", "EnumProperty", "IntProperty", "BoolProperty",
+                                                             "FloatProperty", "StrProperty"]:
+                    fmtValue = True
+                    rep = object['type']
+                elif dict_type == {'struct_id', 'struct_type'} and object['type'] == "StructProperty" and str(object['struct_id']) == '00000000-0000-0000-0000-000000000000':
+                    rep = f"Struct:{object['struct_type']}"
+                    fmtValue = True
+                elif dict_type == {'array_type'} and object['type'] == "ArrayProperty":
+                    rep = f"ArrayProperty:{object['array_type']}"
+                    fmtValue = True
+                # elif dict_type == {'key_type', 'key_struct_type', 'value_type', 'value_struct_type'} and object['type'] == "MapProperty":
+                #     rep = f"Map:{object['key_type']}{{{object['key_struct_type']}}}={object['value_type']}{{{object['value_struct_type']}}}"
+                #     fmtValue = True
+            if fmtValue:
+                repr = self._repr('value', context, level)
+                write(f"\033[36m{rep}\033[0m=")
+                if rep == "Struct:Guid":
+                    write("\033[43;31m" if str(object['value']) == "00000000-0000-0000-0000-000000000000" else "\033[93m")
+                    self._format(str(object['value']), stream, indent + len(repr) + 1, allowance,
+                                        context, level)
+                    write("\033[0m")
+                else:
+                    self._format(object['value'], stream, indent + len(repr) + 1, allowance,
+                                        context, level)
+            else:
+                self._format_dict_items(items, stream, indent, allowance + 1,
+                                    context, level)
+        write('}')
+    
+    _dispatch[dict.__repr__] = _pprint_dict
+
 pp = pprint.PrettyPrinter(width=80, compact=True, depth=6)
+gvas_pp = GvasPrettyPrint(width=1, compact=True, depth=6)
+gp = gvas_pp.pprint
+
 wsd = None
 output_file = None
 gvas_file = None
@@ -123,6 +177,10 @@ def skip_encode(
             f"Expected ArrayProperty or MapProperty or StructProperty, got {property_type}"
         )
 
+loadingTitle = ""
+def set_loadingTitle(title):
+    loadingTitle = title
+    print("\033]0;%s\a" % loadingTitle, end="", flush=True)
 
 class skip_loading_progress(threading.Thread):
     def __init__(self, reader, size):
@@ -133,11 +191,38 @@ class skip_loading_progress(threading.Thread):
     def run(self) -> None:
         try:
             while not self.reader.eof():
+                print("\033]0;%s - %3.1f%%\a" % (loadingTitle, 100 * self.reader.data.tell() / self.size), end="", flush=True)
                 print("%3.0f%%" % (100 * self.reader.data.tell() / self.size), end="\b\b\b\b", flush=True)
+                if gui is not None:
+                    gui.progressbar['value'] = 100 * self.reader.data.tell() / self.size
                 time.sleep(0.02)
         except ValueError:
             pass
 
+class ProgressGvasFile(GvasFile):
+    @staticmethod
+    def read(
+        data: bytes,
+        type_hints: dict[str, str] = {},
+        custom_properties: dict[str, tuple[Callable, Callable]] = {},
+        allow_nan: bool = True,
+    ) -> "ProgressGvasFile":
+        gvas_file = GvasFile()
+        with FArchiveReader(
+            data,
+            type_hints=type_hints,
+            custom_properties=custom_properties,
+            allow_nan=allow_nan,
+        ) as reader:
+            skip_loading_progress(reader, len(data)).start()
+            gvas_file.header = GvasHeader.read(reader)
+            gvas_file.properties = reader.properties_until_end()
+            gvas_file.trailer = reader.read_to_end()
+            if gvas_file.trailer != b"\x00\x00\x00\x00":
+                print(
+                    f"{len(gvas_file.trailer)} bytes of trailer data, file may not have fully parsed"
+                )
+        return gvas_file
 
 def parse_item(properties, skip_path):
     if isinstance(properties, dict):
@@ -238,6 +323,10 @@ SKP_PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.ItemContainerSaveData.Value.Belon
 SKP_PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.ItemContainerSaveData.Value.Slots"] = (skip_decode, skip_encode)
 SKP_PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.ItemContainerSaveData.Value.RawData"] = (skip_decode, skip_encode)
 
+def gui_thread():
+    GUI()
+    gui.mainloop()
+
 def main():
     global output_file, output_path, args, gui, playerMapping, instanceMapping
 
@@ -324,7 +413,7 @@ def main():
         FixDuplicateUser()
 
     if args.gui:
-        GUI()
+        threading.Thread(target=gui_thread).start()
 
     if sys.flags.interactive:
         print("Go To Interactive Mode (no auto save), we have follow command:")
@@ -359,7 +448,7 @@ def main():
         print("  PrettyPrint(value)                         - Use XML format to show the value")
         return
     elif args.gui:
-        gui.mainloop()
+        # gui.mainloop()
         return
 
     if args.fix_missing or args.fix_capture:
@@ -402,22 +491,26 @@ class EntryPopup(tk.Entry):
 
 class ParamEditor(tk.Toplevel):
     def __init__(self):
-        super().__init__()
+        super().__init__(master=gui.gui)
         self.gui = self
         self.parent = self
         #
         self.font = tk.font.Font(family="Courier New")
 
     def build_subgui(self, g_frame, attribute_key, attrib_var, attrib):
-        sub_frame = ttk.Frame(master=g_frame)
+        sub_frame = ttk.Frame(master=g_frame, borderwidth=1, relief=tk.constants.GROOVE, padding=2)
         sub_frame.pack(side="right")
         sub_frame_c = ttk.Frame(master=sub_frame)
-        cmbx = ttk.Combobox(master=sub_frame, font=self.font, width=20, state="readonly",
+        
+        sub_frame_item = ttk.Frame(master=sub_frame)
+        tk.Label(master=sub_frame_item, font=self.font, text=attrib['array_type']).pack(side="left")
+        cmbx = ttk.Combobox(master=sub_frame_item, font=self.font, width=20, state="readonly",
                             values=["Item %d" % i for i in range(len(attrib['value']['values']))])
         cmbx.bind("<<ComboboxSelected>>",
                   lambda evt: self.cmb_array_selected(evt, sub_frame_c, attribute_key, attrib_var, attrib))
-        cmbx.pack(side="top")
-        sub_frame_c.pack(side="top")
+        cmbx.pack(side="right")
+        sub_frame_item.pack(side="top")
+        sub_frame_c.pack(side="bottom")
 
     def valid_int(self, value):
         try:
@@ -442,10 +535,12 @@ class ParamEditor(tk.Toplevel):
         elif attrib['type'] == "StructProperty" and attrib['struct_type'] == "FixedPoint64" and \
                 attrib['value']['Value']['type'] == "Int64Property":
             return tk.StringVar(master)
-        elif attrib['type'] == "StructProperty" and attrib['struct_type'] == "Guid":
+        elif attrib['type'] == "StructProperty" and attrib['struct_type'] in ["DateTime", "Guid", "PalContainerId"]:
             return tk.StringVar(master)
-        elif attrib['type'] == "StructProperty" and attrib['struct_type'] == "PalContainerId":
-            return tk.StringVar(master)
+        elif attrib['type'] == "StructProperty" and attrib['struct_type'] == "Vector":
+            return [tk.StringVar(master), tk.StringVar(master), tk.StringVar(master)]
+        elif attrib['type'] == "StructProperty" and attrib['struct_type'] == "LinearColor":
+            return [tk.StringVar(master), tk.StringVar(master), tk.StringVar(master), tk.StringVar(master)]
         elif attrib['type'] == "BoolProperty":
             return tk.BooleanVar(master=master)
         elif attrib['type'] == "ArrayProperty" and attrib['array_type'] == "StructProperty":
@@ -453,9 +548,11 @@ class ParamEditor(tk.Toplevel):
             for x in range(len(attrib['value']['values'])):
                 attrib_var.append({})
             return attrib_var
-        # elif attrib['type'] == "ArrayProperty" and attrib['array_type'] == "NameProperty":
-        #     attrib_var = []
-        #     return attrib_var
+        elif attrib['type'] == "ArrayProperty" and attrib['array_type'] == "NameProperty":
+            attrib_var = []
+            for x in range(len(attrib['value']['values'])):
+                attrib_var.append({})
+            return attrib_var
 
     def assign_attrib_var(self, var, attrib):
         if attrib['type'] in ["IntProperty", "StrProperty", "NameProperty", "FloatProperty"]:
@@ -466,10 +563,23 @@ class ParamEditor(tk.Toplevel):
         elif attrib['type'] == "StructProperty" and attrib['struct_type'] == "FixedPoint64" and \
                 attrib['value']['Value']['type'] == "Int64Property":
             var.set(str(attrib['value']['Value']['value']))
+        elif attrib['type'] == "StructProperty" and attrib['struct_type'] in ["DateTime"]:
+            var.set(str(attrib['value']))
         elif attrib['type'] == "StructProperty" and attrib['struct_type'] == "Guid":
             var.set(str(attrib['value']))
         elif attrib['type'] == "StructProperty" and attrib['struct_type'] == "PalContainerId":
             var.set(str(attrib['value']['ID']['value']))
+        elif attrib['type'] == "StructProperty" and attrib['struct_type'] in ["Vector", "Quat"]:
+            var[0].set(str(attrib['value']['x']))
+            var[1].set(str(attrib['value']['y']))
+            var[2].set(str(attrib['value']['z']))
+            if attrib['struct_type'] == "Quat":
+                var[2].set(str(attrib['value']['w']))
+        elif attrib['type'] == "StructProperty" and attrib['struct_type'] == "LinearColor":
+            var[0].set(str(attrib['value']['r']))
+            var[1].set(str(attrib['value']['g']))
+            var[2].set(str(attrib['value']['b']))
+            var[3].set(str(attrib['value']['a']))
         elif attrib['type'] == "BoolProperty":
             var.set(attrib['value'])
         elif attrib['type'] == "EnumProperty":
@@ -483,68 +593,129 @@ class ParamEditor(tk.Toplevel):
             if not isinstance(attrib, dict):
                 continue
             if 'type' in attrib:
+                storage_object = attrib
+                storage_key = 'value'
+                if 'value' in attrib:
+                    storage_key = 'value'
+                elif 'values' in attrib and 'value_idx' in attrib:
+                    storage_object = attrib['values']
+                    storage_key = attrib['value_idx']
+                        
                 if attrib['type'] == "IntProperty":
                     print("%s%s [%s] = %d -> %d" % (
-                        path, attribute_key, attrib['type'], attribs[attribute_key]['value'],
+                        path, attribute_key, attrib['type'], storage_object[storage_key],
                         int(attrib_var[attribute_key].get())))
-                    attribs[attribute_key]['value'] = int(attrib_var[attribute_key].get())
+                    storage_object[storage_key] = int(attrib_var[attribute_key].get())
                 elif attrib['type'] == "FloatProperty":
                     print("%s%s [%s] = %f -> %f" % (
-                        path, attribute_key, attrib['type'], attribs[attribute_key]['value'],
+                        path, attribute_key, attrib['type'], storage_object[storage_key],
                         float(attrib_var[attribute_key].get())))
-                    attribs[attribute_key]['value'] = float(attrib_var[attribute_key].get())
+                    storage_object[storage_key] = float(attrib_var[attribute_key].get())
                 elif attrib['type'] == "BoolProperty":
                     print(
                         "%s%s [%s] = %d -> %d" % (
-                            path, attribute_key, attrib['type'], attribs[attribute_key]['value'],
+                            path, attribute_key, attrib['type'], storage_object[storage_key],
                             attrib_var[attribute_key].get()))
-                    attribs[attribute_key]['value'] = attrib_var[attribute_key].get()
+                    storage_object[storage_key] = attrib_var[attribute_key].get()
+                elif attrib['type'] == "StructProperty" and attrib['struct_type'] in ["DateTime"]:
+                    print("%s%s [%s.%s] = %d -> %d" % (
+                        path, attribute_key, attrib['type'], attrib['struct_type'],
+                        storage_object[storage_key],
+                        int(attrib_var[attribute_key].get())))
+                    storage_object[storage_key] = int(attrib_var[attribute_key].get())
                 elif attrib['type'] == "StructProperty" and attrib['struct_type'] == "FixedPoint64":
                     if attrib['value']['Value']['type'] == "Int64Property":
                         print("%s%s [%s.%s] = %d -> %d" % (
                             path, attribute_key, attrib['type'], attrib['value']['Value']['type'],
-                            attribs[attribute_key]['value']['Value']['value'],
+                            storage_object[storage_key]['Value']['value'],
                             int(attrib_var[attribute_key].get())))
-                        attribs[attribute_key]['value']['Value']['value'] = int(attrib_var[attribute_key].get())
+                        storage_object[storage_key]['Value']['value'] = int(attrib_var[attribute_key].get())
                     else:
                         print("Error: unsupported property type -> %s[%s.%s]" % (
                             attribute_key, attrib['type'], attrib['value']['Value']['type']))
                 elif attrib['type'] == "StructProperty" and attrib['struct_type'] == "Guid":
                     print("%s%s [%s.%s] = %s -> %s" % (
                         path, attribute_key, attrib['type'], attrib['struct_type'],
-                        str(attribs[attribute_key]['value']),
+                        str(storage_object[storage_key]),
                         str(attrib_var[attribute_key].get())))
-                    attribs[attribute_key]['value'] = to_storage_uuid(uuid.UUID(attrib_var[attribute_key].get()))
+                    storage_object[storage_key] = to_storage_uuid(uuid.UUID(attrib_var[attribute_key].get()))
                 elif attrib['type'] == "StructProperty" and attrib['struct_type'] == "PalContainerId":
                     print("%s%s [%s.%s] = %s -> %s" % (
                         path, attribute_key, attrib['type'], attrib['struct_type'],
-                        str(attribs[attribute_key]['value']['ID']['value']),
+                        str(storage_object[storage_key]['ID']['value']),
                         str(attrib_var[attribute_key].get())))
-                    attribs[attribute_key]['value']['ID']['value'] = to_storage_uuid(uuid.UUID(attrib_var[attribute_key].get()))
+                    storage_object[storage_key]['ID']['value'] = to_storage_uuid(uuid.UUID(attrib_var[attribute_key].get()))
+                elif attrib['type'] == "StructProperty" and attrib['struct_type'] == "Vector":
+                    print("%s%s [%s.%s] = %f,%f,%f -> %f,%f,%f" % (
+                        path, attribute_key, attrib['type'], attrib['struct_type'],
+                        storage_object[storage_key]['x'],storage_object[storage_key]['y'],
+                        storage_object[storage_key]['z'],float(attrib_var[attribute_key][0].get()),
+                        float(attrib_var[attribute_key][1].get()),float(attrib_var[attribute_key][2].get())))
+                    storage_object[storage_key]['x'] = float(attrib_var[attribute_key][0].get())
+                    storage_object[storage_key]['y'] = float(attrib_var[attribute_key][1].get())
+                    storage_object[storage_key]['z'] = float(attrib_var[attribute_key][2].get())
+                elif attrib['type'] == "StructProperty" and attrib['struct_type'] == "Quat":
+                    print("%s%s [%s.%s] = %f,%f,%f,%f -> %f,%f,%f,%f" % (
+                        path, attribute_key, attrib['type'], attrib['struct_type'],
+                        storage_object[storage_key]['x'],storage_object[storage_key]['y'],
+                        storage_object[storage_key]['z'],storage_object[storage_key]['w'],
+                        float(attrib_var[attribute_key][0].get()),float(attrib_var[attribute_key][1].get()),
+                        float(attrib_var[attribute_key][2].get()),float(attrib_var[attribute_key][3].get())))
+                    storage_object[storage_key]['x'] = float(attrib_var[attribute_key][0].get())
+                    storage_object[storage_key]['y'] = float(attrib_var[attribute_key][1].get())
+                    storage_object[storage_key]['z'] = float(attrib_var[attribute_key][2].get())
+                    storage_object[storage_key]['w'] = float(attrib_var[attribute_key][3].get())
+                elif attrib['type'] == "StructProperty" and attrib['struct_type'] == "LinearColor":
+                    print("%s%s [%s.%s] = %f,%f,%f,%f -> %f,%f,%f,%f" % (
+                        path, attribute_key, attrib['type'], attrib['struct_type'],
+                        storage_object[storage_key]['r'],storage_object[storage_key]['g'],
+                        storage_object[storage_key]['b'],storage_object[storage_key]['a'],
+                        float(attrib_var[attribute_key][0].get()),float(attrib_var[attribute_key][1].get()),
+                        float(attrib_var[attribute_key][2].get()),float(attrib_var[attribute_key][3].get())))
+                    storage_object[storage_key]['r'] = float(attrib_var[attribute_key][0].get())
+                    storage_object[storage_key]['g'] = float(attrib_var[attribute_key][1].get())
+                    storage_object[storage_key]['b'] = float(attrib_var[attribute_key][2].get())
+                    storage_object[storage_key]['a'] = float(attrib_var[attribute_key][3].get())
                 elif attrib['type'] in ["StrProperty", "NameProperty"]:
                     try:
                         print(
                             "%s%s [%s] = %s -> %s" % (
-                                path, attribute_key, attrib['type'], attribs[attribute_key]['value'],
+                                path, attribute_key, attrib['type'], storage_object[storage_key],
                                 attrib_var[attribute_key].get()))
                     except UnicodeEncodeError:
                         pass
-                    attribs[attribute_key]['value'] = attrib_var[attribute_key].get()
+                    storage_object[storage_key] = attrib_var[attribute_key].get()
                 elif attrib['type'] == "EnumProperty":
                     print(
                         "%s%s [%s - %s] = %s -> %s" % (path, attribute_key, attrib['type'], attrib['value']['type'],
-                                                       attribs[attribute_key]['value']['value'],
+                                                       storage_object[storage_key]['value'],
                                                        attrib_var[attribute_key].get()))
-                    attribs[attribute_key]['value']['value'] = attrib_var[attribute_key].get()
+                    storage_object[storage_key]['value'] = attrib_var[attribute_key].get()
+                elif attrib['type'] == "ArrayProperty" and attrib['array_type'] == "NameProperty":
+                    for idx, item in enumerate(attrib['value']['values']):
+                        print("%s%s [%s] = " % (path, attribute_key, attrib['type']))
+                        self.save({
+                            'Name': {
+                                'type': attrib['array_type'],
+                                'values': attrib['value']['values'],
+                                'value_idx': idx
+                            }}, attrib_var[attribute_key][idx], "%s[%d]." % (attribute_key, idx))
                 elif attrib['type'] == "ArrayProperty" and attrib['array_type'] == "StructProperty":
                     for idx, item in enumerate(attrib['value']['values']):
                         print("%s%s [%s] = " % (path, attribute_key, attrib['type']))
-                        self.save(item, attrib_var[attribute_key][idx], "%s[%d]." % (attribute_key, idx))
+                        self.save({
+                            attrib['value']['prop_name']: {
+                                'type': attrib['value']['prop_type'],
+                                'struct_type': attrib['value']['type_name'],
+                                'values': attrib['value']['values'],
+                                'value_idx': idx
+                            }}, attrib_var[attribute_key][idx], "%s[%d]." % (attribute_key, idx))
                 elif attrib['type'] == "StructProperty":
                     if attrib_var[attribute_key] is None:
                         continue
-                    for key in attrib['value']:
-                        self.save({key: attrib['value'][key]}, attrib_var[attribute_key],
+                    gp(attrib)
+                    for key in storage_object[storage_key]:
+                        self.save({key: storage_object[storage_key][key]}, attrib_var[attribute_key],
                                   "%s[\"%s\"]." % (attribute_key, key))
                 else:
                     print("Error: unsupported property type -> %s[%s]" % (attribute_key, attrib['type']))
@@ -578,16 +749,43 @@ class ParamEditor(tk.Toplevel):
                                     'EPalWorkSuitability::MonsterFarm']
                     if attrib['value']['value'] not in enum_options:
                         enum_options.append(attrib['value']['value'])
-                    ttk.Combobox(master=g_frame, font=self.font, state="readonly",
+                    ttk.Combobox(master=g_frame, font=self.font, state="readonly", width=40,
                                  textvariable=attrib_var[attribute_key],
                                  values=enum_options).pack(side="right")
                     self.assign_attrib_var(attrib_var[attribute_key], attrib)
-                elif attrib['type'] == "ArrayProperty" and attrib['array_type'] == "StructProperty":
+                elif attrib['type'] == "ArrayProperty" and attrib['array_type'] in ["StructProperty", "NameProperty"]:
                     self.build_subgui(g_frame, attribute_key, attrib_var[attribute_key], attrib)
                 elif attrib['type'] == "StructProperty" and attrib['struct_type'] in ["Guid", "PalContainerId"]:
                     tk.Entry(font=self.font, master=g_frame, width=50,
                              textvariable=attrib_var[attribute_key]).pack(
                         side="right", fill=tk.constants.X)
+                    self.assign_attrib_var(attrib_var[attribute_key], attrib)
+                elif attrib['type'] == "StructProperty" and attrib['struct_type'] == "Vector":
+                    valid_cmd = (self.register(self.valid_float), '%P')
+                    tk.Entry(font=self.font, master=g_frame, width=16,
+                             validate='all', validatecommand=valid_cmd,
+                             textvariable=attrib_var[attribute_key][2]).pack(side="right", fill=tk.constants.X)
+                    tk.Entry(font=self.font, master=g_frame, width=16,
+                             validate='all', validatecommand=valid_cmd,
+                             textvariable=attrib_var[attribute_key][1]).pack(side="right", fill=tk.constants.X)
+                    tk.Entry(font=self.font, master=g_frame, width=16,
+                             validate='all', validatecommand=valid_cmd,
+                             textvariable=attrib_var[attribute_key][0]).pack(side="right", fill=tk.constants.X)
+                    self.assign_attrib_var(attrib_var[attribute_key], attrib)
+                elif attrib['type'] == "StructProperty" and attrib['struct_type'] in ["Quat", "LinearColor"]:
+                    valid_cmd = (self.register(self.valid_float), '%P')
+                    tk.Entry(font=self.font, master=g_frame, width=12,
+                             validate='all', validatecommand=valid_cmd,
+                             textvariable=attrib_var[attribute_key][3]).pack(side="right", fill=tk.constants.X)
+                    tk.Entry(font=self.font, master=g_frame, width=12,
+                             validate='all', validatecommand=valid_cmd,
+                             textvariable=attrib_var[attribute_key][2]).pack(side="right", fill=tk.constants.X)
+                    tk.Entry(font=self.font, master=g_frame, width=12,
+                             validate='all', validatecommand=valid_cmd,
+                             textvariable=attrib_var[attribute_key][1]).pack(side="right", fill=tk.constants.X)
+                    tk.Entry(font=self.font, master=g_frame, width=12,
+                             validate='all', validatecommand=valid_cmd,
+                             textvariable=attrib_var[attribute_key][0]).pack(side="right", fill=tk.constants.X)
                     self.assign_attrib_var(attrib_var[attribute_key], attrib)
                 elif attrib_var[attribute_key] is not None:
                     valid_cmd = None
@@ -608,16 +806,22 @@ class ParamEditor(tk.Toplevel):
                     attrib_var[attribute_key] = {}
                     sub_f = tk.Frame(master=g_frame)
                     sub_f.pack(side="right", fill=tk.constants.X)
-                    for key in attrib['value']:
-                        print("Try create Struct %s" % key)
-                        try:
-                            attrib_var[attribute_key][key] = self.make_attrib_var(master=sub_f,
-                                                                                  attrib=attrib['value'][key])
-                            if attrib_var[attribute_key][key] is not None:
-                                self.build_variable_gui(sub_f, attrib_var[attribute_key],
-                                                        {key: attrib['value'][key]})
-                        except TypeError as e:
-                            print("Error attribute [%s]->%s " % (key, attribute_key), attrib)
+                    try:
+                        for key in attrib['value']:
+                            try:
+                                attrib_var[attribute_key][key] = self.make_attrib_var(master=sub_f,
+                                                                                      attrib=attrib['value'][key])
+                                if attrib_var[attribute_key][key] is not None:
+                                    self.build_variable_gui(sub_f, attrib_var[attribute_key],
+                                                            {key: attrib['value'][key]})
+                                else:
+                                    print("cannot create Struct %s" % key)
+                            except TypeError as e:
+                                print("Error attribute [%s]->%s " % (key, attribute_key), attrib)
+                    except Exception as e:
+                        traceback.print_exception(e)
+                        gp(attrib)
+                        print("----------------------------")
                 else:
                     print("  ", attribute_key, attrib['type'] + (
                         ".%s" % attrib['struct_type'] if attrib['type'] == "StructProperty" else ""), attrib['value'])
@@ -629,8 +833,19 @@ class ParamEditor(tk.Toplevel):
         for item in g_frame.winfo_children():
             item.destroy()
         print("Binding to %s[%d]" % (attribute_key, evt.widget.current()))
-        self.build_variable_gui(g_frame, attrib_var[evt.widget.current()],
-                                attrib['value']['values'][evt.widget.current()])
+        if attrib['type'] == 'ArrayProperty' and attrib['array_type'] == 'NameProperty':
+            self.build_variable_gui(g_frame, attrib_var[evt.widget.current()],{
+                                    'Name': {
+                                        'type': attrib['array_type'],
+                                        'value': attrib['value']['values'][evt.widget.current()]
+                                    }}, with_labelframe=False)
+        else:
+            self.build_variable_gui(g_frame, attrib_var[evt.widget.current()],{
+                                    attrib['value']['prop_name']: {
+                                        'type': attrib['value']['prop_type'],
+                                        'struct_type': attrib['value']['type_name'],
+                                        'value': attrib['value']['values'][evt.widget.current()]
+                                    }}, with_labelframe=False)
 
     @staticmethod
     def on_table_gui_dblclk(event, popup_set, columns, attrib_var):
@@ -671,7 +886,7 @@ class ParamEditor(tk.Toplevel):
         x_scroll = tk.Scrollbar(master, orient='horizontal')
         x_scroll.pack(side=tk.constants.BOTTOM, fill=tk.constants.X)
         tables = ttk.Treeview(master, yscrollcommand=y_scroll.set, xscrollcommand=x_scroll.set)
-        tables.pack(fill=tk.constants.BOTH)
+        tables.pack(fill=tk.constants.BOTH, expand=True)
         y_scroll.config(command=tables.yview)
         x_scroll.config(command=tables.xview)
         tables['columns'] = columns
@@ -686,28 +901,29 @@ class ParamEditor(tk.Toplevel):
         tables.bind("<Double-1>", lambda event: self.on_table_gui_dblclk(event, popup_set, columns, attrib_var))
         return tables
 
+def GetPlayerGvas(player_uid):
+    player_sav_file = os.path.dirname(os.path.abspath(args.filename)) + "/Players/" + player_uid.upper().replace(
+        "-",
+        "") + ".sav"
+    if not os.path.exists(player_sav_file):
+        return player_sav_file, None, None, None
+
+    with open(player_sav_file, "rb") as f:
+        raw_gvas, _ = decompress_sav_to_gvas(f.read())
+        player_gvas_file = GvasFile.read(raw_gvas, PALWORLD_TYPE_HINTS, PALWORLD_CUSTOM_PROPERTIES)
+    player_gvas = player_gvas_file.properties['SaveData']['value']
+    
+    return None, player_gvas, player_sav_file, player_gvas_file
 
 class PlayerItemEdit(ParamEditor):
     def __init__(self, player_uid):
-        load_skiped_decode(wsd, ['ItemContainerSaveData'], False)
-        item_containers = {}
-        for item_container in wsd["ItemContainerSaveData"]['value']:
-            item_containers[str(item_container['key']['ID']['value'])] = item_container
-
         self.item_containers = {}
         self.item_container_vars = {}
-
-        player_sav_file = os.path.dirname(os.path.abspath(args.filename)) + "/Players/" + player_uid.upper().replace(
-            "-",
-            "") + ".sav"
-        if not os.path.exists(player_sav_file):
-            messagebox.showerror("Player Itme Editor", "Player Sav file Not exists: %s" % player_sav_file)
+        
+        err, player_gvas, player_sav_file, player_gvas_file = GetPlayerGvas(player_uid)
+        if err:
+            messagebox.showerror("Player Itme Editor", "Player Sav file Not exists: %s" % player_gvas)
             return
-        else:
-            with open(player_sav_file, "rb") as f:
-                raw_gvas, _ = decompress_sav_to_gvas(f.read())
-                player_gvas_file = GvasFile.read(raw_gvas, PALWORLD_TYPE_HINTS, PALWORLD_CUSTOM_PROPERTIES)
-            player_gvas = player_gvas_file.properties['SaveData']['value']
         super().__init__()
         self.player_uid = player_uid
         self.player = \
@@ -715,6 +931,16 @@ class PlayerItemEdit(ParamEditor):
                 'SaveParameter']['value']
         self.gui.title("Player Item Edit - %s" % player_uid)
         tabs = ttk.Notebook(master=self)
+        threading.Thread(target=self.load, args=[tabs, player_gvas]).start()
+        tabs.pack(anchor=tk.constants.N, fill=tk.constants.BOTH, expand=True)
+        tk.Button(master=self.gui, font=self.font, text="Save", command=self.savedata).pack(fill=tk.constants.X, anchor=tk.constants.S, expand=False)
+    
+    def load(self, tabs, player_gvas):
+        load_skiped_decode(wsd, ['ItemContainerSaveData'], False)
+        item_containers = {}
+        for item_container in wsd["ItemContainerSaveData"]['value']:
+            item_containers[str(item_container['key']['ID']['value'])] = item_container
+
         for idx_key in ['CommonContainerId', 'DropSlotContainerId', 'EssentialContainerId', 'FoodEquipContainerId',
                         'PlayerEquipArmorContainerId', 'WeaponLoadOutContainerId']:
             if str(player_gvas['inventoryInfo']['value'][idx_key]['value']['ID']['value']) in item_containers:
@@ -722,7 +948,8 @@ class PlayerItemEdit(ParamEditor):
                 tabs.add(tab, text=idx_key[:-11])
                 self.item_container_vars[idx_key[:-11]] = []
                 item_container = parse_item(item_containers[
-                    str(player_gvas['inventoryInfo']['value'][idx_key]['value']['ID']['value'])], "ItemContainerSaveData")
+                                                str(player_gvas['inventoryInfo']['value'][idx_key]['value']['ID'][
+                                                        'value'])], "ItemContainerSaveData")
                 self.item_containers[idx_key[:-11]] = [{
                     'SlotIndex': item['SlotIndex'],
                     'ItemId': item['ItemId']['value']['StaticId'],
@@ -733,10 +960,8 @@ class PlayerItemEdit(ParamEditor):
                 for idx, item in enumerate(self.item_containers[idx_key[:-11]]):
                     self.item_container_vars[idx_key[:-11]].append({})
                     self.build_array_gui_item(tables, idx, self.item_container_vars[idx_key[:-11]][idx], item)
-        # 
-        tabs.pack(side="top")
-        tk.Button(master=self.gui, font=self.font, text="Save", command=self.savedata).pack(fill=tk.constants.X)
-
+        self.geometry("640x800")
+    
     def savedata(self):
         for idx_key in self.item_containers:
             for idx, item in enumerate(self.item_containers[idx_key]):
@@ -746,18 +971,11 @@ class PlayerItemEdit(ParamEditor):
 
 class PlayerSaveEdit(ParamEditor):
     def __init__(self, player_uid):
-        self.player_sav_file = os.path.dirname(
-            os.path.abspath(args.filename)) + "/Players/" + player_uid.upper().replace(
-            "-",
-            "") + ".sav"
-        if not os.path.exists(self.player_sav_file):
-            messagebox.showerror("Player Itme Editor", "Player Sav file Not exists: %s" % self.player_sav_file)
+        
+        err, player_gvas, self.player_sav_file, self.player_gvas_file = GetPlayerGvas(player_uid)
+        if err:
+            messagebox.showerror("Player Itme Editor", "Player Sav file Not exists: %s" % player_gvas)
             return
-        else:
-            with open(self.player_sav_file, "rb") as f:
-                raw_gvas, _ = decompress_sav_to_gvas(f.read())
-                self.player_gvas_file = GvasFile.read(raw_gvas, PALWORLD_TYPE_HINTS, PALWORLD_CUSTOM_PROPERTIES)
-            player_gvas = self.player_gvas_file.properties['SaveData']['value']
         super().__init__()
         self.player_uid = player_uid
         self.player = player_gvas
@@ -780,13 +998,12 @@ class PlayerSaveEdit(ParamEditor):
 
 
 class PlayerEditGUI(ParamEditor):
-    def __init__(self, player_uid):
+    def __init__(self, player_uid=None, instanceId=None):
         super().__init__()
-        self.player_uid = player_uid
-        self.player = \
-            instanceMapping[str(playerMapping[player_uid]['InstanceId'])]['value']['RawData']['value']['object'][
-                'SaveParameter']['value']
-        self.gui.title("Player Edit - %s" % player_uid)
+        self.player = instanceMapping[str(playerMapping[player_uid]['InstanceId'] if instanceId is None else instanceId)]\
+                ['value']['RawData']['value']['object']['SaveParameter']['value']
+        gp(self.player)
+        self.gui.title("Player Edit - %s" % player_uid if player_uid is not None else "Character Edit - %s" % instanceId)
         self.gui_attribute = {}
         self.build_variable_gui(self.gui, self.gui_attribute, self.player)
         tk.Button(master=self.gui, font=self.font, text="Save", command=self.savedata).pack(fill=tk.constants.X)
@@ -840,6 +1057,72 @@ class PalEditGUI(PalEdit):
         toolmenu.add_command(label="Debug", command=self.toggleDebug)
         toolmenu.add_command(label="Generate GUID", command=self.generateguid)
         tools.add_cascade(label="Tools", menu=toolmenu, underline=0)
+
+class AutocompleteCombobox(ttk.Combobox):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._hits = None
+        self._hit_index = None
+        self._completion_list = None
+        self.position = None
+        if kwargs.get('values'):
+            self.set_completion_list(kwargs.get('values'))
+    
+    def __setitem__(self, key, value):
+        if 'key' == 'values':
+            self.set_completion_list(value)
+        return super().__setitem__(key, value)
+    
+    def set_completion_list(self, completion_list):
+        """Use our completion list as our drop down selection menu, arrows move through menu."""
+        self._completion_list = sorted(completion_list, key=str.lower) # Work with a sorted list
+        self._hits = []
+        self._hit_index = 0
+        self.position = 0
+        self.bind('<KeyRelease>', self.handle_keyrelease)
+        # self['values'] = self._completion_list  # Setup our popup menu
+
+    def autocomplete(self, delta=0):
+        """autocomplete the Combobox, delta may be 0/1/-1 to cycle through possible hits"""
+        if delta: # need to delete selection otherwise we would fix the current position
+            self.delete(self.position, tk.constants.END)
+        else: # set position to end so selection starts where textentry ended
+            self.position = len(self.get())
+        # collect hits
+        _hits = []
+        for element in self['values']:
+            if element.lower().startswith(self.get().lower()): # Match case insensitively
+                _hits.append(element)
+        # if we have a new hit list, keep this in mind
+        if _hits != self._hits:
+            self._hit_index = 0
+            self._hits=_hits
+        # only allow cycling if we are in a known hit list
+        if _hits == self._hits and self._hits:
+            self._hit_index = (self._hit_index + delta) % len(self._hits)
+        # now finally perform the auto completion
+        if self._hits:
+            self.delete(0,tk.constants.END)
+            self.insert(0,self._hits[self._hit_index])
+            self.select_range(self.position,tk.constants.END)
+
+    def handle_keyrelease(self, event):
+        """event handler for the keyrelease event on this widget"""
+        # if event.keysym == "BackSpace":
+        #     self.delete(self.index(tk.constants.INSERT), tk.constants.END)
+        #     self.position = self.index(tk.constants.END)
+        # if event.keysym == "Left":
+        #     if self.position < self.index(tk.constants.END): # delete the selection
+        #         self.delete(self.position, tk.constants.END)
+        #     else:
+        #         self.position = self.position-1 # delete one character
+        #         self.delete(self.position, tk.constants.END)
+        # if event.keysym == "Right":
+        #     self.position = self.index(tk.constants.END) # go to end (no selection)
+        if len(event.keysym) == 1 and event.keysym in ['0','1','2','3','4','5','6','7','8','9','a','b','c','d','e','f']:
+            self.autocomplete()
+        # No need for up/down, we'll jump to the popup
+        # list at the position of the autocompletion
 
 
 class GUI():
@@ -1074,7 +1357,16 @@ class GUI():
         target_uuid = self.parse_target_uuid()
         if target_uuid is None:
             return
-        PlayerEditGUI(target_uuid)
+        PlayerEditGUI(player_uid=target_uuid)
+    
+    def edit_instance(self):
+        target_uuid = self.target_instance.get()[:36]
+        if target_uuid is None:
+            return
+        if target_uuid not in instanceMapping:
+            messagebox.showerror("Edit Instance Error", "Instance Not Found")
+            return
+        PlayerEditGUI(instanceId=target_uuid)
 
     def edit_player_item(self):
         target_uuid = self.parse_target_uuid()
@@ -1116,6 +1408,7 @@ class GUI():
             for idx, grp_msg in enumerate(self.target_guild['values']):
                 if str(gid) == grp_msg[0:36]:
                     self.target_guild.current(idx)
+                    self.select_guild(evt)
                     break
     
     def select_guild(self, evt):
@@ -1132,6 +1425,19 @@ class GUI():
         if target_guild_uuid in groupMapping:
             self.target_base['value'] = [str(x) for x in groupMapping[target_guild_uuid]['value']['RawData']['value']['base_ids']]
 
+    def characterInstanceName(self, instance):
+        saveParameter = instance['value']['RawData']['value']['object']['SaveParameter']['value']
+        if 'IsPlayer' in saveParameter:
+            try:
+                return 'Player:%s' % repr(saveParameter['NickName']['value'])
+            except UnicodeEncodeError:
+                return 'Player:%s' % repr(saveParameter['NickName']['value'])
+        else:
+            try:
+                return 'Pal:%s' % saveParameter['CharacterID']['value']
+            except UnicodeEncodeError:
+                return 'Pal:%s' % repr(saveParameter['CharacterID']['value'])
+    
     def build_gui(self):
         #
         self.gui = tk.Tk()
@@ -1147,7 +1453,7 @@ class GUI():
         self.gui.option_add('*TCombobox*Listbox.font', self.font)
         # window.resizable(False, False)
         f_src = tk.Frame()
-        tk.Label(master=f_src, text="Data Source", font=self.font).pack(side="left")
+        tk.Label(master=f_src, text="Source Player Data Source", font=self.font).pack(side="left")
         self.data_source = ttk.Combobox(master=f_src, font=self.font, width=20, values=['Main File', 'Backup File'],
                                         state="readonly")
         self.data_source.pack(side="left")
@@ -1158,43 +1464,47 @@ class GUI():
         #
         f_src_player = tk.Frame()
         tk.Label(master=f_src_player, text="Source Player", font=self.font).pack(side="left")
-        self.src_player = ttk.Combobox(master=f_src_player, font=self.font, width=50)
+        self.src_player = AutocompleteCombobox(master=f_src_player, font=self.font, width=50)
         self.src_player.pack(side="left")
         #
         f_target_player = tk.Frame()
         tk.Label(master=f_target_player, text="Target Player", font=self.font).pack(side="left")
-        self.target_player = ttk.Combobox(master=f_target_player, font=self.font, width=50)
+        self.target_player = AutocompleteCombobox(master=f_target_player, font=self.font, width=50)
         self.target_player.pack(side="left")
         self.target_player.bind("<<ComboboxSelected>>", self.select_target_player)
 
         f_target_guild = tk.Frame()
         tk.Label(master=f_target_guild, text="Target Guild", font=self.font).pack(side="left")
-        self.target_guild = ttk.Combobox(master=f_target_guild, font=self.font, width=80)
+        self.target_guild = AutocompleteCombobox(master=f_target_guild, font=self.font, width=80)
         self.target_guild.pack(side="left", fill=tk.constants.X)
         self.target_guild.bind("<<ComboboxSelected>>", self.select_guild)
 
         f_target_guildbase = tk.Frame()
-        tk.Label(master=f_target_guildbase, text="Target Base", font=self.font).pack(side="left")
-        self.target_base = ttk.Combobox(master=f_target_guildbase, font=self.font, width=50)
+        tk.Label(master=f_target_guildbase, text="Target Base ⛺️", font=self.font).pack(side="left")
+        self.target_base = AutocompleteCombobox(master=f_target_guildbase, font=self.font, width=50)
         self.target_base.pack(side="left")
-        g_delete_base = tk.Button(master=f_target_guildbase, text="Delete Base", font=self.font, command=self.delete_base)
+        g_delete_base = tk.Button(master=f_target_guildbase, text="Delete Base Camp ⛺️", font=self.font, command=self.delete_base)
         g_delete_base.pack(side="left")
         #
-        f_src.pack(anchor=tk.constants.W)
-        f_src_player.pack(anchor=tk.constants.W)
-        f_target_player.pack(anchor=tk.constants.W)
-        f_target_guild.pack(anchor=tk.constants.W)
-        f_target_guildbase.pack(anchor=tk.constants.W)
-        g_button_frame = tk.Frame()
-        self.btn_migrate = tk.Button(master=g_button_frame, text="Migrate Player", font=self.font, command=self.migrate)
-        self.btn_migrate.pack(side="left")
-        g_copy = tk.Button(master=g_button_frame, text="Copy Player", font=self.font, command=self.copy_player)
-        g_copy.pack(side="left")
-        g_pal = tk.Button(master=g_button_frame, text="Pal Edit", font=self.font, command=self.pal_edit)
-        g_pal.pack(side="left")
-        g_button_frame.pack()
+        f_target_instance = tk.Frame()
+        tk.Label(master=f_target_instance, text="Target Instance", font=self.font).pack(side="left")
+        self.target_instance = AutocompleteCombobox(master=f_target_instance, font=self.font, width=60, values=sorted([
+            "%s - %s" % (str(k), self.characterInstanceName(instanceMapping[k]))
+            for k in instanceMapping.keys()
+        ]))
+        self.target_instance.pack(side="left")
+        g_btn_edit_instance = tk.Button(master=f_target_instance, text="Edit", font=self.font, 
+                                        command=self.edit_instance).pack(side="left")
 
-        g_button_frame = tk.Frame()
+        g_multi_button_frame = tk.Frame()
+        self.btn_migrate = tk.Button(master=g_multi_button_frame, text="⬆️ Migrate Player ⬇️", font=self.font, command=self.migrate)
+        self.btn_migrate.pack(side="left")
+        g_copy = tk.Button(master=g_multi_button_frame, text="⬆️ Copy Player ⬇️", font=self.font, command=self.copy_player)
+        g_copy.pack(side="left")
+        
+        #
+        # g_target_player_frame = tk.Frame(borderwidth=1, relief=tk.constants.GROOVE, pady=5)
+        g_button_frame = tk.Frame(borderwidth=1, relief=tk.constants.GROOVE, pady=5)
         tk.Label(master=g_button_frame, text="Operate for Target Player", font=self.font).pack(fill="x", side="top")
         g_move = tk.Button(master=g_button_frame, text="Move To Guild", font=self.font, command=self.move_guild)
         g_move.pack(side="left")
@@ -1208,10 +1518,26 @@ class GUI():
         g_edit_item.pack(side="left")
         g_edit_save = tk.Button(master=g_button_frame, text="Edit Save", font=self.font, command=self.edit_player_save)
         g_edit_save.pack(side="left")
-        g_button_frame.pack()
 
+        f_src.pack(anchor=tk.constants.W)
+        f_src_player.pack(anchor=tk.constants.W)
+        g_multi_button_frame.pack()
+        f_target_player.pack(anchor=tk.constants.W)
+        g_button_frame.pack(fill=tk.constants.X)
+        f_target_guild.pack(anchor=tk.constants.W)
+        f_target_guildbase.pack(anchor=tk.constants.W)
+        f_target_instance.pack(anchor=tk.constants.W)
+        
+        g_pal = tk.Button(master=g_button_frame, text="Pal Edit", font=self.font, command=self.pal_edit)
+        g_pal.pack(side="left")
+        g_button_frame.pack()
+        
+        
         g_save = tk.Button(text="Save & Exit", font=self.font, command=self.save)
         g_save.pack()
+
+        self.progressbar = ttk.Progressbar()
+        self.progressbar.pack(fill=tk.constants.X)
 
         self.load_players()
         self.load_guilds()
@@ -1228,7 +1554,7 @@ def LoadFile(filename):
 
         print(f"Parsing {filename}...", end="", flush=True)
         start_time = time.time()
-        gvas_file = GvasFile.read(raw_gvas, PALWORLD_TYPE_HINTS, SKP_PALWORLD_CUSTOM_PROPERTIES)
+        gvas_file = ProgressGvasFile.read(raw_gvas, PALWORLD_TYPE_HINTS, SKP_PALWORLD_CUSTOM_PROPERTIES)
         print("Done in %.2fs." % (time.time() - start_time))
 
     wsd = gvas_file.properties['worldSaveData']['value']
@@ -1280,21 +1606,16 @@ def GetPlayerItems(player_uid):
         }
             for x in item_container['value']['Slots']['value']['values']
         ]
-    player_sav_file = os.path.dirname(os.path.abspath(args.filename)) + "/Players/" + player_uid.upper().replace("-",
-                                                                                                                 "") + ".sav"
-    if not os.path.exists(player_sav_file):
+
+    err, player_gvas, player_sav_file, player_gvas_file = GetPlayerGvas(player_uid)
+    if err:
         print("\033[33mWarning: Player Sav file Not exists: %s\033[0m" % player_sav_file)
         return
-    else:
-        with open(player_sav_file, "rb") as f:
-            raw_gvas, _ = decompress_sav_to_gvas(f.read())
-            player_gvas_file = GvasFile.read(raw_gvas, PALWORLD_TYPE_HINTS, PALWORLD_CUSTOM_PROPERTIES)
-        player_gvas = player_gvas_file.properties['SaveData']['value']
-        for idx_key in ['CommonContainerId', 'DropSlotContainerId', 'EssentialContainerId', 'FoodEquipContainerId',
-                        'PlayerEquipArmorContainerId', 'WeaponLoadOutContainerId']:
-            print("  %s" % player_gvas['inventoryInfo']['value'][idx_key]['value']['ID']['value'])
-            pp.pprint(item_containers[str(player_gvas['inventoryInfo']['value'][idx_key]['value']['ID']['value'])])
-            print()
+    for idx_key in ['CommonContainerId', 'DropSlotContainerId', 'EssentialContainerId', 'FoodEquipContainerId',
+                    'PlayerEquipArmorContainerId', 'WeaponLoadOutContainerId']:
+        print("  %s" % player_gvas['inventoryInfo']['value'][idx_key]['value']['ID']['value'])
+        pp.pprint(item_containers[str(player_gvas['inventoryInfo']['value'][idx_key]['value']['ID']['value'])])
+        print()
 
 
 def OpenBackup(filename):
@@ -1307,7 +1628,7 @@ def OpenBackup(filename):
 
         print(f"Parsing {filename}...", end="", flush=True)
         start_time = time.time()
-        backup_gvas_file = GvasFile.read(raw_gvas, PALWORLD_TYPE_HINTS, PALWORLD_CUSTOM_PROPERTIES)
+        backup_gvas_file = ProgressGvasFile.read(raw_gvas, PALWORLD_TYPE_HINTS, PALWORLD_CUSTOM_PROPERTIES)
         print("Done in %.2fs." % (time.time() - start_time))
     backup_wsd = backup_gvas_file.properties['worldSaveData']['value']
     ShowPlayers(backup_wsd)
@@ -1319,24 +1640,19 @@ def to_storage_uuid(uuid_str):
 
 def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
     load_skiped_decode(wsd, ['ItemContainerSaveData', 'CharacterContainerSaveData', 'DynamicItemSaveData'], False)
-    player_sav_file = os.path.dirname(os.path.abspath(args.filename)) + "/Players/" + player_uid.upper().replace("-",
-                                                                                                                 "") + ".sav"
+
+    err, player_gvas, player_sav_file, player_gvas_file = GetPlayerGvas(player_uid)
+    if err:
+        print("\033[33mWarning: Player Sav file Not exists: %s\033[0m" % player_sav_file)
+        return
     new_player_sav_file = os.path.dirname(
         os.path.abspath(args.filename)) + "/Players/" + new_player_uid.upper().replace("-", "") + ".sav"
     instances = []
     container_mapping = {}
-    if not os.path.exists(player_sav_file):
-        print("\033[33mWarning: Player Sav file Not exists: %s\033[0m" % player_sav_file)
-        return
-    else:
-        with open(player_sav_file, "rb") as f:
-            raw_gvas, _ = decompress_sav_to_gvas(f.read())
-            player_gvas_file = GvasFile.read(raw_gvas, PALWORLD_TYPE_HINTS, PALWORLD_CUSTOM_PROPERTIES)
-        player_gvas = player_gvas_file.properties['SaveData']['value']
-        player_uid = str(player_gvas['PlayerUId']['value'])
-        player_gvas['PlayerUId']['value'] = to_storage_uuid(uuid.UUID(new_player_uid))
-        player_gvas['IndividualId']['value']['PlayerUId']['value'] = player_gvas['PlayerUId']['value']
-        player_gvas['IndividualId']['value']['InstanceId']['value'] = to_storage_uuid(uuid.uuid4())
+    player_uid = str(player_gvas['PlayerUId']['value'])
+    player_gvas['PlayerUId']['value'] = to_storage_uuid(uuid.UUID(new_player_uid))
+    player_gvas['IndividualId']['value']['PlayerUId']['value'] = player_gvas['PlayerUId']['value']
+    player_gvas['IndividualId']['value']['InstanceId']['value'] = to_storage_uuid(uuid.uuid4())
     # Clone Item from CharacterContainerSaveData
     for idx_key in ['OtomoCharacterContainerId', 'PalStorageContainerId']:
         for container in old_wsd['CharacterContainerSaveData']['value']:
@@ -1371,7 +1687,7 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
     srcItemContainers = {str(container['key']['ID']['value']): container for container in
                      old_wsd['ItemContainerSaveData']['value']}
     targetItemContainers ={str(container['key']['ID']['value']): container for container in
-                     wsd['ItemContainerSaveData']['value']} 
+                     wsd['ItemContainerSaveData']['value']}
     cloneDynamicItemIds = []
     for idx_key in ['CommonContainerId', 'DropSlotContainerId', 'EssentialContainerId', 'FoodEquipContainerId',
                     'PlayerEquipArmorContainerId', 'WeaponLoadOutContainerId']:
@@ -1657,31 +1973,26 @@ def MoveToGuild(player_uid, group_id):
 def MigratePlayer(player_uid, new_player_uid):
     load_skiped_decode(wsd, ['MapObjectSaveData'])
 
-    player_sav_file = os.path.dirname(os.path.abspath(args.filename)) + "/Players/" + player_uid.upper().replace("-",
-                                                                                                                 "") + ".sav"
+    err, player_gvas, player_sav_file, player_gvas_file = GetPlayerGvas(player_uid)
+    if err:
+        print("\033[33mWarning: Player Sav file Not exists: %s\033[0m" % player_sav_file)
+        return
     new_player_sav_file = os.path.dirname(
         os.path.abspath(args.filename)) + "/Players/" + new_player_uid.upper().replace("-", "") + ".sav"
     DeletePlayer(new_player_uid)
-    if not os.path.exists(player_sav_file):
-        print("\033[33mWarning: Player Sav file Not exists: %s\033[0m" % player_sav_file)
-        return
-    else:
-        with open(player_sav_file, "rb") as f:
-            raw_gvas, _ = decompress_sav_to_gvas(f.read())
-            player_gvas_file = GvasFile.read(raw_gvas, PALWORLD_TYPE_HINTS, PALWORLD_CUSTOM_PROPERTIES)
-        player_gvas = player_gvas_file.properties['SaveData']['value']
-        player_uid = player_gvas['PlayerUId']['value']
-        player_gvas['PlayerUId']['value'] = to_storage_uuid(uuid.UUID(new_player_uid))
-        player_gvas['IndividualId']['value']['PlayerUId']['value'] = player_gvas['PlayerUId']['value']
-        player_gvas['IndividualId']['value']['InstanceId']['value'] = to_storage_uuid(uuid.uuid4())
-        with open(new_player_sav_file, "wb") as f:
-            print("Saving new player sav %s" % new_player_sav_file)
-            if "Pal.PalWorldSaveGame" in player_gvas_file.header.save_game_class_name or "Pal.PalLocalWorldSaveGame" in player_gvas_file.header.save_game_class_name:
-                save_type = 0x32
-            else:
-                save_type = 0x31
-            sav_file = compress_gvas_to_sav(player_gvas_file.write(PALWORLD_CUSTOM_PROPERTIES), save_type)
-            f.write(sav_file)
+    
+    player_uid = player_gvas['PlayerUId']['value']
+    player_gvas['PlayerUId']['value'] = to_storage_uuid(uuid.UUID(new_player_uid))
+    player_gvas['IndividualId']['value']['PlayerUId']['value'] = player_gvas['PlayerUId']['value']
+    player_gvas['IndividualId']['value']['InstanceId']['value'] = to_storage_uuid(uuid.uuid4())
+    with open(new_player_sav_file, "wb") as f:
+        print("Saving new player sav %s" % new_player_sav_file)
+        if "Pal.PalWorldSaveGame" in player_gvas_file.header.save_game_class_name or "Pal.PalLocalWorldSaveGame" in player_gvas_file.header.save_game_class_name:
+            save_type = 0x32
+        else:
+            save_type = 0x31
+        sav_file = compress_gvas_to_sav(player_gvas_file.write(PALWORLD_CUSTOM_PROPERTIES), save_type)
+        f.write(sav_file)
     for item in wsd['CharacterSaveParameterMap']['value']:
         player = item['value']['RawData']['value']['object']['SaveParameter']['value']
         if str(item['key']['PlayerUId']['value']) == str(player_uid) and \
@@ -1739,28 +2050,24 @@ def DeletePlayer(player_uid, InstanceId=None, dry_run=False):
     load_skiped_decode(wsd, ['ItemContainerSaveData', 'CharacterContainerSaveData'], False)
     if isinstance(player_uid, int):
         player_uid = str(uuid.UUID("%08x-0000-0000-0000-000000000000" % player_uid))
-    player_sav_file = os.path.dirname(os.path.abspath(args.filename)) + "/Players/" + player_uid.upper().replace("-",
-                                                                                                                 "") + ".sav"
+
+    err, player_gvas, player_sav_file, player_gvas_file = GetPlayerGvas(player_uid)
+    if err:
+        print("\033[33mWarning: Player Sav file Not exists: %s\033[0m" % player_sav_file)
+        return
     player_container_ids = []
     playerInstanceId = None
     if InstanceId is None:
-        if not os.path.exists(player_sav_file):
-            print("\033[33mWarning: Player Sav file Not exists: %s\033[0m" % player_sav_file)
-            player_gvas_file = None
-        else:
-            with open(player_sav_file, "rb") as f:
-                raw_gvas, _ = decompress_sav_to_gvas(f.read())
-                player_gvas_file = GvasFile.read(raw_gvas, PALWORLD_TYPE_HINTS, PALWORLD_CUSTOM_PROPERTIES)
-            print("Player Container ID:")
-            player_gvas = player_gvas_file.properties['SaveData']['value']
-            playerInstanceId = player_gvas['IndividualId']['value']['InstanceId']['value']
-            for key in ['OtomoCharacterContainerId', 'PalStorageContainerId']:
-                print("  %s" % player_gvas[key]['value']['ID']['value'])
-                player_container_ids.append(player_gvas[key]['value']['ID']['value'])
-            for key in ['CommonContainerId', 'DropSlotContainerId', 'EssentialContainerId', 'FoodEquipContainerId',
-                        'PlayerEquipArmorContainerId', 'WeaponLoadOutContainerId']:
-                print("  %s" % player_gvas['inventoryInfo']['value'][key]['value']['ID']['value'])
-                player_container_ids.append(player_gvas['inventoryInfo']['value'][key]['value']['ID']['value'])
+        print("Player Container ID:")
+        player_gvas = player_gvas_file.properties['SaveData']['value']
+        playerInstanceId = player_gvas['IndividualId']['value']['InstanceId']['value']
+        for key in ['OtomoCharacterContainerId', 'PalStorageContainerId']:
+            print("  %s" % player_gvas[key]['value']['ID']['value'])
+            player_container_ids.append(player_gvas[key]['value']['ID']['value'])
+        for key in ['CommonContainerId', 'DropSlotContainerId', 'EssentialContainerId', 'FoodEquipContainerId',
+                    'PlayerEquipArmorContainerId', 'WeaponLoadOutContainerId']:
+            print("  %s" % player_gvas['inventoryInfo']['value'][key]['value']['ID']['value'])
+            player_container_ids.append(player_gvas['inventoryInfo']['value'][key]['value']['ID']['value'])
     else:
         playerInstanceId = InstanceId
     remove_items = []
@@ -1881,30 +2188,31 @@ def search_values(dicts, key, level=""):
     isFound = False
     if isinstance(dicts, dict):
         if key in dicts.values():
-            print("Found value at %s['%s']" % (level, list(dicts.keys())[list(dicts.values()).index(key)]))
+            print("wsd%s['%s']" % (level, list(dicts.keys())[list(dicts.values()).index(key)]))
             isFound = True
         elif uuid_match is not None and uuid_match in dicts.values():
-            print("Found UUID  at %s['%s']" % (level, list(dicts.keys())[list(dicts.values()).index(uuid_match)]))
+            print("wsd%s['%s']" % (level, list(dicts.keys())[list(dicts.values()).index(uuid_match)]))
             isFound = True
         for k in dicts:
             if level == "":
-                print("Searching %s" % k)
+                set_loadingTitle("Searching "%k)
             if isinstance(dicts[k], dict) or isinstance(dicts[k], list):
                 isFound |= search_values(dicts[k], key, level + "['%s']" % k)
     elif isinstance(dicts, list):
         if key in dicts:
-            print("Found value at %s[%d]" % (level, dicts.index(key)))
+            print("wsd%s[%d]" % (level, dicts.index(key)))
             isFound = True
         elif uuid_match is not None and uuid_match in dicts:
-            print("Found UUID  at %s[%d]" % (level, dicts.index(uuid_match)))
+            print("wsd%s[%d]" % (level, dicts.index(uuid_match)))
             isFound = True
         for idx, l in enumerate(dicts):
             if level == "":
-                print("Searching %s" % l)
+                set_loadingTitle("Searching " % l)
             if isinstance(l, dict) or isinstance(l, list):
                 isFound |= search_values(l, key, level + "[%d]" % idx)
+    if level == "":
+        set_loadingTitle("")
     return isFound
-
 
 def LoadPlayers(data_source=None):
     global wsd, playerMapping, instanceMapping
@@ -2175,6 +2483,63 @@ def ShowGuild():
         #         if ind_char['instance_id'] not in instanceMapping:
         #             print("    \033[31mInvalid Character %s\033[0m" % (str(ind_char['instance_id'])))
 
+
+def PrettyPrint(data, level=0):
+    simpleType = ['DateTime', 'Guid', 'LinearColor', 'Quat', 'Vector', 'PalContainerId']
+    if 'struct_type' in data:
+        if data['struct_type'] == 'DateTime':
+            print("%s<Value Type='DateTime'>%d</Value>" % ("  " * level, data['value']))
+        elif data['struct_type'] == 'Guid':
+            print("\033[96m%s\033[0m" % (data['value']), end="")
+        elif data['struct_type'] == "LinearColor":
+            print("%.f %.f %.f %.f" % (data['value']['r'],
+                                       data['value']['g'],
+                                       data['value']['b'],
+                                       data['value']['a']), end="")
+        elif data['struct_type'] == "Quat":
+            print("%.f %.f %.f %.f" % (data['value']['x'],
+                                       data['value']['y'],
+                                       data['value']['z'],
+                                       data['value']['w']), end="")
+        elif data['struct_type'] == "Vector":
+            print("%.f %.f %.f" % (data['value']['x'],
+                                   data['value']['y'],
+                                   data['value']['z']), end="")
+        elif data['struct_type'] == "PalContainerId":
+            print("\033[96m%s\033[0m" % (data['value']['ID']['value']), end="")
+        elif isinstance(data['struct_type'], dict):
+            print("%s<%s>" % ("  " * level, data['struct_type']))
+            for key in data['value']:
+                PrettyPrint(data['value'], level + 1)
+            print("%s</%s>" % ("  " * level, data['struct_type']))
+        else:
+            PrettyPrint(data['value'], level + 1)
+    else:
+        for key in data:
+            if not isinstance(data[key], dict):
+                print("%s<%s type='unknow'>%s</%s>" % ("  " * level, key, data[key], key))
+                continue
+            if 'struct_type' in data[key] and data[key]['struct_type'] in simpleType:
+                print("%s<%s type='%s'>" % ("  " * level, key, data[key]['struct_type']), end="")
+                PrettyPrint(data[key], level + 1)
+                print("</%s>" % (key))
+            elif 'type' in data[key] and data[key]['type'] in ["IntProperty", "Int64Property", "BoolProperty"]:
+                print("%s<%s Type='%s'>\033[95m%d\033[0m</%s>" % (
+                    "  " * level, key, data[key]['type'], data[key]['value'], key))
+            elif 'type' in data[key] and data[key]['type'] == "FloatProperty":
+                print("%s<%s Type='%s'>\033[95m%f\033[0m</%s>" % (
+                    "  " * level, key, data[key]['type'], data[key]['value'], key))
+            elif 'type' in data[key] and data[key]['type'] in ["StrProperty", "ArrayProperty", "NameProperty"]:
+                print("%s<%s Type='%s'>\033[95m%s\033[0m</%s>" % (
+                    "  " * level, key, data[key]['type'], data[key]['value'], key))
+            elif isinstance(data[key], list):
+                print("%s<%s Type='%s'>%s</%s>" % ("  " * level, key, data[key]['struct_type'] if 'struct_type' in data[
+                    key] else "\033[31munknow struct\033[0m", str(data[key]), key))
+            else:
+                print("%s<%s Type='%s'>" % ("  " * level, key, data[key]['struct_type'] if 'struct_type' in data[
+                    key] else "\033[31munknow struct\033[0m"))
+                PrettyPrint(data[key], level + 1)
+                print("%s</%s>" % ("  " * level, key))
 
 def PrettyPrint(data, level=0):
     simpleType = ['DateTime', 'Guid', 'LinearColor', 'Quat', 'Vector', 'PalContainerId']

@@ -14,6 +14,16 @@ Changelog
     Note that they these tags will not actually close the issue/PR until they
     are merged into the "default" branch.
 
+v0.3.2
+-------
+
+Feature:
+
+- Edit Character Instance Feature
+- Reconstruct edit player item loading
+- Reconstruct editor
+- Add interactive function gp to print the Gvas Object cleanly
+
 v0.3.1
 -------
 
