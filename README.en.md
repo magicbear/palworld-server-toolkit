@@ -1,7 +1,6 @@
-# palworld-server-toolkit
+# Palworld Server Toolkit
 
 ### Tools for Palworld servers
-The world fastest PalWorld server save editor, parse Level.sav in 1.1s for JSON about 1.5GB, and for convert.py time spent in 1m40s.
 
 <p align="center">
    <a href="/README.md">简体中文</a> | <strong>English</strong>
@@ -13,12 +12,30 @@ The world fastest PalWorld server save editor, parse Level.sav in 1.1s for JSON 
 <img alt="Python" src="https://img.shields.io/badge/Python-FFD43B?style=for-the-badge&logo=python&logoColor=blue">&nbsp;&nbsp;
 </p>
 
+The world fastest PalWorld server save editor, parse Level.sav in 1.1s for JSON about 1.5GB, and for convert.py time spent in 1m40s.
 
-### GUI
+- This toolkit transfers character between worlds in Palworld, which allows friends to transfer their characters to each other's server without losing one's progress.
+
+- Also can be edit the Player's Item, Pals, Guilds, Money, etc...
+
+---
+
+- [Palworld Server Toolkit](#palworld-server-toolkit)
+  - [How to use install](#Binaries)
+  - [Where to find the save-files](#faq)
+  - [An example](#operate-sample)
+  - [Credits](#acknowledgements)
+
+
+## GUI
 
 ![](./docs/img/GUI.png)	
 
-### Install
+## Binaries
+
+Visit [Release Pages](https://github.com/magicbear/palworld-server-toolkit/releases) to download and run.
+
+## Manual Install
 
 1. Python 3.9 or newer.
     - Windows users: You can install [Python 3.12 from the Microsoft Store](https://apps.microsoft.com/detail/9NCVDN91XZQP) or from [python.org](https://www.python.org/)
@@ -29,7 +46,7 @@ The world fastest PalWorld server save editor, parse Level.sav in 1.1s for JSON 
 
 3. Use pip to install `pip install palworld-server-toolkit` or `python -m pip install palworld-server-toolkit`
 
-### Source Code Prerequisites
+## Source Code Prerequisites
 
 1. Python 3.9 or newer.
     - Windows users: You can install [Python 3.12 from the Microsoft Store](https://apps.microsoft.com/detail/9NCVDN91XZQP) or from [python.org](https://www.python.org/)
@@ -38,7 +55,7 @@ The world fastest PalWorld server save editor, parse Level.sav in 1.1s for JSON 
 
 3. Windows User present use `Windows Terminal` instance of `cmd` for color
 
-### Question?
+## Question?
 
 [Discord](https://discord.com/channels/1200798336916144188/1203683616488685698)
 
@@ -169,7 +186,53 @@ Tools for set cpu affinity to CPU performance core (Linux only)
 
 ---
 
+## FAQ
+
+- Copy Player will transfers the character and all its pals on your team and in your inventory, items on the character, and progress. It does not transfer map objects, items in chests and pals working at your base. Move items into your inventory / pals into your team if you want to transfer them.
+- The save files are usually located at C:\Users<username>\AppData\Local\Pal\Saved\SaveGames<SteamID><Original Server Folder> for co-op saves.
+- For `Xbox Game Pass` Player, save files are usually located at `C:\Users\<User>\AppData\Packages\ PocketpairInc.Palworld_ad4psfrxyesvt\SystemAppData\wgs`
+- For server saves, go to the dedicated server's file location through steam.
+- u need at least 3 files to complete the transfer:
+	- The source player character save file in Players folder
+	- The source world's `Level.sav` file
+	- The target world's `Level.sav` file
+- For co-op saves, the player character save file is always `000000...001.sav`
+- For another server saves, their `ID` will not change between worlds, so that have the same name in target server, you only need the source world's `000000...000.sav`
+
+
+- Data Struct
+	- Source World
+	```
+	SaveGames
+	└── <steam-id>
+	    └── <source-world-id>
+	        ├── backup
+	        ├── Level.sav  ----------  <- The source world save-file
+	        ├── LevelMeta.sav
+	        ├── Players
+	        │   ├── 00000...0001.sav
+	        │   └── 12345...6789.sav   <- character save-file we want to transfer
+	        └── WorldOption.sav
+	```
+	- Target World
+	```
+	SaveGames
+	└── <steam-id>
+	    └── <destination-world-id>
+	        ├── backup
+	        ├── Level.sav  ----------  <- The target world save-file
+	        ├── LevelMeta.sav
+	        ├── Players
+	        │   ├── 00000...0001.sav   <- the target player-placeholder save-file
+	        │   └── 98765...4321.sav
+	        └── WorldOption.sav
+	```
+
+---
+
 ## Acknowledgements
+
+Thanks to
 
 - [palworld-save-tools](https://github.com/cheahjs/palworld-save-tools) for providing save file parsing tool implementation
 - [PalEdit](https://github.com/EternalWraith/PalEdit) - GUI for editing Pals
