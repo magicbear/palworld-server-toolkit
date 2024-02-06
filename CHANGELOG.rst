@@ -14,6 +14,14 @@ Changelog
     Note that they these tags will not actually close the issue/PR until they
     are merged into the "default" branch.
 
+v0.2.9
+-------
+
+Major:
+
+- Player Save Editor: Add support for inventoryInfo
+
+
 v0.2.8
 -------
 
