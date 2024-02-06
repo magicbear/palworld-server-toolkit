@@ -14,6 +14,14 @@ Changelog
     Note that they these tags will not actually close the issue/PR until they
     are merged into the "default" branch.
 
+v0.3.0
+-------
+
+Feature:
+
+- Delete Guild Base Camp Feature
+- GUI Select Player auto locate the Guild
+
 v0.2.9
 -------
 

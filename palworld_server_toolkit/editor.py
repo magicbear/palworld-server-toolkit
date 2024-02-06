@@ -34,7 +34,7 @@ from palworld_save_tools.archive import *
 from palworld_server_toolkit.PalEdit import PalInfo
 from palworld_server_toolkit.PalEdit.PalEdit import PalEditConfig, PalEdit
 
-pp = pprint.PrettyPrinter(width=80, compact=True, depth=4)
+pp = pprint.PrettyPrinter(width=80, compact=True, depth=6)
 wsd = None
 output_file = None
 gvas_file = None
@@ -793,6 +793,27 @@ class PlayerEditGUI(ParamEditor):
         self.save(self.player, self.gui_attribute)
         self.destroy()
 
+class GuildEditGUI(ParamEditor):
+    def __init__(self, group_id):
+        super().__init__()
+        self.group_id = group_id
+        groupMapping = {str(group['key']): group for group in wsd['GroupSaveDataMap']['value']}
+        if group_id not in groupMapping:
+            messagebox.showerror("Guild Edit", "Guild not exists")
+            self.destroy()
+            return
+        self.group_data = groupMapping[group_id]['value']['RawData']
+        print(self.group_data)
+        self.gui.title("Guild Edit - %s" % group_id)
+        self.gui_attribute = {}
+        self.build_variable_gui(self.gui, self.gui_attribute, self.group_data)
+        tk.Button(master=self.gui, font=self.font, text="Save", command=self.savedata).pack(fill=tk.constants.X)
+    
+    def savedata(self):
+        self.save(self.group_data, self.gui_attribute)
+        self.destroy()
+
+# g = GuildEditGUI("5cbf2999-92db-40e7-be6d-f96faf810453")
 
 class PalEditGUI(PalEdit):
     def createWindow(self):
@@ -956,14 +977,15 @@ class GUI():
             self.btn_migrate["state"] = "disabled"
         self.load_players()
 
-    def parse_target_uuid(self, checkExists=True):
+    def parse_target_uuid(self, checkExists=True, showmessage=True):
         target_uuid = self.target_player.get().split(" - ")[0]
         if len(target_uuid) == 8:
             target_uuid += "-0000-0000-0000-000000000000"
         try:
             uuid.UUID(target_uuid)
         except Exception as e:
-            messagebox.showerror("Target Player Error", "UUID: \"%s\"\n%s" % (target_uuid, str(e)))
+            if showmessage:
+                messagebox.showerror("Target Player Error", "UUID: \"%s\"\n%s" % (target_uuid, str(e)))
             return None
         if checkExists:
             for player_uid in playerMapping:
@@ -971,7 +993,8 @@ class GUI():
                     target_uuid = player_uid
                     break
             if target_uuid not in playerMapping:
-                messagebox.showerror("Target Player Error", "Target Player Not exists")
+                if showmessage:
+                    messagebox.showerror("Target Player Error", "Target Player Not exists")
                 return None
         return target_uuid
 
@@ -1072,6 +1095,35 @@ class GUI():
         pal = PalEditGUI()
         pal.load(None)
         pal.mainloop()
+    
+    def delete_base(self):
+        if DeleteBaseCamp(self.target_base.get()):
+            messagebox.showinfo("Result", "Delete Base Camp Success")
+        else:
+            messagebox.showerror("Delete Base", "Failed to delete")
+    
+    def select_target_player(self, evt):
+        target_uuid = self.parse_target_uuid(showmessage=False)
+        if target_uuid is not None:
+            gid = instanceMapping[str(playerMapping[target_uuid]['InstanceId'])]['value']['RawData']['value']['group_id']
+            for idx, grp_msg in enumerate(self.target_guild['values']):
+                if str(gid) == grp_msg[0:36]:
+                    self.target_guild.current(idx)
+                    break
+    
+    def select_guild(self, evt):
+        target_guild_uuid = self.target_guild.get().split(" - ")[0]
+        try:
+            uuid.UUID(target_guild_uuid)
+        except Exception as e:
+            messagebox.showerror("Target Guild Error", str(e))
+            self.target_base['value'] = []
+            self.target_base.set("ERROR")
+            return None
+        self.target_base.set("")
+        groupMapping = {str(group['key']): group for group in wsd['GroupSaveDataMap']['value']}
+        if target_guild_uuid in groupMapping:
+            self.target_base['value'] = [str(x) for x in groupMapping[target_guild_uuid]['value']['RawData']['value']['base_ids']]
 
     def build_gui(self):
         #
@@ -1106,16 +1158,26 @@ class GUI():
         tk.Label(master=f_target_player, text="Target Player", font=self.font).pack(side="left")
         self.target_player = ttk.Combobox(master=f_target_player, font=self.font, width=50)
         self.target_player.pack(side="left")
+        self.target_player.bind("<<ComboboxSelected>>", self.select_target_player)
 
         f_target_guild = tk.Frame()
         tk.Label(master=f_target_guild, text="Target Guild", font=self.font).pack(side="left")
         self.target_guild = ttk.Combobox(master=f_target_guild, font=self.font, width=80)
-        self.target_guild.pack(side="left")
+        self.target_guild.pack(side="left", fill=tk.constants.X)
+        self.target_guild.bind("<<ComboboxSelected>>", self.select_guild)
+
+        f_target_guildbase = tk.Frame()
+        tk.Label(master=f_target_guildbase, text="Target Base", font=self.font).pack(side="left")
+        self.target_base = ttk.Combobox(master=f_target_guildbase, font=self.font, width=50)
+        self.target_base.pack(side="left")
+        g_delete_base = tk.Button(master=f_target_guildbase, text="Delete Base", font=self.font, command=self.delete_base)
+        g_delete_base.pack(side="left")
         #
         f_src.pack(anchor=tk.constants.W)
         f_src_player.pack(anchor=tk.constants.W)
         f_target_player.pack(anchor=tk.constants.W)
         f_target_guild.pack(anchor=tk.constants.W)
+        f_target_guildbase.pack(anchor=tk.constants.W)
         g_button_frame = tk.Frame()
         self.btn_migrate = tk.Button(master=g_button_frame, text="Migrate Player", font=self.font, command=self.migrate)
         self.btn_migrate.pack(side="left")
@@ -1799,10 +1861,10 @@ def DeletePlayer(player_uid, InstanceId=None, dry_run=False):
 def search_keys(dicts, key, level=""):
     if isinstance(dicts, dict):
         if key in dicts:
-            print("Found at %s->%s" % (level, key))
+            print("Found at %s['%s']" % (level, key))
         for k in dicts:
             if isinstance(dicts[k], dict) or isinstance(dicts[k], list):
-                search_keys(dicts[k], key, level + "->" + k)
+                search_keys(dicts[k], key, level + "['%s']" % k)
     elif isinstance(dicts, list):
         for idx, l in enumerate(dicts):
             if isinstance(l, dict) or isinstance(l, list):
@@ -2001,6 +2063,45 @@ def BindGuildInstanceId(uid, instance_id):
                     guildInstanceMapping[str(ind_char['guid'])] = str(ind_char['instance_id'])
             print()
 
+def DeleteCharacterByContainerId(containerId):
+    removeItemList = list(filter(lambda x: "SlotID" in x['value']['RawData']['value']['object']['SaveParameter']['value'] and 
+                     str(x['value']['RawData']['value']['object']['SaveParameter']['value']['SlotID']['value']['ContainerId']['value']['ID']['value']) == str(containerId), wsd['CharacterSaveParameterMap']['value']))
+    for item in removeItemList:
+        print(f"Delete Character UUID {item['key']['PlayerUId']['value']}  InstanceID {item['key']['InstanceId']['value']}")
+        wsd['CharacterSaveParameterMap']['value'].remove(item)
+    return [x['key']['InstanceId']['value'] for x in removeItemList]
+
+def DeleteBaseCamp(base_id):
+    baseCampMapping = {str(base['key']): base for base in wsd['BaseCampSaveData']['value']}
+    groupMapping = {str(group['key']): group for group in wsd['GroupSaveDataMap']['value']}
+    workDataMapping = {str(wrk['RawData']['value']['id']): wrk for wrk in wsd['WorkSaveData']['value']['values']}
+    if base_id not in baseCampMapping:
+        print(f"Error: Base camp {base_id} not found")
+        return False
+    baseCamp = baseCampMapping[base_id]['value']
+    group_data = None
+    if str(baseCamp['RawData']['value']['group_id_belong_to']) in groupMapping:
+        group_data = groupMapping[str(baseCamp['RawData']['value']['group_id_belong_to'])]['value']['RawData']['value']
+        if base_id in group_data['base_ids']:
+            print(f"Delete Group UUID {baseCamp['RawData']['value']['group_id_belong_to']}  Base Camp ID {base_id}")
+            group_data['base_ids'].remove(base_id)
+        if str(baseCamp['RawData']['value']['owner_map_object_instance_id']) in group_data['map_object_instance_ids_base_camp_points']:
+            print(f"Delete Group UUID {baseCamp['RawData']['value']['group_id_belong_to']}  Map Instance ID {baseCamp['RawData']['value']['owner_map_object_instance_id']}")
+            group_data['map_object_instance_ids_base_camp_points'].remove(
+                baseCamp['RawData']['value']['owner_map_object_instance_id'])
+    for wrk_id in baseCamp['WorkCollection']['value']['RawData']['value']['work_ids']:
+        if str(wrk_id) in workDataMapping:
+            print(f"Delete Base Camp Work Collection {wrk_id}")
+            wsd['WorkSaveData']['value']['values'].remove(workDataMapping[(str(wrk_id))])
+        else:
+            print(f"Ignore Base Camp Work Collection {wrk_id}")
+    instanceIds = DeleteCharacterByContainerId(baseCamp['WorkerDirector']['value']['RawData']['value']['container_id'])
+    if group_data is not None:
+        for instance in list(filter(lambda x: x['instance_id'] in instanceIds, group_data['individual_character_handle_ids'])):
+            print(f"Remove Character Instance {instance['guid']}  {instance['instance_id']} from Group individual_character_handle_ids")
+            group_data['individual_character_handle_ids'].remove(instance)
+    wsd['BaseCampSaveData']['value'].remove(baseCampMapping[base_id])
+    return True
 
 def ShowGuild():
     global guildInstanceMapping
@@ -2015,9 +2116,19 @@ def ShowGuild():
             for m_k in item:
                 mapObjectMeta[m_k] = item[m_k]
             # pp.pprint(mapObjectMeta)
-            print("Guild \033[93m%s\033[0m   Admin \033[96m%s\033[0m  Group ID %s  Character Count: %d" % (
+            print("Guild \033[93m%s\033[0m   Admin \033[96m%s\033[0m  Group ID %s  Base Camp Level: %d Character Count: %d" % (
                 mapObjectMeta['guild_name'], str(mapObjectMeta['admin_player_uid']), str(mapObjectMeta['group_id']),
+                item['base_camp_level'],
                 len(mapObjectMeta['individual_character_handle_ids'])))
+            # Referer to ['WorkSaveData']['value']['values'][55]['RawData']['value']['base_camp_id_belong_to']
+            # ['BaseCampSaveData']['value'][1]['key']
+            # ['BaseCampSaveData']['value'][1]['value']['WorkerDirector']['value']['RawData']['value']['id']
+            # ['BaseCampSaveData']['value'][1]['value']['WorkCollection']['value']['RawData']['value']['id']
+            # ['BaseCampSaveData']['value'][1]['value']['RawData']['value']['id']
+            # ['GroupSaveDataMap']['value'][223]['value']['RawData']['value']['base_ids'][1]
+            for base_idx, base_id in enumerate(item['base_ids']):
+                print(f"    Base ID \033[32m {base_id} \033[0m    Map ID \033[32m {item['map_object_instance_ids_base_camp_points'][base_idx]} \033[0m")
+            print()
             for player in mapObjectMeta['players']:
                 try:
                     print("    Player \033[93m %-30s \033[0m\t[\033[92m%s\033[0m] Last Online: %s - %s" % (
