@@ -166,3 +166,4 @@ options:
 
 - [palworld-save-tools](https://github.com/cheahjs/palworld-save-tools) 提供了存档解析工具实现
 - [PalEdit](https://github.com/EternalWraith/PalEdit) - 提供了帕鲁编辑器
+- [PalworldCharacterTransfer](https://github.com/jmkl009/PalworldCharacterTransfer) - 参考了其中的动态物品数据迁移引用概念

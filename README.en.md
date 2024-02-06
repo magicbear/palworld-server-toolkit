@@ -173,3 +173,4 @@ Tools for set cpu affinity to CPU performance core (Linux only)
 
 - [palworld-save-tools](https://github.com/cheahjs/palworld-save-tools) for providing save file parsing tool implementation
 - [PalEdit](https://github.com/EternalWraith/PalEdit) - GUI for editing Pals
+- [PalworldCharacterTransfer](https://github.com/jmkl009/PalworldCharacterTransfer) - Idea for the Dynamic Item Data transfer
