@@ -62,27 +62,6 @@
 QQ群 139107098
 
 ---
-## palworld-player-list
-```
-usage: palworld-playey-list [-h] [--host HOST] [--port PORT] [--password PASSWORD] [filename]
-
-用于列出服务器Players目录中的玩家名字，PlayerUId，Steam ID
-
-positional arguments:
-  filename              Filename of the player sav
-
-options:
-  -h, --help            show this help message and exit
-  --host HOST, -H HOST  Host for PalWorld Server RCON
-  --port PORT, -P PORT  PalWorld Server RCON Port
-  --password PASSWORD, -p PASSWORD  RCON密码
-```
-
-
-- 列出玩家 - 在工作目录 `/PalSaved/SaveGames/0/<server id>/Players` 中运行 `python3 list.py`
-- 玩家详细 - `python3 list.py <PLAYER HEX UID>`
-
----
 ## palworld-save-editor
 
 清理捕捉日志，改名，合并不同服务器玩家，删除玩家，迁移坏档等工具包
@@ -121,11 +100,6 @@ options:
 	- `MigratePlayer(old_uid,new_uid)` - 从`old_uid`向`new_uid`迁移玩家数据
 	- `CopyPlayer(old_uid,new_uid, backup_wsd)` - 复制玩家数据 `backup_wsd` 为OpenBackup备份文件 `wsd`为当前主文件
 	- `Save()` - 保存修改并退出
-
-### 功能截图
-
-![](./docs/img/ShowPlayer.png)
-![](./docs/img/ShowGuild.png)
 
 ### 操作示例
 > [!IMPORTANT]
@@ -172,6 +146,28 @@ options:
 		MigratePlayer("xxxxxxxx-0000-0000-0000-000000000000","yyyyyyyy-0000-0000-0000-000000000000")
 		Save()
 		```
+
+
+---
+## palworld-player-list
+```
+usage: palworld-playey-list [-h] [--host HOST] [--port PORT] [--password PASSWORD] [filename]
+
+用于列出服务器Players目录中的玩家名字，PlayerUId，Steam ID
+
+positional arguments:
+  filename              Filename of the player sav
+
+options:
+  -h, --help            show this help message and exit
+  --host HOST, -H HOST  Host for PalWorld Server RCON
+  --port PORT, -P PORT  PalWorld Server RCON Port
+  --password PASSWORD, -p PASSWORD  RCON密码
+```
+
+
+- 列出玩家 - 在工作目录 `/PalSaved/SaveGames/0/<server id>/Players` 中运行 `python3 list.py`
+- 玩家详细 - `python3 list.py <PLAYER HEX UID>`
 
 
 ---

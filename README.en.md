@@ -62,29 +62,6 @@ Visit [Release Pages](https://github.com/magicbear/palworld-server-toolkit/relea
 
 ---
 
-## palworld-player-list
-```
-usage: palworld-playey-list [-h] [--host HOST] [--port PORT] [--password PASSWORD] [filename]
-
-List player on the Players Folder
-
-positional arguments:
-  filename              Filename of the player sav
-
-options:
-  -h, --help            show this help message and exit
-  --host HOST, -H HOST  Host for PalWorld Server RCON
-  --port PORT, -P PORT  PalWorld Server RCON Port
-  --password PASSWORD, -p PASSWORD
-                        RCON Password
-```
-
-- List player - `python3 list.py` in working directory `/PalSaved/SaveGames/0/<server id>/Players`
-- Check player detail - `python3 list.py <PLAYER HEX UID>`
-
-
----
-
 ## palworld-save-editor
 
 This tools is for cleanup the unreference item, rename the player name, migrate player and delete the player.
@@ -124,11 +101,6 @@ This tools is for cleanup the unreference item, rename the player name, migrate 
 	- `CopyPlayer(old_uid,new_uid, backup_wsd)` - Copy the player from old PlayerUId to new PlayerUId `backup_wsd` is the OpenBackup file, `wsd` is current file
 	- `Save()` - Save the file and exit
 
-
-### Function screenshot
-
-![](./docs/img/ShowPlayer.png)
-![](./docs/img/ShowGuild.png)
 
 ### Operate Sample
 
@@ -177,6 +149,29 @@ This tools is for cleanup the unreference item, rename the player name, migrate 
 		MigratePlayer("xxxxxxxx-0000-0000-0000-000000000000","yyyyyyyy-0000-0000-0000-000000000000")
 		Save()
 		```
+
+
+---
+
+## palworld-player-list
+```
+usage: palworld-playey-list [-h] [--host HOST] [--port PORT] [--password PASSWORD] [filename]
+
+List player on the Players Folder
+
+positional arguments:
+  filename              Filename of the player sav
+
+options:
+  -h, --help            show this help message and exit
+  --host HOST, -H HOST  Host for PalWorld Server RCON
+  --port PORT, -P PORT  PalWorld Server RCON Port
+  --password PASSWORD, -p PASSWORD
+                        RCON Password
+```
+
+- List player - `python3 list.py` in working directory `/PalSaved/SaveGames/0/<server id>/Players`
+- Check player detail - `python3 list.py <PLAYER HEX UID>`
 
 
 ---
