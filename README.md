@@ -26,6 +26,7 @@
   - [如何安装](#直接运行)
   - [找到存档文件](#faq)
   - [操作示例](#操作示例)
+  - [跨服务器迁移玩家数据](#跨服务器迁移玩家数据)
   - [感谢](#感谢)
 
 
@@ -108,10 +109,24 @@ QQ群 139107098
 > 
 > 最后均为把 `Level_fixed.sav` 替换至 `Level.sav` 并启动服务端
 
-- 跨服务器迁移玩家数据示例
+#### 跨服务器迁移玩家数据
+
+- 提前工作
 
 	1. 复制旧服务器 `Level.sav` 至 `SaveGames/0/<Server ID>/Old-Level.sav`
 	1. 复制旧服务器所有需迁移玩家 `Players/xxxxxxxx000000000000000000000000.sav` 至 `SaveGames/0/<Server ID>/Players/xxxxxxxx000000000000000000000000.sav`
+
+- GUI模式操作
+
+	1. `Source Player Data Source` 选择 `Backup File`
+	2. 点击 `Open File` 选择旧服务器存档 `Old-Level.sav`
+	3. `Source Player` 选择要迁移的旧玩家
+	4. `Target Player` 选择要被替换的玩家（如果目标玩家ID不变，可从`Source Player`拷贝UUID)
+	5. 点击 `Copy Player`
+	6. 点击 `Save & Exit`
+	7. 替换文件 `Level_fixed.sav` 到 `Level.sav`
+
+- 命令模式操作
 	1. 使用编辑模式运行 `python -i -m palworld_server_toolkit.editor Level.sav`
 	1. 使用以下命令 并所有需迁移玩家执行`CopyPlayer`
 		> :warning: UUID 可相同，数据自`backup_wsd`拷贝

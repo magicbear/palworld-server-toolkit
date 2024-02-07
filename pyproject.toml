@@ -18,7 +18,7 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-    "palworld-save-tools",
+    "palworld-save-tools >=0.18.0",
     "pillow",
     "pyperclip"
 ]

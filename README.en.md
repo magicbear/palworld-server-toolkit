@@ -24,6 +24,7 @@ The world fastest PalWorld server save editor, parse Level.sav in 1.1s for JSON 
   - [How to use install](#Binaries)
   - [Where to find the save-files](#faq)
   - [An example](#operate-sample)
+  - [Migrate Data Between Server](#migrate-difference-server-to-single-server)
   - [Credits](#acknowledgements)
 
 
@@ -111,10 +112,25 @@ This tools is for cleanup the unreference item, rename the player name, migrate 
 > Finally is replace `Level_fixed.sav` to `Level.sav` and start Palworld Server.
 
 
-- Migrate difference server to single server sample:
+#### Migrate difference server to single server
+
+- Preparing
 
 	1. Copy old server `Level.sav` to `SaveGames/0/<Server ID>/Old-Level.sav`
 	2. Copy old server `Players/xxxxxxxx000000000000000000000000.sav` to `SaveGames/0/<Server ID>/Players/xxxxxxxx000000000000000000000000.sav`
+
+- Operate By GUI
+
+	1. Item `Source Player Data Source` Select `Backup File`
+	2. Click `Open File` to load old server `Old-Level.sav`
+	3. Item `Source Player` to select player that you want to migrate
+	4. Item `Target Player` to select player that will be replaced. (if target player ID is the same, can copy the UUID from `Source Player`)
+	5. Click `Copy Player`
+	6. Click `Save & Exit`
+	7. Replace `Level_fixed.sav` to `Level.sav`, enjoy it.
+
+- Operate By Command Line
+
 	3. Use interactive mode `python -i -m palworld_server_toolkit.editor Level.sav`
 	4. Execute following command and run `CopyPlayer` for each migrate player
 		> :warning: UUID can be the same, the user data will be copy from `backup_wsd`

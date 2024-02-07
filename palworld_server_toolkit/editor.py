@@ -21,19 +21,18 @@ from tkinter import filedialog
 from tkinter import simpledialog
 
 module_dir = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, module_dir)
-sys.path.insert(0, os.path.join(module_dir, "../"))
-sys.path.insert(0, os.path.join(module_dir, "PalEdit"))
+# sys.path.insert(0, module_dir)
+sys.path.insert(0, os.path.join(module_dir, "../PalEdit"))
 sys.path.insert(0, os.path.join(module_dir, "../save_tools"))
-# sys.path.insert(0, os.path.join(module_dir, "../palworld-save-tools"))
 
 from palworld_save_tools.gvas import GvasFile, GvasHeader
 from palworld_save_tools.palsav import compress_gvas_to_sav, decompress_sav_to_gvas
 from palworld_save_tools.paltypes import PALWORLD_CUSTOM_PROPERTIES, PALWORLD_TYPE_HINTS
 from palworld_save_tools.archive import *
+from palworld_save_tools.rawdata import map_concrete_model_module
 
-from palworld_server_toolkit.PalEdit import PalInfo
-from palworld_server_toolkit.PalEdit.PalEdit import PalEditConfig, PalEdit
+import PalInfo
+from PalEdit import PalEditConfig, PalEdit
 
 class GvasPrettyPrint(pprint.PrettyPrinter):
     _dispatch = pprint.PrettyPrinter._dispatch.copy()
@@ -121,6 +120,7 @@ def skip_decode(
             "array_type": array_type,
             "id": reader.optional_guid(),
             "value": reader.read(size),
+            "size": size
         }
     elif type_name == "MapProperty":
         key_type = reader.fstring()
@@ -257,47 +257,38 @@ def parse_skiped_item(properties, skip_path, progress=True, recursive=True):
     if "skip_type" not in properties:
         return properties
 
+    writer = FArchiveWriter(PALWORLD_CUSTOM_PROPERTIES)
+    if properties["skip_type"] == "ArrayProperty":
+        writer.fstring(properties["array_type"])
+        writer.optional_guid(properties.get("id", None))
+        writer.write(properties['value'])
+    elif properties["skip_type"] == "MapProperty":
+        writer.fstring(properties["key_type"])
+        writer.fstring(properties["value_type"])
+        writer.optional_guid(properties.get("id", None))
+        writer.write(properties["value"])
+    elif properties["skip_type"] == "StructProperty":
+        writer.fstring(properties["struct_type"])
+        writer.guid(properties["struct_id"])
+        writer.optional_guid(properties.get("id", None))
+        writer.write(properties["value"])
+    
+    localProperties = copy.deepcopy(SKP_PALWORLD_CUSTOM_PROPERTIES)
+    if ".worldSaveData.%s" % skip_path in PALWORLD_CUSTOM_PROPERTIES:
+        localProperties[".worldSaveData.%s" % skip_path] = PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.%s" % skip_path]
+    else:
+        del localProperties[".worldSaveData.%s" % skip_path]
+    
     with FArchiveReader(
-            properties['value'], PALWORLD_TYPE_HINTS, SKP_PALWORLD_CUSTOM_PROPERTIES if recursive == False else PALWORLD_CUSTOM_PROPERTIES
+            writer.bytes(), PALWORLD_TYPE_HINTS,
+            localProperties
     ) as reader:
         if progress:
             skip_loading_progress(reader, len(properties['value'])).start()
-        if properties["skip_type"] == "ArrayProperty":
-            properties['value'] = reader.array_property(properties["array_type"], len(properties['value']) - 4,
-                                                        ".worldSaveData.%s" % skip_path)
-        elif properties["skip_type"] == "StructProperty":
-            properties['value'] = reader.struct_value(properties['struct_type'], ".worldSaveData.%s" % skip_path)
-        elif properties["skip_type"] == "MapProperty":
-            reader.u32()
-            count = reader.u32()
-            path = ".worldSaveData.%s" % skip_path
-            key_path = path + ".Key"
-            key_type = properties['key_type']
-            value_type = properties['value_type']
-            if key_type == "StructProperty":
-                key_struct_type = reader.get_type_or(key_path, "Guid")
-            else:
-                key_struct_type = None
-            value_path = path + ".Value"
-            if value_type == "StructProperty":
-                value_struct_type = reader.get_type_or(value_path, "StructProperty")
-            else:
-                value_struct_type = None
-            values: list[dict[str, Any]] = []
-            for _ in range(count):
-                key = reader.prop_value(key_type, key_struct_type, key_path)
-                value = reader.prop_value(value_type, value_struct_type, value_path)
-                values.append(
-                    {
-                        "key": key,
-                        "value": value,
-                    }
-                )
-            properties["key_struct_type"] = key_struct_type
-            properties["value_struct_type"] = value_struct_type
-            properties["value"] = values
-        del properties['custom_type']
-        del properties["skip_type"]
+        properties['value'] = reader.property(properties["skip_type"], len(properties['value']),
+                            ".worldSaveData.%s" % skip_path)['value']
+    del properties['custom_type']
+    del properties["skip_type"]
     return properties
 
 
@@ -419,7 +410,7 @@ def main():
     if args.fix_duplicate:
         FixDuplicateUser()
 
-    if args.gui:
+    if args.gui and sys.flags.interactive:
         threading.Thread(target=gui_thread).start()
 
     if sys.flags.interactive:
@@ -455,7 +446,7 @@ def main():
         print("  PrettyPrint(value)                         - Use XML format to show the value")
         return
     elif args.gui:
-        # gui.mainloop()
+        gui_thread()
         return
 
     if args.fix_missing or args.fix_capture:
@@ -2109,10 +2100,12 @@ def LoadGroupSaveDataMap():
     MappingCache.GroupSaveDataMap = {group['key']: group for group in wsd['GroupSaveDataMap']['value']}
 
 def BatchDeleteMapObject(map_object_ids):
+    load_skiped_decode(wsd, ['MapObjectSpawnerInStageSaveData'], False)
     if MappingCache.MapObjectSaveData is None:
         LoadMapObjectMaps()
     
     delete_map_object_ids = {}
+    delete_item_container_ids = []
     delete_owners = {}
     for map_object_id in map_object_ids:
         map_object_id = toUUID(map_object_id)
@@ -2120,8 +2113,10 @@ def BatchDeleteMapObject(map_object_ids):
             continue
         delete_map_object_ids[map_object_id] = None
         mapObject = MappingCache.MapObjectSaveData[map_object_id]
-        owner_spawner_level_object_instance_id = mapObject['Model']['value']['RawData']['value'][
-            'owner_spawner_level_object_instance_id']
+        for concrete in mapObject['ConcreteModel']['value']['ModuleMap']['value']:
+            if concrete['key'] == "EPalMapObjectConcreteModelModuleType::ItemContainer":
+                delete_item_container_ids.append(concrete['value']['RawData']['value']['target_container_id'])
+        owner_spawner_level_object_instance_id = mapObject['Model']['value']['RawData']['value']['owner_spawner_level_object_instance_id']
         delete_owners[owner_spawner_level_object_instance_id] = None
     
     new_mapobjects = []
@@ -2131,14 +2126,18 @@ def BatchDeleteMapObject(map_object_ids):
     wsd['MapObjectSaveData']['value']['values'] = new_mapobjects
 
     new_spawner_objects = []
-    for mapObj in wsd['MapObjectSpawnerInStageSaveData']['value'][0]['value']['SpawnerDataMapByLevelObjectInstanceId']['value']:
+    spawnInStage = parse_item(wsd['MapObjectSpawnerInStageSaveData']['value'][0]['value'], "CharacterContainerSaveData.Value")
+    for mapObj in spawnInStage['SpawnerDataMapByLevelObjectInstanceId']['value']:
         if mapObj['key'] not in delete_owners:
             new_spawner_objects.append(mapObj)
 
     wsd['MapObjectSpawnerInStageSaveData']['value'][0]['value']['SpawnerDataMapByLevelObjectInstanceId']['value'] = new_spawner_objects
+    BatchDeleteItemContainer(delete_item_container_ids)
+    print(f"Delete MapObjectSaveData: {len(delete_map_object_ids.keys())} / {len(map_object_ids)}")
     LoadMapObjectMaps()
     
 def DeleteMapObject(map_object_id):
+    load_skiped_decode(wsd, ['MapObjectSpawnerInStageSaveData'], False)
     if MappingCache.MapObjectSaveData is None:
         LoadMapObjectMaps()
     if toUUID(map_object_id) not in MappingCache.MapObjectSaveData:
@@ -2151,11 +2150,17 @@ def DeleteMapObject(map_object_id):
     except ValueError:
         return False
     # MapObjectConcreteModelInstanceId = mapObject['MapObjectConcreteModelInstanceId']['value']
+    # concrete_model_instance_id = mapObject['Model']['value']['RawValue']['value']['concrete_model_instance_id']   > = Referer To mapObject['ConcreteModel']
+    for concrete in mapObject['ConcreteModel']['value']['ModuleMap']['value']:
+        if concrete['key'] == "EPalMapObjectConcreteModelModuleType::ItemContainer":
+            DeleteItemContainer(concrete['value']['RawData']['value']['target_container_id'])
     owner_spawner_level_object_instance_id = mapObject['Model']['value']['RawData']['value']['owner_spawner_level_object_instance_id']
     if owner_spawner_level_object_instance_id in MappingCache.MapObjectSpawnerInStageSaveData:
-        mapObjSpawner = MappingCache.MapObjectSpawnerInStageSaveData[owner_spawner_level_object_instance_id]
+        mapObjSpawner = parse_item(MappingCache.MapObjectSpawnerInStageSaveData[owner_spawner_level_object_instance_id],
+                                   "CharacterContainerSaveData.Value")
         print(f"Delete MapObjectSpawnerInStageSaveData {owner_spawner_level_object_instance_id}  Map Object {map_object_id}")
         wsd['MapObjectSpawnerInStageSaveData']['value'][0]['value']['SpawnerDataMapByLevelObjectInstanceId']['value'].remove(mapObjSpawner)
+        
     return True
 
 def DeleteCharacterContainer(characterContainerId):
@@ -2227,13 +2232,59 @@ def DeleteCharacter(characterId):
     return True
 
 def FindReferenceItemContainerIds():
+    load_skiped_decode(wsd, ['MapObjectSaveData'], False)
     reference_ids = []
+
+    for mapObject in wsd['MapObjectSaveData']['value']['values']:
+        for concrete in mapObject['ConcreteModel']['value']['ModuleMap']['value']:
+            if concrete['key'] == "EPalMapObjectConcreteModelModuleType::ItemContainer":
+                reference_ids.append(concrete['value']['RawData']['value']['target_container_id'])
+    
     for character in wsd['CharacterSaveParameterMap']['value']:
         characterData = character['value']['RawData']['value']['object']['SaveParameter']['value']
         if 'EquipItemContainerId' in characterData:
             reference_ids.append(characterData['EquipItemContainerId']['value']['ID']['value'])
     
     return reference_ids
+
+
+def BatchDeleteItemContainer(itemContainerIds):
+    LoadItemContainerMaps()
+
+    deleteDynamicIds = []
+    deleteItemContainerIds = []
+    for itemContainerId in itemContainerIds:
+        itemContainerId = toUUID(itemContainerId)
+        if itemContainerId not in MappingCache.ItemContainerSaveData:
+            print(f"Error: Item Container {itemContainerId} not found")
+            continue
+
+        deleteItemContainerIds.append(itemContainerId)
+        container = parse_item(MappingCache.ItemContainerSaveData[itemContainerId], "ItemContainerSaveData")
+        containerSlots = container['value']['Slots']['value']['values']
+        for slotItem in containerSlots:
+            dynamicItemId = slotItem['ItemId']['value']['DynamicId']['value']['LocalIdInCreatedWorld']['value']
+            if dynamicItemId == '00000000-0000-0000-0000-000000000000':
+                continue
+            if dynamicItemId not in MappingCache.DynamicItemSaveData:
+                print(
+                    f"\033[31m  Error missed DynamicItemContainer UUID [\033[33m {str(dynamicItemId)}\033[0m]  Item \033[32m {slotItem['ItemId']['value']['StaticId']['value']} \033[0m")
+                continue
+            del MappingCache.DynamicItemSaveData[dynamicItemId]
+            deleteDynamicIds.append(dynamicItemId)
+        
+        del MappingCache.ItemContainerSaveData[itemContainerId]
+
+    wsd['ItemContainerSaveData']['value'] = []
+    for container_id in MappingCache.ItemContainerSaveData:
+        wsd['ItemContainerSaveData']['value'].append(MappingCache.ItemContainerSaveData[container_id])
+    wsd['DynamicItemSaveData']['value']['values'] = []
+    for dynamicItemId in MappingCache.DynamicItemSaveData:
+        wsd['DynamicItemSaveData']['value']['values'].append(MappingCache.DynamicItemSaveData[dynamicItemId])
+    print(f"Delete Dynamic Containers: {len(deleteDynamicIds)}")
+    print(f"Delete Item Containers: {len(deleteItemContainerIds)} / {len(itemContainerIds)}")
+    LoadItemContainerMaps()
+    
 
 def DeleteItemContainer(itemContainerId):
     if MappingCache.ItemContainerSaveData is None:
@@ -2350,7 +2401,6 @@ def DeletePlayer(player_uid, InstanceId=None, dry_run=False):
     for map_data in wsd['MapObjectSaveData']['value']['values']:
         if str(map_data['Model']['value']['RawData']['value']['build_player_uid']) == str(player_uid):
             delete_map_ids.append(map_data['MapObjectInstanceId']['value'])
-    print("Delete ", len(delete_map_ids))
     if not dry_run:
         BatchDeleteMapObject(delete_map_ids)
     if InstanceId is None:
