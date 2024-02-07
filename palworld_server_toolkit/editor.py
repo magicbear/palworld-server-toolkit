@@ -276,7 +276,7 @@ def parse_skiped_item(properties, skip_path, progress=True, recursive=True):
     localProperties = copy.deepcopy(SKP_PALWORLD_CUSTOM_PROPERTIES)
     if ".worldSaveData.%s" % skip_path in PALWORLD_CUSTOM_PROPERTIES:
         localProperties[".worldSaveData.%s" % skip_path] = PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.%s" % skip_path]
-    else:
+    elif ".worldSaveData.%s" % skip_path in localProperties:
         del localProperties[".worldSaveData.%s" % skip_path]
     
     with FArchiveReader(
@@ -1543,6 +1543,13 @@ class GUI():
         self.load_players()
         self.load_guilds()
 
+def DumpSavDecompressData(filename):
+    with open(filename, "rb") as f:
+        data = f.read()
+        raw_gvas, _ = decompress_sav_to_gvas(data)
+        
+    with open(filename+".raw", "wb") as f:
+        f.write(raw_gvas)
 
 def LoadFile(filename):
     global filetime, gvas_file, wsd

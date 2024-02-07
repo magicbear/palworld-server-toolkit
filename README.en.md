@@ -25,6 +25,7 @@ The world fastest PalWorld server save editor, parse Level.sav in 1.1s for JSON 
   - [Where to find the save-files](#faq)
   - [An example](#operate-sample)
   - [Migrate Data Between Server](#migrate-difference-server-to-single-server)
+  - [Migrate server to local](#migrate-server-to-local)
   - [Credits](#acknowledgements)
 
 
@@ -128,6 +129,19 @@ This tools is for cleanup the unreference item, rename the player name, migrate 
 	5. Click `Copy Player`
 	6. Click `Save & Exit`
 	7. Replace `Level_fixed.sav` to `Level.sav`, enjoy it.
+
+#### Migrate server to local
+
+- Operate By GUI
+
+	1. Item `Source Player` to select player that you want to migrate
+	2. Item `Target Player` paste `00000000-0000-0000-0000-000000000001`
+	3. Click `Migrate Player`
+	4. Click `Save & Exit`
+	5. Replace `Level_fixed.sav` to `Level.sav`, enjoy it.
+
+
+#### Other Migrate
 
 - Operate By Command Line
 
