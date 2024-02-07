@@ -961,16 +961,16 @@ class PlayerItemEdit(ParamEditor):
                 item_container = parse_item(
                     MappingCache.ItemContainerSaveData[player_gvas['inventoryInfo']['value'][idx_key]['value']['ID'][
                                                         'value']], "ItemContainerSaveData")
-                # self.item_containers[idx_key[:-11]] = [{
-                #     'SlotIndex': item['SlotIndex'],
-                #     'ItemId': item['ItemId']['value']['StaticId'],
-                #     'StackCount': item['StackCount']
-                # } for item in item_container['value']['Slots']['value']['values']]
-                # tables = self.build_array_gui(tab, ("SlotIndex", "ItemId", "StackCount"),
-                #                               self.item_container_vars[idx_key[:-11]])
-                # for idx, item in enumerate(self.item_containers[idx_key[:-11]]):
-                #     self.item_container_vars[idx_key[:-11]].append({})
-                #     self.build_array_gui_item(tables, idx, self.item_container_vars[idx_key[:-11]][idx], item)
+                self.item_containers[idx_key[:-11]] = [{
+                    'SlotIndex': item['SlotIndex'],
+                    'ItemId': item['ItemId']['value']['StaticId'],
+                    'StackCount': item['StackCount']
+                } for item in item_container['value']['Slots']['value']['values']]
+                tables = self.build_array_gui(tab, ("SlotIndex", "ItemId", "StackCount"),
+                                              self.item_container_vars[idx_key[:-11]])
+                for idx, item in enumerate(self.item_containers[idx_key[:-11]]):
+                    self.item_container_vars[idx_key[:-11]].append({})
+                    self.build_array_gui_item(tables, idx, self.item_container_vars[idx_key[:-11]][idx], item)
         self.geometry("640x800")
 
     def savedata(self):
