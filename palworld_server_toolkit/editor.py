@@ -22,7 +22,6 @@ from tkinter import simpledialog
 
 module_dir = os.path.dirname(os.path.abspath(__file__))
 # sys.path.insert(0, module_dir)
-sys.path.insert(0, os.path.join(module_dir, "../PalEdit"))
 sys.path.insert(0, os.path.join(module_dir, "../save_tools"))
 
 from palworld_save_tools.gvas import GvasFile, GvasHeader
@@ -31,6 +30,9 @@ from palworld_save_tools.paltypes import PALWORLD_CUSTOM_PROPERTIES, PALWORLD_TY
 from palworld_save_tools.archive import *
 from palworld_save_tools.rawdata import map_concrete_model_module
 
+sys.path.insert(0, os.path.join(module_dir, "../PalEdit"))
+# Fix hack for pyinstaller
+sys.path.insert(0, os.path.join(module_dir, "PalEdit"))
 import PalInfo
 from PalEdit import PalEditConfig, PalEdit
 
@@ -152,9 +154,13 @@ def skip_encode(
 ) -> int:
     if "skip_type" not in properties:
         if properties['custom_type'] in PALWORLD_CUSTOM_PROPERTIES is not None:
+            # print("process parent encoder -> ", properties['custom_type'])
             return PALWORLD_CUSTOM_PROPERTIES[properties["custom_type"]][1](
                     writer, property_type, properties
                 )
+        else:
+            # Never be run to here
+            return writer.property_inner(writer, property_type, properties)
     if property_type == "ArrayProperty":
         del properties["custom_type"]
         del properties["skip_type"]
@@ -271,10 +277,12 @@ def parse_skiped_item(properties, skip_path, progress=True, recursive=True):
         writer.guid(properties["struct_id"])
         writer.optional_guid(properties.get("id", None))
         writer.write(properties["value"])
-
+    
+    keep_custom_type = False
     localProperties = copy.deepcopy(SKP_PALWORLD_CUSTOM_PROPERTIES)
     if ".worldSaveData.%s" % skip_path in PALWORLD_CUSTOM_PROPERTIES:
         localProperties[".worldSaveData.%s" % skip_path] = PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.%s" % skip_path]
+        keep_custom_type = True
     elif ".worldSaveData.%s" % skip_path in localProperties:
         del localProperties[".worldSaveData.%s" % skip_path]
 
@@ -288,7 +296,8 @@ def parse_skiped_item(properties, skip_path, progress=True, recursive=True):
                             ".worldSaveData.%s" % skip_path)
         for k in decoded_properties:
             properties[k] = decoded_properties[k]
-    del properties['custom_type']
+    if not keep_custom_type:
+        del properties['custom_type']
     del properties["skip_type"]
     return properties
 
@@ -305,8 +314,6 @@ def load_skiped_decode(wsd, skip_paths, recursive=True):
         t1 = time.time()
         parse_skiped_item(properties, skip_path, True, recursive)
         print("Done in %.2fs" % (time.time() - t1))
-        if ".worldSaveData.%s" % skip_path in SKP_PALWORLD_CUSTOM_PROPERTIES:
-            del SKP_PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.%s" % skip_path]
 
 
 # ArrayProperty: -> .Value
@@ -954,17 +961,16 @@ class PlayerItemEdit(ParamEditor):
                 item_container = parse_item(
                     MappingCache.ItemContainerSaveData[player_gvas['inventoryInfo']['value'][idx_key]['value']['ID'][
                                                         'value']], "ItemContainerSaveData")
-                gp(item_container)
-                self.item_containers[idx_key[:-11]] = [{
-                    'SlotIndex': item['SlotIndex'],
-                    'ItemId': item['ItemId']['value']['StaticId'],
-                    'StackCount': item['StackCount']
-                } for item in item_container['value']['Slots']['value']['values']]
-                tables = self.build_array_gui(tab, ("SlotIndex", "ItemId", "StackCount"),
-                                              self.item_container_vars[idx_key[:-11]])
-                for idx, item in enumerate(self.item_containers[idx_key[:-11]]):
-                    self.item_container_vars[idx_key[:-11]].append({})
-                    self.build_array_gui_item(tables, idx, self.item_container_vars[idx_key[:-11]][idx], item)
+                # self.item_containers[idx_key[:-11]] = [{
+                #     'SlotIndex': item['SlotIndex'],
+                #     'ItemId': item['ItemId']['value']['StaticId'],
+                #     'StackCount': item['StackCount']
+                # } for item in item_container['value']['Slots']['value']['values']]
+                # tables = self.build_array_gui(tab, ("SlotIndex", "ItemId", "StackCount"),
+                #                               self.item_container_vars[idx_key[:-11]])
+                # for idx, item in enumerate(self.item_containers[idx_key[:-11]]):
+                #     self.item_container_vars[idx_key[:-11]].append({})
+                #     self.build_array_gui_item(tables, idx, self.item_container_vars[idx_key[:-11]][idx], item)
         self.geometry("640x800")
 
     def savedata(self):
@@ -972,14 +978,6 @@ class PlayerItemEdit(ParamEditor):
             for idx, item in enumerate(self.item_containers[idx_key]):
                 self.save(self.item_containers[idx_key][idx], self.item_container_vars[idx_key][idx])
         self.destroy()
-        err, player_gvas, player_sav_file, player_gvas_file = GetPlayerGvas(self.player_uid)
-        for idx_key in ['CommonContainerId', 'DropSlotContainerId', 'EssentialContainerId', 'FoodEquipContainerId',
-                        'PlayerEquipArmorContainerId', 'WeaponLoadOutContainerId']:
-            if player_gvas['inventoryInfo']['value'][idx_key]['value']['ID']['value'] in MappingCache.ItemContainerSaveData:
-                item_container = parse_item(
-                    MappingCache.ItemContainerSaveData[player_gvas['inventoryInfo']['value'][idx_key]['value']['ID'][
-                                                        'value']], "ItemContainerSaveData")
-                gp(item_container)
 
 
 class PlayerSaveEdit(ParamEditor):
