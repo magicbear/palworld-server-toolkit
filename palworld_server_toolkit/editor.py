@@ -83,7 +83,14 @@ class GvasPrettyPrint(pprint.PrettyPrinter):
                                     context, level)
         write('}')
     
+    def _pprint_UUID(self, object, stream, indent, allowance, context, level):
+        stream.write("\033[36mUUID:\033[0m\033[43;31m" if str(object) == "00000000-0000-0000-0000-000000000000" else "\033[93m")
+        self._format(str(object), stream, indent, allowance,
+                     context, level)
+        stream.write("\033[0m")
+    
     _dispatch[dict.__repr__] = _pprint_dict
+    _dispatch[UUID.__repr__] = _pprint_UUID
 
 pp = pprint.PrettyPrinter(width=80, compact=True, depth=6)
 gvas_pp = GvasPrettyPrint(width=1, compact=True, depth=6)
@@ -638,13 +645,13 @@ class ParamEditor(tk.Toplevel):
                         path, attribute_key, attrib['type'], attrib['struct_type'],
                         str(storage_object[storage_key]),
                         str(attrib_var[attribute_key].get())))
-                    storage_object[storage_key] = to_storage_uuid(uuid.UUID(attrib_var[attribute_key].get()))
+                    storage_object[storage_key] = toUUID(uuid.UUID(attrib_var[attribute_key].get()))
                 elif attrib['type'] == "StructProperty" and attrib['struct_type'] == "PalContainerId":
                     print("%s%s [%s.%s] = %s -> %s" % (
                         path, attribute_key, attrib['type'], attrib['struct_type'],
                         str(storage_object[storage_key]['ID']['value']),
                         str(attrib_var[attribute_key].get())))
-                    storage_object[storage_key]['ID']['value'] = to_storage_uuid(uuid.UUID(attrib_var[attribute_key].get()))
+                    storage_object[storage_key]['ID']['value'] = toUUID(uuid.UUID(attrib_var[attribute_key].get()))
                 elif attrib['type'] == "StructProperty" and attrib['struct_type'] == "Vector":
                     print("%s%s [%s.%s] = %f,%f,%f -> %f,%f,%f" % (
                         path, attribute_key, attrib['type'], attrib['struct_type'],
@@ -1069,7 +1076,7 @@ class AutocompleteCombobox(ttk.Combobox):
             self.set_completion_list(kwargs.get('values'))
     
     def __setitem__(self, key, value):
-        if 'key' == 'values':
+        if key == 'value':
             self.set_completion_list(value)
         return super().__setitem__(key, value)
     
@@ -1246,6 +1253,11 @@ class GUI():
 
         self.target_player['value'] = target_value_lists
 
+        self.target_instance['value'] = sorted([
+            "%s - %s" % (str(k), self.characterInstanceName(instanceMapping[k]))
+            for k in instanceMapping.keys()
+        ])
+
     def load_guilds(self):
         guild_list = []
         for group_data in wsd['GroupSaveDataMap']['value']:
@@ -1312,7 +1324,8 @@ class GUI():
                 messagebox.showinfo("Result", "Delete success")
                 self.load_players()
             except Exception as e:
-                messagebox.showerror("Delete Error", str(e))
+                traceback.print_exception(e)
+                messagebox.showerror("Delete Error", "\n".join(traceback.format_exception(e)))
 
     def move_guild(self):
         target_uuid = self.parse_target_uuid()
@@ -1488,10 +1501,7 @@ class GUI():
         #
         f_target_instance = tk.Frame()
         tk.Label(master=f_target_instance, text="Target Instance", font=self.font).pack(side="left")
-        self.target_instance = AutocompleteCombobox(master=f_target_instance, font=self.font, width=60, values=sorted([
-            "%s - %s" % (str(k), self.characterInstanceName(instanceMapping[k]))
-            for k in instanceMapping.keys()
-        ]))
+        self.target_instance = AutocompleteCombobox(master=f_target_instance, font=self.font, width=60)
         self.target_instance.pack(side="left")
         g_btn_edit_instance = tk.Button(master=f_target_instance, text="Edit", font=self.font, 
                                         command=self.edit_instance).pack(side="left")
@@ -1634,9 +1644,10 @@ def OpenBackup(filename):
     ShowPlayers(backup_wsd)
 
 
-def to_storage_uuid(uuid_str):
+def toUUID(uuid_str):
+    if isinstance(uuid_str, UUID):
+        return uuid_str
     return UUID.from_str(str(uuid_str))
-
 
 def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
     load_skiped_decode(wsd, ['ItemContainerSaveData', 'CharacterContainerSaveData', 'DynamicItemSaveData'], False)
@@ -1650,9 +1661,9 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
     instances = []
     container_mapping = {}
     player_uid = str(player_gvas['PlayerUId']['value'])
-    player_gvas['PlayerUId']['value'] = to_storage_uuid(uuid.UUID(new_player_uid))
+    player_gvas['PlayerUId']['value'] = toUUID(uuid.UUID(new_player_uid))
     player_gvas['IndividualId']['value']['PlayerUId']['value'] = player_gvas['PlayerUId']['value']
-    player_gvas['IndividualId']['value']['InstanceId']['value'] = to_storage_uuid(uuid.uuid4())
+    player_gvas['IndividualId']['value']['InstanceId']['value'] = toUUID(uuid.uuid4())
     # Clone Item from CharacterContainerSaveData
     for idx_key in ['OtomoCharacterContainerId', 'PalStorageContainerId']:
         for container in old_wsd['CharacterContainerSaveData']['value']:
@@ -1661,7 +1672,7 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
                 IsFound = False
                 for idx, insert_item in enumerate(wsd['CharacterContainerSaveData']['value']):
                     if insert_item['key']['ID']['value'] == player_gvas[idx_key]['value']['ID']['value']:
-                        player_gvas[idx_key]['value']['ID']['value'] = to_storage_uuid(uuid.uuid4())
+                        player_gvas[idx_key]['value']['ID']['value'] = toUUID(uuid.uuid4())
                         new_item['key']['ID']['value'] = player_gvas[idx_key]['value']['ID']['value']
                         IsFound = True
                         break
@@ -1696,7 +1707,7 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
             container = parse_item(srcItemContainers[container_id], "ItemContainerSaveData")
             new_item = copy.deepcopy(container)
             if container_id in targetItemContainers:
-                player_gvas['inventoryInfo']['value'][idx_key]['value']['ID']['value'] = to_storage_uuid(uuid.uuid4())
+                player_gvas['inventoryInfo']['value'][idx_key]['value']['ID']['value'] = toUUID(uuid.uuid4())
                 new_item['key']['ID']['value'] = player_gvas['inventoryInfo']['value'][idx_key]['value']['ID']['value']
                 print("\033[32mCreate Item Container\033[0m %s UUID: %s -> %s" % (idx_key,
                                                                               str(container['key']['ID']['value']),
@@ -1742,7 +1753,7 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
     if str(new_player_uid) in targetPlayerMapping:
         print(f"\033[36mPlayer \033[32m {str(new_player_uid)} \033[31m exists, update new player information \033[0m")
         userInstance = targetPlayerMapping[str(new_player_uid)]
-        instances.append({'guid': to_storage_uuid(uuid.UUID(new_player_uid)), 'instance_id': to_storage_uuid(
+        instances.append({'guid': toUUID(uuid.UUID(new_player_uid)), 'instance_id': toUUID(
                 uuid.UUID(str(player_gvas['IndividualId']['value']['InstanceId']['value'])))})
     else:
         print(
@@ -1752,8 +1763,8 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
             wsd['CharacterSaveParameterMap']['value'].append(userInstance)
     
     if not dry_run:
-        userInstance['key']['PlayerUId']['value'] = to_storage_uuid(uuid.UUID(new_player_uid))
-        userInstance['key']['InstanceId']['value'] = to_storage_uuid(
+        userInstance['key']['PlayerUId']['value'] = toUUID(uuid.UUID(new_player_uid))
+        userInstance['key']['InstanceId']['value'] = toUUID(
             uuid.UUID(str(player_gvas['IndividualId']['value']['InstanceId']['value'])))
         userInstance['value'] = srcPlayerMapping[str(player_uid)]['value']
         
@@ -1769,7 +1780,7 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
                 'value']['ID'][
                 'value'] = player_gvas['PalStorageContainerId']['value']['ID']['value']
             if isFound:
-                new_item['key']['InstanceId']['value'] = to_storage_uuid(uuid.uuid4())
+                new_item['key']['InstanceId']['value'] = toUUID(uuid.uuid4())
                 print(
                     "\033[32mCopy Pal\033[0m  UUID: %s -> %s  Owner: %s  CharacterID: %s" % (
                         str(item['key']['InstanceId']['value']), str(new_item['key']['InstanceId']['value']),
@@ -1837,7 +1848,7 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
                             for n_player_info in n_item['players']:
                                 if str(n_player_info['player_uid']) == player_uid or \
                                     str(n_player_info['player_uid']) == new_player_uid:
-                                    n_player_info['player_uid'] = to_storage_uuid(uuid.UUID(new_player_uid))
+                                    n_player_info['player_uid'] = toUUID(uuid.UUID(new_player_uid))
                                     n_player_info['player_info'] = {
                                         'last_online_real_time': 0,
                                         'player_name':
@@ -1848,7 +1859,7 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
                                     break
                             if not bIsUpdateItem:
                                 n_item['players'].append({
-                                    'player_uid': to_storage_uuid(uuid.UUID(new_player_uid)),
+                                    'player_uid': toUUID(uuid.UUID(new_player_uid)),
                                     'player_info': {
                                         'last_online_real_time': 0,
                                         'player_name':
@@ -1877,7 +1888,7 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
                         #             copy_user_params['value']['RawData']['value']['object']['SaveParameter']['value'][
                         #                 'NickName']['value']))
                         #         n_item['players'].append({
-                        #             'player_uid': to_storage_uuid(uuid.UUID(new_player_uid)),
+                        #             'player_uid': toUUID(uuid.UUID(new_player_uid)),
                         #             'player_info': {
                         #                 'last_online_real_time': 0,
                         #                 'player_name':
@@ -1925,7 +1936,7 @@ def MoveToGuild(player_uid, group_id):
             remove_instance_ids.append(item['key']['InstanceId']['value'])
         elif 'OwnerPlayerUId' in player and str(player['OwnerPlayerUId']['value']) == player_uid:
             instances.append({
-                'guid': to_storage_uuid(uuid.UUID("00000000-0000-0000-0000-000000000000")),
+                'guid': toUUID(uuid.UUID("00000000-0000-0000-0000-000000000000")),
                 'instance_id': item['key']['InstanceId']['value']
             })
             remove_instance_ids.append(item['key']['InstanceId']['value'])
@@ -1960,7 +1971,7 @@ def MoveToGuild(player_uid, group_id):
 
     print("\033[32mAppend character and players to guild\033[0m")
     target_group['players'].append({
-        'player_uid': to_storage_uuid(uuid.UUID(player_uid)),
+        'player_uid': toUUID(uuid.UUID(player_uid)),
         'player_info': {
             'last_online_real_time': 0,
             'player_name':
@@ -1982,9 +1993,9 @@ def MigratePlayer(player_uid, new_player_uid):
     DeletePlayer(new_player_uid)
     
     player_uid = player_gvas['PlayerUId']['value']
-    player_gvas['PlayerUId']['value'] = to_storage_uuid(uuid.UUID(new_player_uid))
+    player_gvas['PlayerUId']['value'] = toUUID(uuid.UUID(new_player_uid))
     player_gvas['IndividualId']['value']['PlayerUId']['value'] = player_gvas['PlayerUId']['value']
-    player_gvas['IndividualId']['value']['InstanceId']['value'] = to_storage_uuid(uuid.uuid4())
+    player_gvas['IndividualId']['value']['InstanceId']['value'] = toUUID(uuid.uuid4())
     with open(new_player_sav_file, "wb") as f:
         print("Saving new player sav %s" % new_player_sav_file)
         if "Pal.PalWorldSaveGame" in player_gvas_file.header.save_game_class_name or "Pal.PalLocalWorldSaveGame" in player_gvas_file.header.save_game_class_name:
@@ -2004,7 +2015,7 @@ def MigratePlayer(player_uid, new_player_uid):
                     str(item['key']['InstanceId']['value']), player['Level']['value'] if 'Level' in player else -1,
                     player['NickName']['value']))
         elif 'OwnerPlayerUId' in player and str(player['OwnerPlayerUId']['value']) == str(player_uid):
-            player['OwnerPlayerUId']['value'] = to_storage_uuid(uuid.UUID(new_player_uid))
+            player['OwnerPlayerUId']['value'] = toUUID(uuid.UUID(new_player_uid))
             player['OldOwnerPlayerUIds']['value']['values'] = [player['OwnerPlayerUId']['value']]
             print(
                 "\033[32mMigrate Pal\033[0m  UUID: %s  Owner: %s  CharacterID: %s" % (
@@ -2046,8 +2057,216 @@ def MigratePlayer(player_uid, new_player_uid):
     print("Finish to migrate player from Save, please delete this file manually: %s" % player_sav_file)
 
 
+# mapObject = wsd['MapObjectSaveData']['value']['values'][0]
+# gp(mapObject)
+
+class MappingCache:
+    CharacterSaveParameterMap = None
+    MapObjectSaveData = None
+    MapObjectSpawnerInStageSaveData = None
+    ItemContainerSaveData = None
+    DynamicItemSaveData = None
+    CharacterContainerSaveData = None
+    GroupSaveDataMap = None
+
+def LoadMapObjectMaps():
+    load_skiped_decode(wsd, ['MapObjectSaveData', 'MapObjectSpawnerInStageSaveData'])
+    MappingCache.MapObjectSaveData = {
+        mapobj['MapObjectInstanceId']['value']: mapobj for mapobj in
+                         wsd['MapObjectSaveData']['value']['values']}
+    MappingCache.MapObjectSaveDataIndex = {
+        mapobj['MapObjectInstanceId']['value']: idx for idx, mapobj in
+        enumerate(wsd['MapObjectSaveData']['value']['values'])
+    }
+    MappingCache.MapObjectSpawnerInStageSaveData = {
+        mapObj['key']: mapObj
+        for mapObj in
+        wsd['MapObjectSpawnerInStageSaveData']['value'][0]['value']['SpawnerDataMapByLevelObjectInstanceId']['value']
+    }
+    MappingCache.MapObjectSpawnerInStageSaveDataIndex = {
+        mapObj['key']: idx
+        for idx, mapObj in
+        enumerate(wsd['MapObjectSpawnerInStageSaveData']['value'][0]['value']['SpawnerDataMapByLevelObjectInstanceId']['value'])
+    }
+
+def LoadCharacterSaveParameterMap():
+    MappingCache.CharacterSaveParameterMap = {character['key']['InstanceId']['value']: character for character in
+                     wsd['CharacterSaveParameterMap']['value']}
+
+def LoadItemContainerMaps():
+    load_skiped_decode(wsd, ['ItemContainerSaveData', 'DynamicItemSaveData'], False)
+    MappingCache.ItemContainerSaveData = {container['key']['ID']['value']: container for container in
+                     wsd['ItemContainerSaveData']['value']}
+    MappingCache.DynamicItemSaveData = {dyn_item_data['ID']['value']['LocalIdInCreatedWorld']['value']: dyn_item_data for 
+            dyn_item_data in wsd['DynamicItemSaveData']['value']['values']}
+
+def LoadCharacterContainerMaps():
+    load_skiped_decode(wsd, ['CharacterContainerSaveData'], False)
+    MappingCache.CharacterContainerSaveData = {container['key']['ID']['value']: container for container in wsd['CharacterContainerSaveData']['value']}
+
+
+def LoadGroupSaveDataMap():
+    MappingCache.GroupSaveDataMap = {group['key']: group for group in wsd['GroupSaveDataMap']['value']}
+
+def BatchDeleteMapObject(map_object_ids):
+    if MappingCache.MapObjectSaveData is None:
+        LoadMapObjectMaps()
+    
+    delete_map_object_ids = {}
+    delete_owners = {}
+    for map_object_id in map_object_ids:
+        map_object_id = toUUID(map_object_id)
+        if map_object_id not in MappingCache.MapObjectSaveData:
+            continue
+        delete_map_object_ids[map_object_id] = None
+        mapObject = MappingCache.MapObjectSaveData[map_object_id]
+        owner_spawner_level_object_instance_id = mapObject['Model']['value']['RawData']['value'][
+            'owner_spawner_level_object_instance_id']
+        delete_owners[owner_spawner_level_object_instance_id] = None
+    
+    new_mapobjects = []
+    for mapObject in wsd['MapObjectSaveData']['value']['values']:
+        if mapObject['MapObjectInstanceId']['value'] not in delete_map_object_ids:
+            new_mapobjects.append(mapObject)
+    wsd['MapObjectSaveData']['value']['values'] = new_mapobjects
+
+    new_spawner_objects = []
+    for mapObj in wsd['MapObjectSpawnerInStageSaveData']['value'][0]['value']['SpawnerDataMapByLevelObjectInstanceId']['value']:
+        if mapObj['key'] not in delete_owners:
+            new_spawner_objects.append(mapObj)
+
+    wsd['MapObjectSpawnerInStageSaveData']['value'][0]['value']['SpawnerDataMapByLevelObjectInstanceId']['value'] = new_spawner_objects
+    LoadMapObjectMaps()
+    
+def DeleteMapObject(map_object_id):
+    if MappingCache.MapObjectSaveData is None:
+        LoadMapObjectMaps()
+    if toUUID(map_object_id) not in MappingCache.MapObjectSaveData:
+        print(f"Error: Map Object {map_object_id} not found")
+        return False
+    mapObject = MappingCache.MapObjectSaveData[toUUID(map_object_id)]
+    try:
+        print(f"Delete MapObjectSaveData {map_object_id}")
+        wsd['MapObjectSaveData']['value']['values'].remove(mapObject)
+    except ValueError:
+        return False
+    # MapObjectConcreteModelInstanceId = mapObject['MapObjectConcreteModelInstanceId']['value']
+    owner_spawner_level_object_instance_id = mapObject['Model']['value']['RawData']['value']['owner_spawner_level_object_instance_id']
+    if owner_spawner_level_object_instance_id in MappingCache.MapObjectSpawnerInStageSaveData:
+        mapObjSpawner = MappingCache.MapObjectSpawnerInStageSaveData[owner_spawner_level_object_instance_id]
+        print(f"Delete MapObjectSpawnerInStageSaveData {owner_spawner_level_object_instance_id}  Map Object {map_object_id}")
+        wsd['MapObjectSpawnerInStageSaveData']['value'][0]['value']['SpawnerDataMapByLevelObjectInstanceId']['value'].remove(mapObjSpawner)
+    return True
+
+def DeleteCharacterContainer(characterContainerId):
+    if MappingCache.CharacterContainerSaveData is None:
+        LoadCharacterContainerMaps()
+    
+    characterContainerId = toUUID(characterContainerId)
+    if characterContainerId not in MappingCache.CharacterContainerSaveData:
+        print(f"Error: Character Container {characterContainerId} not found")
+        return False
+    
+    container = parse_item(MappingCache.CharacterContainerSaveData[characterContainerId], "CharacterContainerSaveData")
+    containerSlots = container['value']['Slots']['value']['values']
+    deleteCharacterIds = []
+    for slotItem in containerSlots:
+        if slotItem['IndividualId']['value']['InstanceId']['value'] != "00000000-0000-0000-0000-000000000000":
+            deleteCharacterIds.append(slotItem['IndividualId']['value']['InstanceId']['value'])
+    
+    for character_id in deleteCharacterIds:
+        DeleteCharacter(character_id)
+    
+    print(f"Delete Characher Container {characterContainerId}")
+    wsd['CharacterContainerSaveData']['value'].remove(container)
+    LoadCharacterContainerMaps()
+
+def DeleteCharacter(characterId):
+    if MappingCache.CharacterSaveParameterMap is None:
+        LoadCharacterSaveParameterMap()
+
+    characterId = toUUID(characterId)
+    if characterId not in MappingCache.CharacterSaveParameterMap:
+        print(f"Error: Character {characterId} not found")
+        return False
+    character = MappingCache.CharacterSaveParameterMap[characterId]
+    characterData = character['value']['RawData']['value']['object']['SaveParameter']['value']
+    if 'EquipItemContainerId' in characterData:
+        DeleteItemContainer(characterData['EquipItemContainerId']['value']['ID']['value'])
+    
+    if 'group_id' in character['value']['RawData']['value']:
+        if MappingCache.GroupSaveDataMap is None:
+            LoadGroupSaveDataMap()
+        try:
+            group = MappingCache.GroupSaveDataMap[character['value']['RawData']['value']['group_id']]
+            for idx, ind in enumerate(group['value']['RawData']['value']['individual_character_handle_ids']):
+                if ind['instance_id'] == characterId:
+                    print(f"Delete Chracater {characterId} group {character['value']['RawData']['value']['group_id']} instances")
+                    del group['value']['RawData']['value']['individual_character_handle_ids'][idx]
+                    break
+        except KeyError:
+            pass
+        
+    if 'SlotID' in characterData:
+        if MappingCache.CharacterContainerSaveData is None:
+            LoadCharacterContainerMaps()
+        try:
+            characterContainer = parse_item(MappingCache.CharacterContainerSaveData[characterData['SlotID']['value']['ContainerId']['value']['ID']['value']], "CharacterContainerSaveData")
+            for slotItem in characterContainer['value']['Slots']['value']['values']:
+                if slotItem['RawData']['value']['instance_id'] == characterId:
+                    characterContainer['value']['Slots']['value']['values'].remove(slotItem)
+                    print(f"Delete Character {characterId} from CharacterContainer {characterData['SlotID']['value']['ContainerId']['value']['ID']['value']}")
+                    break
+        except KeyError:
+            pass
+    try:
+        wsd['CharacterSaveParameterMap']['value'].remove(character)
+    except ValueError:
+        return False
+    LoadCharacterSaveParameterMap()
+    return True
+
+def FindReferenceItemContainerIds():
+    reference_ids = []
+    for character in wsd['CharacterSaveParameterMap']['value']:
+        characterData = character['value']['RawData']['value']['object']['SaveParameter']['value']
+        if 'EquipItemContainerId' in characterData:
+            reference_ids.append(characterData['EquipItemContainerId']['value']['ID']['value'])
+    
+    return reference_ids
+
+def DeleteItemContainer(itemContainerId):
+    if MappingCache.ItemContainerSaveData is None:
+        LoadItemContainerMaps()
+    
+    itemContainerId = toUUID(itemContainerId)
+    if itemContainerId not in MappingCache.ItemContainerSaveData:
+        print(f"Error: Item Container {itemContainerId} not found")
+        return False
+    
+    container = parse_item(MappingCache.ItemContainerSaveData[itemContainerId], "ItemContainerSaveData")
+    containerSlots = container['value']['Slots']['value']['values']
+    for slotItem in containerSlots:
+        dynamicItemId = slotItem['ItemId']['value']['DynamicId']['value']['LocalIdInCreatedWorld']['value']
+        if dynamicItemId == '00000000-0000-0000-0000-000000000000':
+            continue
+        if dynamicItemId not in MappingCache.DynamicItemSaveData:
+            print(
+                f"\033[31m  Error missed DynamicItemContainer UUID [\033[33m {str(dynamicItemId)}\033[0m]  Item \033[32m {slotItem['ItemId']['value']['StaticId']['value']} \033[0m")
+            continue
+        print(f"Delete DynamicItemId {dynamicItemId}")
+        wsd['DynamicItemSaveData']['value']['values'].remove(MappingCache.DynamicItemSaveData[dynamicItemId])
+    
+    print(f"Delete Item Container {itemContainerId}")
+    wsd['ItemContainerSaveData']['value'].remove(container)
+    LoadItemContainerMaps()
+
+# DeleteMapObject("6137354f-422d-73af-5791-2faf850bdaed")
+
 def DeletePlayer(player_uid, InstanceId=None, dry_run=False):
-    load_skiped_decode(wsd, ['ItemContainerSaveData', 'CharacterContainerSaveData'], False)
+    if MappingCache.ItemContainerSaveData is None:
+        LoadItemContainerMaps()
+    load_skiped_decode(wsd, ['ItemContainerSaveData', 'CharacterContainerSaveData', 'MapObjectSaveData'], False)
     if isinstance(player_uid, int):
         player_uid = str(uuid.UUID("%08x-0000-0000-0000-000000000000" % player_uid))
 
@@ -2063,79 +2282,50 @@ def DeletePlayer(player_uid, InstanceId=None, dry_run=False):
         playerInstanceId = player_gvas['IndividualId']['value']['InstanceId']['value']
         for key in ['OtomoCharacterContainerId', 'PalStorageContainerId']:
             print("  %s" % player_gvas[key]['value']['ID']['value'])
+
+            print("\033[31mDelete Character Container\033[0m  UUID: %s" % (
+                    str(player_gvas[key]['value']['ID']['value'])))
+            if not dry_run:
+                DeleteCharacterContainer(player_gvas[key]['value']['ID']['value'])
             player_container_ids.append(player_gvas[key]['value']['ID']['value'])
         for key in ['CommonContainerId', 'DropSlotContainerId', 'EssentialContainerId', 'FoodEquipContainerId',
                     'PlayerEquipArmorContainerId', 'WeaponLoadOutContainerId']:
             print("  %s" % player_gvas['inventoryInfo']['value'][key]['value']['ID']['value'])
+
+            print("\033[31mDelete Item Container\033[0m  UUID: %s" % (
+                    str(player_gvas['inventoryInfo']['value'][key]['value']['ID']['value'])))
+            if not dry_run:
+                DeleteItemContainer(player_gvas['inventoryInfo']['value'][key]['value']['ID']['value'])
             player_container_ids.append(player_gvas['inventoryInfo']['value'][key]['value']['ID']['value'])
     else:
         playerInstanceId = InstanceId
-    remove_items = []
-    remove_instance_id = []
     # Remove item from CharacterSaveParameterMap
     for item in wsd['CharacterSaveParameterMap']['value']:
         player = item['value']['RawData']['value']['object']['SaveParameter']['value']
         if str(item['key']['PlayerUId']['value']) == player_uid \
                 and 'IsPlayer' in player and player['IsPlayer']['value'] \
                 and (InstanceId is None or str(item['key']['InstanceId']['value']) == InstanceId):
-            remove_items.append(item)
-            remove_instance_id.append(item['key']['InstanceId']['value'])
             print(
                 "\033[31mDelete User\033[0m  UUID: %s  Level: %d  CharacterID: \033[93m%s\033[0m" % (
                     str(item['key']['InstanceId']['value']), player['Level']['value'] if 'Level' in player else -1,
                     player['NickName']['value']))
+            if not dry_run:
+                DeleteCharacter(item['key']['InstanceId']['value'])
         elif 'OwnerPlayerUId' in player and str(player['OwnerPlayerUId']['value']) == player_uid and InstanceId is None:
-            remove_instance_id.append(item['key']['InstanceId']['value'])
             print(
                 "\033[31mDelete Pal\033[0m  UUID: %s  Owner: %s  CharacterID: %s" % (
                     str(item['key']['InstanceId']['value']), str(player['OwnerPlayerUId']['value']),
                     player['CharacterID']['value']))
-            remove_items.append(item)
-        elif 'SlotID' in player and player['SlotID']['value']['ContainerId']['value']['ID'][
-            'value'] in player_container_ids and InstanceId is None:
-            remove_instance_id.append(item['key']['InstanceId']['value'])
+            if not dry_run:
+                DeleteCharacter(item['key']['InstanceId']['value'])
+        elif 'SlotID' in player and player['SlotID']['value']['ContainerId']['value']['ID']['value'] in player_container_ids and InstanceId is None:
             print(
                 "\033[31mDelete Pal\033[0m  UUID: %s  Slot: %s  CharacterID: %s" % (
                     str(item['key']['InstanceId']['value']),
                     str(player['SlotID']['value']['ContainerId']['value']['ID']['value']),
                     player['CharacterID']['value']))
-            remove_items.append(item)
-    if not dry_run:
-        for item in remove_items:
-            wsd['CharacterSaveParameterMap']['value'].remove(item)
-    # Remove Item from CharacterContainerSaveData
-    remove_items = []
-    for container in wsd['CharacterContainerSaveData']['value']:
-        if container['key']['ID']['value'] in player_container_ids:
-            remove_items.append(container)
-            print(
-                "\033[31mDelete Character Container\033[0m  UUID: %s" % (
-                    str(container['key']['ID']['value'])))
-    if not dry_run:
-        for item in remove_items:
-            wsd['CharacterContainerSaveData']['value'].remove(item)
-    # Remove Item from ItemContainerSaveData
-    remove_items = []
-    for container in wsd['ItemContainerSaveData']['value']:
-        if container['key']['ID']['value'] in player_container_ids:
-            remove_items.append(container)
-            print(
-                "\033[31mDelete Item Container\033[0m  UUID: %s" % (
-                    str(container['key']['ID']['value'])))
-    if not dry_run:
-        for item in remove_items:
-            wsd['ItemContainerSaveData']['value'].remove(item)
-    # Remove Item from CharacterSaveParameterMap
-    remove_items = []
-    for container in wsd['CharacterSaveParameterMap']['value']:
-        if container['key']['InstanceId']['value'] == playerInstanceId:
-            remove_items.append(container)
-            print(
-                "\033[31mDelete CharacterSaveParameterMap\033[0m  UUID: %s" % (
-                    str(container['key']['InstanceId']['value'])))
-    if not dry_run:
-        for item in remove_items:
-            wsd['CharacterSaveParameterMap']['value'].remove(item)
+            if not dry_run:
+                DeleteCharacter(item['key']['InstanceId']['value'])
     # Remove Item from GroupSaveDataMap
     remove_guilds = []
     for group_data in wsd['GroupSaveDataMap']['value']:
@@ -2153,16 +2343,16 @@ def DeletePlayer(player_uid, InstanceId=None, dry_run=False):
                         if len(item['players']) == 0:
                             DeleteGuild(item['group_id'])
                     break
-            removeItems = []
-            for ind_char in item['individual_character_handle_ids']:
-                if ind_char['instance_id'] in remove_instance_id:
-                    print("\033[31mDelete Guild Character %s\033[0m" % (str(ind_char['instance_id'])))
-                    removeItems.append(ind_char)
-            if not dry_run:
-                for ind_char in removeItems:
-                    item['individual_character_handle_ids'].remove(ind_char)
     for guild in remove_guilds:
         wsd['GroupSaveDataMap']['value'].remove(guild)
+        
+    delete_map_ids = []
+    for map_data in wsd['MapObjectSaveData']['value']['values']:
+        if str(map_data['Model']['value']['RawData']['value']['build_player_uid']) == str(player_uid):
+            delete_map_ids.append(map_data['MapObjectInstanceId']['value'])
+    print("Delete ", len(delete_map_ids))
+    if not dry_run:
+        BatchDeleteMapObject(delete_map_ids)
     if InstanceId is None:
         print("Finish to remove player from Save, please delete this file manually: %s" % player_sav_file)
 
@@ -2179,6 +2369,30 @@ def search_keys(dicts, key, level=""):
             if isinstance(l, dict) or isinstance(l, list):
                 search_keys(l, key, level + "[%d]" % idx)
 
+def search_gpid(dicts, level=""):
+    isFound = False
+    empty_uuid = toUUID("00000000-0000-0000-0000-000000000000")
+    if isinstance(dicts, dict):
+        for k in dicts:
+            if level == "":
+                set_loadingTitle("Searching %s"%k)
+            if isinstance(dicts[k], UUID) and dicts[k] != empty_uuid:
+                isFound = True
+                print("wsd%s['%s'] = '%s'" % (level, k, dicts[k]))
+            if isinstance(dicts[k], dict) or isinstance(dicts[k], list):
+                isFound |= search_gpid(dicts[k], level + "['%s']" % k)
+    elif isinstance(dicts, list):
+        for idx, l in enumerate(dicts):
+            if level == "":
+                set_loadingTitle("Searching %s" % l)
+            if isinstance(l, UUID) and l != empty_uuid:
+                isFound = True
+                print("wsd%s[%d] = '%s'" % (level, idx, l))
+            if isinstance(l, dict) or isinstance(l, list):
+                isFound |= search_gpid(l, level + "[%d]" % idx)
+    if level == "":
+        set_loadingTitle("")
+    return isFound
 
 def search_values(dicts, key, level=""):
     try:
@@ -2195,7 +2409,7 @@ def search_values(dicts, key, level=""):
             isFound = True
         for k in dicts:
             if level == "":
-                set_loadingTitle("Searching "%k)
+                set_loadingTitle("Searching %s"%k)
             if isinstance(dicts[k], dict) or isinstance(dicts[k], list):
                 isFound |= search_values(dicts[k], key, level + "['%s']" % k)
     elif isinstance(dicts, list):
@@ -2207,7 +2421,7 @@ def search_values(dicts, key, level=""):
             isFound = True
         for idx, l in enumerate(dicts):
             if level == "":
-                set_loadingTitle("Searching " % l)
+                set_loadingTitle("Searching %s" % l)
             if isinstance(l, dict) or isinstance(l, list):
                 isFound |= search_values(l, key, level + "[%d]" % idx)
     if level == "":
@@ -2369,7 +2583,7 @@ def BindGuildInstanceId(uid, instance_id):
                 if str(ind_char['guid']) == uid:
                     print("Update Guild %s binding guild UID %s  %s -> %s" % (
                         item['guild_name'], uid, ind_char['instance_id'], instance_id))
-                    ind_char['instance_id'] = to_storage_uuid(uuid.UUID(instance_id))
+                    ind_char['instance_id'] = toUUID(uuid.UUID(instance_id))
                     guildInstanceMapping[str(ind_char['guid'])] = str(ind_char['instance_id'])
             print()
 
@@ -2429,7 +2643,7 @@ def DeleteGuild(group_id):
         return False
     group_info = groupMapping[str(group_id)]['value']['RawData']['value']
     for base_id in group_info['base_ids']:
-        DeleteBaseCamp(base_id)
+        DeleteBaseCamp(base_id, group_id)
     print("\033[31mDelete Guild\033[0m \033[93m %s \033[0m  UUID: %s" % (
         group_info['guild_name'], str(group_info['group_id'])))
     wsd['GroupSaveDataMap']['value'].remove(groupMapping[str(group_id)])

@@ -14,6 +14,21 @@ Changelog
     Note that they these tags will not actually close the issue/PR until they
     are merged into the "default" branch.
 
+v0.3.3
+-------
+
+Major:
+
+- GUI Modified for more clearly
+
+Feature:
+
+- Auto complete Combobox for Editory
+- Delete Player To Clean More Data
+- Delete Item Containers Feature
+- Delete Character Containers Feature
+- Delete MapSaveData Feature
+
 v0.3.2
 -------
 
