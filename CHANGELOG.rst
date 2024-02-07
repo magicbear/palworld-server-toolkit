@@ -20,6 +20,8 @@ v0.3.4
 Major:
 
 - DeleteMapObject will delete item containers now
+- Performance Upgrade for Multiple Functions
+- Mapping Cache System
 
 Feature:
 
