@@ -27,6 +27,11 @@ Feature:
 
 - BatchDeleteItemContainers
 
+Fix:
+
+- Loading Cache cause Save Failed
+- Edit Player if didn't change Array Value, can not save
+
 v0.3.3
 -------
 

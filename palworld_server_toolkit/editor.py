@@ -284,8 +284,10 @@ def parse_skiped_item(properties, skip_path, progress=True, recursive=True):
     ) as reader:
         if progress:
             skip_loading_progress(reader, len(properties['value'])).start()
-        properties['value'] = reader.property(properties["skip_type"], len(properties['value']),
-                            ".worldSaveData.%s" % skip_path)['value']
+        decoded_properties = reader.property(properties["skip_type"], len(properties['value']),
+                            ".worldSaveData.%s" % skip_path)
+        for k in decoded_properties:
+            properties[k] = decoded_properties[k]
     del properties['custom_type']
     del properties["skip_type"]
     return properties
@@ -591,7 +593,7 @@ class ParamEditor(tk.Toplevel):
     def save(self, attribs, attrib_var, path=""):
         for attribute_key in attribs:
             attrib = attribs[attribute_key]
-            if attribute_key not in attrib_var:
+            if attribute_key not in attrib_var or attrib_var[attribute_key] is None:
                 continue
             if not isinstance(attrib, dict):
                 continue
@@ -935,9 +937,9 @@ class PlayerItemEdit(ParamEditor):
                 'SaveParameter']['value']
         self.gui.title("Player Item Edit - %s" % player_uid)
         tabs = ttk.Notebook(master=self)
-        threading.Thread(target=self.load, args=[tabs, player_gvas]).start()
         tabs.pack(anchor=tk.constants.N, fill=tk.constants.BOTH, expand=True)
         tk.Button(master=self.gui, font=self.font, text="Save", command=self.savedata).pack(fill=tk.constants.X, anchor=tk.constants.S, expand=False)
+        threading.Thread(target=self.load, args=[tabs, player_gvas]).start()
 
     def load(self, tabs, player_gvas):
         if MappingCache.ItemContainerSaveData is None:
@@ -952,6 +954,7 @@ class PlayerItemEdit(ParamEditor):
                 item_container = parse_item(
                     MappingCache.ItemContainerSaveData[player_gvas['inventoryInfo']['value'][idx_key]['value']['ID'][
                                                         'value']], "ItemContainerSaveData")
+                gp(item_container)
                 self.item_containers[idx_key[:-11]] = [{
                     'SlotIndex': item['SlotIndex'],
                     'ItemId': item['ItemId']['value']['StaticId'],
@@ -969,6 +972,14 @@ class PlayerItemEdit(ParamEditor):
             for idx, item in enumerate(self.item_containers[idx_key]):
                 self.save(self.item_containers[idx_key][idx], self.item_container_vars[idx_key][idx])
         self.destroy()
+        err, player_gvas, player_sav_file, player_gvas_file = GetPlayerGvas(self.player_uid)
+        for idx_key in ['CommonContainerId', 'DropSlotContainerId', 'EssentialContainerId', 'FoodEquipContainerId',
+                        'PlayerEquipArmorContainerId', 'WeaponLoadOutContainerId']:
+            if player_gvas['inventoryInfo']['value'][idx_key]['value']['ID']['value'] in MappingCache.ItemContainerSaveData:
+                item_container = parse_item(
+                    MappingCache.ItemContainerSaveData[player_gvas['inventoryInfo']['value'][idx_key]['value']['ID'][
+                                                        'value']], "ItemContainerSaveData")
+                gp(item_container)
 
 
 class PlayerSaveEdit(ParamEditor):
@@ -1333,7 +1344,8 @@ class GUI():
         try:
             uuid.UUID(target_guild_uuid)
         except Exception as e:
-            messagebox.showerror("Target Guild Error", str(e))
+            traceback.print_exception(e)
+            messagebox.showerror("Target Guild Error", "\n".join(traceback.format_exception(e)))
             return None
 
         target_guild = None
@@ -1352,7 +1364,8 @@ class GUI():
             self.load_players()
             self.load_guilds()
         except Exception as e:
-            messagebox.showerror("Move Guild Error", str(e))
+            traceback.print_exception(e)
+            messagebox.showerror("Move Guild Error", "\n".join(traceback.format_exception(e)))
 
     def save(self):
         if 'yes' == messagebox.showwarning("Save", "Confirm to save file?", type=messagebox.YESNO):
@@ -1362,7 +1375,8 @@ class GUI():
                 print()
                 sys.exit(0)
             except Exception as e:
-                messagebox.showerror("Save Error", str(e))
+                traceback.print_exception(e)
+                messagebox.showerror("Save Error", "\n".join(traceback.format_exception(e)))
 
     def edit_player(self):
         target_uuid = self.parse_target_uuid()
@@ -1431,7 +1445,8 @@ class GUI():
         try:
             uuid.UUID(target_guild_uuid)
         except Exception as e:
-            messagebox.showerror("Target Guild Error", str(e))
+            traceback.print_exception(e)
+            messagebox.showerror("Target Guild Error", "\n".join(traceback.format_exception(e)))
             self.target_base['value'] = []
             self.target_base.set("ERROR")
             return None
