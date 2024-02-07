@@ -248,3 +248,4 @@ Thanks to
 - [palworld-save-tools](https://github.com/cheahjs/palworld-save-tools) for providing save file parsing tool implementation
 - [PalEdit](https://github.com/EternalWraith/PalEdit) - GUI for editing Pals
 - [PalworldCharacterTransfer](https://github.com/jmkl009/PalworldCharacterTransfer) - Idea for the Dynamic Item Data transfer
+- [Palworld Host Save Fix](https://github.com/xNul/palworld-host-save-fix) - Idea for the first to transfer between server
