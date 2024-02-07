@@ -28,7 +28,6 @@ from palworld_save_tools.gvas import GvasFile, GvasHeader
 from palworld_save_tools.palsav import compress_gvas_to_sav, decompress_sav_to_gvas
 from palworld_save_tools.paltypes import PALWORLD_CUSTOM_PROPERTIES, PALWORLD_TYPE_HINTS
 from palworld_save_tools.archive import *
-from palworld_save_tools.rawdata import map_concrete_model_module
 
 sys.path.insert(0, os.path.join(module_dir, "../PalEdit"))
 # Fix hack for pyinstaller
