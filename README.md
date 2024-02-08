@@ -252,8 +252,6 @@ options:
 	
 - [ ] Cleanup the data on `FoliageGridSaveDataMap`
 - [ ] Cleanup more deep data on  `MapObjectSpawnerInStageSaveData`
-- [ ] Cleanup Empty Reference on `ItemContainerSaveData`
-- [ ] Localisation support
 
 ---
 
