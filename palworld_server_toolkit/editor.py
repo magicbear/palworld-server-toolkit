@@ -26,8 +26,6 @@ try:
 except ImportError as e:
     raise ImportError("Please update palworld_save_tools to >=0.18.0")
 
-sys.path.insert(0, os.path.join(module_dir, "../PalEdit"))
-# Fix hack for pyinstaller
 sys.path.insert(0, os.path.join(module_dir, "PalEdit"))
 
 try:

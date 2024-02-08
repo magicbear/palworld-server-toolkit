@@ -19,7 +19,8 @@ v0.3.7
 
 Major:
 
-- I18n Multiple language support 
+- I18n Multiple language support
+- Fix bug for packing pip package for PalEdit
 
 v0.3.6
 -------
