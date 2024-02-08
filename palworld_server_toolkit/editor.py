@@ -2022,15 +2022,15 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
     if new_player_uid in MappingCache.PlayerIdMapping:
         print(f"\033[36mPlayer \033[32m {str(new_player_uid)} \033[31m exists, update new player information \033[0m")
         userInstance = MappingCache.PlayerIdMapping[new_player_uid]
-        instances.append(
-            {'guid': new_player_uid, 'instance_id': player_gvas['IndividualId']['value']['InstanceId']['value']})
     else:
         print(
             f"\033[36mCopy Player \033[32m {str(new_player_uid)} %s \033[31m \033[0m")
         userInstance = copy.deepcopy(srcPlayerMapping[player_uid])
         if not dry_run:
             wsd['CharacterSaveParameterMap']['value'].append(userInstance)
-
+    
+    instances.append({'guid': new_player_uid, 'instance_id': player_gvas['IndividualId']['value']['InstanceId']['value']})
+    
     if not dry_run:
         userInstance['key']['PlayerUId']['value'] = new_player_uid
         userInstance['key']['InstanceId']['value'] = player_gvas['IndividualId']['value']['InstanceId']['value']
@@ -2062,7 +2062,7 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
             if not dry_run:
                 wsd['CharacterSaveParameterMap']['value'].append(new_item)
             instances.append(
-                {'guid': player_gvas['PlayerUId']['value'], 'instance_id': new_item['key']['InstanceId']['value']})
+                {'guid': toUUID("00000000-0000-0000-0000-000000000000"), 'instance_id': new_item['key']['InstanceId']['value']})
     # Copy Item from GroupSaveDataMap
     if MappingCache.GroupSaveDataMap is None:
         LoadGroupSaveDataMap()
@@ -2072,6 +2072,7 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
             item = group_data['value']['RawData']['value']
             for g_player in item['players']:
                 if g_player['player_uid'] == new_player_uid:
+                    # Target Player is already in the server, update the player data
                     player_group = group_data
                     if not dry_run:
                         item['individual_character_handle_ids'] += instances
@@ -2095,10 +2096,9 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
             if str(group_data['value']['GroupType']['value']['value']) == "EPalGroupType::Guild":
                 item = group_data['value']['RawData']['value']
                 for old_gplayer in item['players']:
-                    if str(old_gplayer['player_uid']) == player_uid:
+                    if old_gplayer['player_uid'] == player_uid:
                         # Check group is exists
-                        player_group = MappingCache.GroupSaveDataMap[group_data['key']] if group_data[
-                                                                                               'key'] in MappingCache.GroupSaveDataMap else None
+                        player_group = MappingCache.GroupSaveDataMap.get(group_data['key'], None)
                         # Same Guild is not exists in target save
                         if player_group is None:
                             player_group = copy.deepcopy(group_data)
@@ -2119,58 +2119,24 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
                             bIsUpdateItem = False
                             n_item = player_group['value']['RawData']['value']
                             for n_player_info in n_item['players']:
-                                if str(n_player_info['player_uid']) == player_uid or \
-                                        n_player_info['player_uid'] == new_player_uid:
-                                    n_player_info['player_uid'] = new_player_uid
-                                    n_player_info['player_info'] = {
-                                        'last_online_real_time': 0,
-                                        'player_name':
-                                            userInstance['value']['RawData']['value']['object']['SaveParameter'][
-                                                'value']['NickName']['value']
-                                    }
-                                    bIsUpdateItem = True
+                                if n_player_info['player_uid'] == new_player_uid:
+                                    n_item['players'].remove(n_player_info)
                                     break
-                            if not bIsUpdateItem:
-                                n_item['players'].append({
-                                    'player_uid': new_player_uid,
-                                    'player_info': {
-                                        'last_online_real_time': 0,
-                                        'player_name':
-                                            userInstance['value']['RawData']['value']['object']['SaveParameter'][
-                                                'value']['NickName']['value']
-                                    }
-                                })
-                            n_item['individual_character_handle_ids'] = instances
-                        #
-                        # else:
-                        #     # Same Guild already has a group on local
-                        #     group_info = group_data['value']['RawData']['value']
-                        #     print(
-                        #         "\033[32mGuild \033[93m %s \033[0m exists\033[0m  Group ID \033[92m %s \033[0m   " % (
-                        #             group_info['guild_name'], group_info['group_id']))
-                        #     copy_user_params['value']['RawData']['value']['group_id'] = group_info['group_id']
-                        #     n_item = player_group['value']['RawData']['value']
-                        #     is_player_found = False
-                        #     for n_player_info in n_item['players']:
-                        #         if str(n_player_info['player_uid']) == new_player_uid:
-                        #             n_player_info['player_info'] = copy.deepcopy(n_player_info['player_info'])
-                        #             is_player_found = True
-                        #             break
-                        #     if not is_player_found:
-                        #         print("\033[32mAdd User to Guild\033[0m  \033[93m%s\033[0m" % (
-                        #             copy_user_params['value']['RawData']['value']['object']['SaveParameter']['value'][
-                        #                 'NickName']['value']))
-                        #         n_item['players'].append({
-                        #             'player_uid': toUUID(uuid.UUID(new_player_uid)),
-                        #             'player_info': {
-                        #                 'last_online_real_time': 0,
-                        #                 'player_name':
-                        #                     copy_user_params['value']['RawData']['value']['object']['SaveParameter'][
-                        #                         'value']['NickName']['value']
-                        #             }
-                        #         })
-                        #     n_item['individual_character_handle_ids'] = instances
+                            n_item['players'].append({
+                                'player_uid': new_player_uid,
+                                'player_info': {
+                                    'last_online_real_time': 0,
+                                    'player_name':
+                                        userInstance['value']['RawData']['value']['object']['SaveParameter'][
+                                            'value']['NickName']['value']
+                                }
+                            })
+                            n_item['individual_character_handle_ids'] += instances
                         break
+    LoadItemContainerMaps()
+    LoadCharacterSaveParameterMap()
+    LoadCharacterContainerMaps()
+    LoadGroupSaveDataMap()
     if not dry_run:
         with open(new_player_sav_file, "wb") as f:
             print("Saving new player sav %s" % (new_player_sav_file))
@@ -2180,10 +2146,6 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
                 save_type = 0x31
             sav_file = compress_gvas_to_sav(player_gvas_file.write(PALWORLD_CUSTOM_PROPERTIES), save_type)
             f.write(sav_file)
-    LoadItemContainerMaps()
-    LoadCharacterSaveParameterMap()
-    LoadCharacterContainerMaps()
-    LoadGroupSaveDataMap()
 
 
 def MoveToGuild(player_uid, group_id):
@@ -2192,7 +2154,7 @@ def MoveToGuild(player_uid, group_id):
     for group_data in wsd['GroupSaveDataMap']['value']:
         if str(group_data['value']['GroupType']['value']['value']) == "EPalGroupType::Guild":
             group_info = group_data['value']['RawData']['value']
-            if group_info['group_id'] == group_id:
+            if group_info['group_id'] == toUUID(group_id):
                 target_group = group_info
     if target_group is None:
         print("\033[31mError: cannot found target guild")
@@ -2204,8 +2166,7 @@ def MoveToGuild(player_uid, group_id):
 
     for item in wsd['CharacterSaveParameterMap']['value']:
         player = item['value']['RawData']['value']['object']['SaveParameter']['value']
-        if item['key']['PlayerUId']['value'] == player_uid and 'IsPlayer' in player and player['IsPlayer'][
-            'value']:
+        if item['key']['PlayerUId']['value'] == player_uid and 'IsPlayer' in player and player['IsPlayer']['value']:
             playerInstance = player
             instances.append({
                 'guid': item['key']['PlayerUId']['value'],
@@ -2234,7 +2195,7 @@ def MoveToGuild(player_uid, group_id):
             for g_player in delete_g_players:
                 group_info['players'].remove(g_player)
 
-            if len(group_info['players']) == 0:
+            if len(group_info['players']) == 0 and group_info['group_id'] != toUUID(group_id):
                 DeleteGuild(group_info['group_id'])
 
             remove_items = []
@@ -2837,23 +2798,19 @@ def ShowPlayers(data_source=None):
         try:
             print("PlayerUId \033[32m %s \033[0m [InstanceID %s %s \033[0m] -> Level %2d  %s" % (
                 playerUId,
-                "\033[33m" if str(playerUId) in guildInstanceMapping and
-                              str(playerMeta['InstanceId']) == guildInstanceMapping[
-                                  str(playerUId)] else "\033[31m", playerMeta['InstanceId'],
+                "\033[33m" if toUUID(playerUId) in guildInstanceMapping and
+                              playerMeta['InstanceId'] == guildInstanceMapping[toUUID(playerUId)] else "\033[31m", playerMeta['InstanceId'],
                 playerMeta['Level'] if 'Level' in playerMeta else -1, playerMeta['NickName']))
         except UnicodeEncodeError as e:
             print("Corrupted Player Name \033[31m %s \033[0m PlayerUId \033[32m %s \033[0m [InstanceID %s %s \033[0m]" %
-                  (repr(playerMeta['NickName']), playerUId, "\033[33m" if str(playerUId) in guildInstanceMapping and
-                                                                          str(playerMeta['InstanceId']) ==
-                                                                          guildInstanceMapping[
-                                                                              str(playerUId)] else "\033[31m",
-                   playerMeta['InstanceId']))
+                  (repr(playerMeta['NickName']), playerUId, "\033[33m" if toUUID(playerUId) in guildInstanceMapping and
+                                        playerMeta['InstanceId'] == guildInstanceMapping[toUUID(playerUId)] else "\033[31m",
+                                        playerMeta['InstanceId']))
         except KeyError:
             print("PlayerUId \033[32m %s \033[0m [InstanceID %s %s \033[0m] -> Level %2d" % (
                 playerUId,
-                "\033[33m" if str(playerUId) in guildInstanceMapping and
-                              str(playerMeta['InstanceId']) == guildInstanceMapping[
-                                  str(playerUId)] else "\033[31m", playerMeta['InstanceId'],
+                "\033[33m" if toUUID(playerUId) in guildInstanceMapping and
+                              playerMeta['InstanceId'] == guildInstanceMapping[toUUID(playerUId)] else "\033[31m", playerMeta['InstanceId'],
                 playerMeta['Level'] if 'Level' in playerMeta else -1))
 
 
@@ -2899,14 +2856,13 @@ def FixDuplicateUser(dry_run=False):
     for item in wsd['CharacterSaveParameterMap']['value']:
         if "00000000-0000-0000-0000-000000000000" != str(item['key']['PlayerUId']['value']):
             player_meta = item['value']['RawData']['value']['object']['SaveParameter']['value']
-            if str(item['key']['PlayerUId']['value']) not in guildInstanceMapping:
+            if item['key']['PlayerUId']['value'] not in guildInstanceMapping:
                 print(
                     "\033[31mInvalid player on CharacterSaveParameterMap\033[0m  PlayerUId: %s  InstanceID: %s  Nick: %s" % (
                         str(item['key']['PlayerUId']['value']), str(item['key']['InstanceId']['value']),
                         str(player_meta['NickName']['value'])))
                 removeItems.append(item)
-            elif str(item['key']['InstanceId']['value']) != guildInstanceMapping[
-                str(item['key']['PlayerUId']['value'])]:
+            elif item['key']['InstanceId']['value'] != guildInstanceMapping[item['key']['PlayerUId']['value']]:
                 print(
                     "\033[31mDuplicate player on CharacterSaveParameterMap\033[0m  PlayerUId: %s  InstanceID: %s  Nick: %s" % (
                         str(item['key']['PlayerUId']['value']), str(item['key']['InstanceId']['value']),
@@ -2940,15 +2896,17 @@ def TickToLocal(tick):
 
 
 def BindGuildInstanceId(uid, instance_id):
+    uid = toUUID(uid)
+    instance_id = toUUID(instance_id)
     for group_data in wsd['GroupSaveDataMap']['value']:
         if str(group_data['value']['GroupType']['value']['value']) == "EPalGroupType::Guild":
             item = group_data['value']['RawData']['value']
             for ind_char in item['individual_character_handle_ids']:
-                if str(ind_char['guid']) == uid:
+                if ind_char['guid'] == uid:
                     print("Update Guild %s binding guild UID %s  %s -> %s" % (
                         item['guild_name'], uid, ind_char['instance_id'], instance_id))
-                    ind_char['instance_id'] = toUUID(uuid.UUID(instance_id))
-                    guildInstanceMapping[str(ind_char['guid'])] = str(ind_char['instance_id'])
+                    ind_char['instance_id'] = instance_id
+                    guildInstanceMapping[ind_char['guid']] = ind_char['instance_id']
             print()
 
 
@@ -3065,7 +3023,7 @@ def ShowGuild():
                         TickToLocal(player['player_info']['last_online_real_time']),
                         TickToHuman(player['player_info']['last_online_real_time'])))
             for ind_char in mapObjectMeta['individual_character_handle_ids']:
-                guildInstanceMapping[str(ind_char['guid'])] = str(ind_char['instance_id'])
+                guildInstanceMapping[ind_char['guid']] = ind_char['instance_id']
             print()
         # elif str(group_data['value']['GroupType']['value']['value']) == "EPalGroupType::Neutral":
         #     item = group_data['value']['RawData']['value']

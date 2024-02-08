@@ -14,6 +14,16 @@ Changelog
     Note that they these tags will not actually close the issue/PR until they
     are merged into the "default" branch.
 
+v0.3.9
+-------
+
+Merge:
+- i18n for Pals (Edit Instance dropdown menu) Pull Request #9 by KrisCris
+
+Fix:
+
+- Copy Player group instances bug
+
 v0.3.8
 -------
 
