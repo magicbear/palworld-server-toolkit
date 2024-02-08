@@ -1213,6 +1213,7 @@ except NameError:
 
 class GUI():
     def __init__(self):
+        self.g_move_guild_owner = None
         global gui
         try:
             if tk is None:
@@ -1286,6 +1287,27 @@ class GUI():
                 OpenBackup(bk_f)
             self.change_datasource(None)
             self.load_guilds()
+        
+    def set_guild_owner(self):
+        src_uuid = self.parse_source_uuid()
+        if src_uuid is None:
+            return
+        target_guild_uuid = self.target_guild.get().split(" - ")[0]
+        try:
+            uuid.UUID(target_guild_uuid)
+        except Exception as e:
+            traceback.print_exception(e)
+            messagebox.showerror("Target Guild Error", "\n".join(traceback.format_exception(e)))
+            return None
+
+        try:
+            SetGuildOwner(target_guild_uuid, src_uuid)
+            messagebox.showinfo("Move Guild Success", "Move Guild Successed")
+        except Exception as e:
+            traceback.print_exception(e)
+            messagebox.showerror("Target Guild Error", "\n".join(traceback.format_exception(e)))
+            return None
+
 
     def copy_player(self):
         src_uuid, target_uuid = self.gui_parse_uuid()
@@ -1360,6 +1382,27 @@ class GUI():
         else:
             self.btn_migrate["state"] = "disabled"
         self.load_players()
+
+    def parse_source_uuid(self, checkExists=True, showmessage=True):
+        target_uuid = self.src_player.get().split(" - ")[0]
+        if len(target_uuid) == 8:
+            target_uuid += "-0000-0000-0000-000000000000"
+        try:
+            uuid.UUID(target_uuid)
+        except Exception as e:
+            if showmessage:
+                messagebox.showerror("Source Player Error", "UUID: \"%s\"\n%s" % (target_uuid, str(e)))
+            return None
+        if checkExists:
+            for player_uid in playerMapping:
+                if player_uid[0:8] == target_uuid[0:8]:
+                    target_uuid = player_uid
+                    break
+            if target_uuid not in playerMapping:
+                if showmessage:
+                    messagebox.showerror("Source Player Error", "Source Player Not exists")
+                return None
+        return target_uuid
 
     def parse_target_uuid(self, checkExists=True, showmessage=True):
         target_uuid = self.target_player.get().split(" - ")[0]
@@ -1575,6 +1618,9 @@ class GUI():
         tk.Label(master=f_src_player, text="Source Player", font=self.font).pack(side="left")
         self.src_player = AutocompleteCombobox(master=f_src_player, font=self.font, width=50)
         self.src_player.pack(side="left")
+        self.g_move_guild_owner = tk.Button(master=f_src_player, text="Set Guild Owner", font=self.font,
+                           command=self.set_guild_owner)
+        self.g_move_guild_owner.pack(side="left")
         #
         f_target_player = tk.Frame()
         tk.Label(master=f_target_player, text="Target Player", font=self.font).pack(side="left")
@@ -1755,6 +1801,21 @@ def toUUID(uuid_str):
     if isinstance(uuid_str, UUID):
         return uuid_str
     return UUID.from_str(str(uuid_str))
+
+
+def SetGuildOwner(group_id, new_player_uid):
+    new_player_uid = toUUID(new_player_uid)
+    if MappingCache.PlayerIdMapping is None:
+        LoadCharacterSaveParameterMap()
+    if new_player_uid not in MappingCache.PlayerIdMapping:
+        raise Exception("Error: target player not exists")
+    if MappingCache.GroupSaveDataMap is None:
+        LoadGroupSaveDataMap()
+    if toUUID(group_id) not in MappingCache.GroupSaveDataMap:
+        raise Exception("Error: Guild not exists")
+    MoveToGuild(new_player_uid, group_id)
+    MappingCache.GroupSaveDataMap[toUUID(group_id)]['value']['RawData']['value']['admin_player_uid'] = new_player_uid
+    return True
 
 
 def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
@@ -2025,6 +2086,7 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
 
 
 def MoveToGuild(player_uid, group_id):
+    player_uid = toUUID(player_uid)
     target_group = None
     for group_data in wsd['GroupSaveDataMap']['value']:
         if str(group_data['value']['GroupType']['value']['value']) == "EPalGroupType::Guild":
@@ -2041,7 +2103,7 @@ def MoveToGuild(player_uid, group_id):
 
     for item in wsd['CharacterSaveParameterMap']['value']:
         player = item['value']['RawData']['value']['object']['SaveParameter']['value']
-        if str(item['key']['PlayerUId']['value']) == player_uid and 'IsPlayer' in player and player['IsPlayer'][
+        if item['key']['PlayerUId']['value'] == player_uid and 'IsPlayer' in player and player['IsPlayer'][
             'value']:
             playerInstance = player
             instances.append({
@@ -2049,7 +2111,7 @@ def MoveToGuild(player_uid, group_id):
                 'instance_id': item['key']['InstanceId']['value']
             })
             remove_instance_ids.append(item['key']['InstanceId']['value'])
-        elif 'OwnerPlayerUId' in player and str(player['OwnerPlayerUId']['value']) == player_uid:
+        elif 'OwnerPlayerUId' in player and player['OwnerPlayerUId']['value'] == player_uid:
             instances.append({
                 'guid': toUUID(uuid.UUID("00000000-0000-0000-0000-000000000000")),
                 'instance_id': item['key']['InstanceId']['value']
@@ -2062,7 +2124,7 @@ def MoveToGuild(player_uid, group_id):
             group_info = group_data['value']['RawData']['value']
             delete_g_players = []
             for g_player in group_info['players']:
-                if str(g_player['player_uid']) == player_uid:
+                if g_player['player_uid'] == player_uid:
                     delete_g_players.append(g_player)
                     print(
                         "\033[31mDelete player \033[93m %s \033[31m on guild \033[93m %s \033[0m [\033[92m %s \033[0m] " % (
@@ -2086,7 +2148,7 @@ def MoveToGuild(player_uid, group_id):
 
     print("\033[32mAppend character and players to guild\033[0m")
     target_group['players'].append({
-        'player_uid': toUUID(uuid.UUID(player_uid)),
+        'player_uid': player_uid,
         'player_info': {
             'last_online_real_time': 0,
             'player_name':
