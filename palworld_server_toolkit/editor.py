@@ -565,6 +565,7 @@ try:
     class ParamEditor(tk.Toplevel):
         def __init__(self):
             super().__init__(master=gui.gui)
+            self.var_options = None
             self.gui = self
             self.parent = self
             #
@@ -757,6 +758,13 @@ try:
                                     attrib_var[attribute_key].get()))
                         except UnicodeEncodeError:
                             pass
+                        if self.var_options is not None and attribute_key in self.var_options:
+                            try:
+                                index = list(self.var_options[attribute_key].values()).index(attrib_var[attribute_key].get())
+                                attrib_var[attribute_key].set(list(self.var_options[attribute_key].keys())[index])
+                                print("Assign Attrib ", list(self.var_options[attribute_key].keys())[index])
+                            except ValueError:
+                                pass
                         storage_object[storage_key] = attrib_var[attribute_key].get()
                     elif attrib['type'] == "EnumProperty":
                         print(
@@ -947,11 +955,16 @@ try:
                 attrib_var[key] = self.make_attrib_var(tables, attrib)
                 if attrib_var[key] is not None:
                     self.assign_attrib_var(attrib_var[key], attrib)
-                    values.append(attrib_var[key].get())
+                    if self.var_options is not None and key in self.var_options\
+                            and attrib_var[key].get() in self.var_options[key]:
+                        values.append(self.var_options[key][attrib_var[key].get()])
+                    else:
+                        values.append(attrib_var[key].get())
             tables.insert(parent='', index='end', iid=idx, text='',
                           values=values)
     
-        def build_array_gui(self, master, columns, attrib_var):
+        def build_array_gui(self, master, columns, attrib_var, var_options=None):
+            self.var_options = var_options
             popup_set = type('', (), {})()
             popup_set.entryPopup = None
             y_scroll = tk.Scrollbar(master)
@@ -991,7 +1004,8 @@ try:
     
     
     class PlayerItemEdit(ParamEditor):
-        def __init__(self, player_uid):
+        def __init__(self, player_uid, i18n='en-US'):
+            self.i18n = i18n
             self.item_containers = {}
             self.item_container_vars = {}
     
@@ -1014,6 +1028,8 @@ try:
             threading.Thread(target=self.load, args=[tabs, player_gvas]).start()
     
         def load(self, tabs, player_gvas):
+            with open(module_dir+"/resources/item_%s.json" % self.i18n, "r") as f:
+                item_list = json.load(f)
             if MappingCache.ItemContainerSaveData is None:
                 LoadItemContainerMaps()
     
@@ -1033,7 +1049,8 @@ try:
                         'StackCount': item['StackCount']
                     } for item in item_container['value']['Slots']['value']['values']]
                     tables = self.build_array_gui(tab, ("SlotIndex", "ItemId", "StackCount"),
-                                                  self.item_container_vars[idx_key[:-11]])
+                                                  self.item_container_vars[idx_key[:-11]],
+                                                  {"ItemId": item_list})
                     for idx, item in enumerate(self.item_containers[idx_key[:-11]]):
                         self.item_container_vars[idx_key[:-11]].append({})
                         self.build_array_gui_item(tables, idx, self.item_container_vars[idx_key[:-11]][idx], item)
@@ -1215,6 +1232,7 @@ except NameError:
     
 class GUI():
     def __init__(self):
+        self.language = None
         self.g_move_guild_owner = None
         global gui
         try:
@@ -1226,6 +1244,7 @@ class GUI():
         if gui is not None:
             gui.gui.destroy()
         gui = self
+        self.i18n = {}
         self.gui = None
         self.src_player = None
         self.target_player = None
@@ -1522,7 +1541,7 @@ class GUI():
         target_uuid = self.parse_target_uuid()
         if target_uuid is None:
             return
-        PlayerItemEdit(target_uuid)
+        PlayerItemEdit(target_uuid, self.language)
 
     def edit_player_save(self):
         target_uuid = self.parse_target_uuid()
@@ -1606,76 +1625,106 @@ class GUI():
         self.font = tk.font.Font(family="Courier New")
         self.gui.option_add('*TCombobox*Listbox.font', self.font)
         # window.resizable(False, False)
+        with open(module_dir+"/resources/gui.json", "r") as f:
+            i18n_list = json.load(f)
+        f_i18n = tk.Frame()
+        tk.Label(master=f_i18n, text="Language", font=self.font).pack(side="left")
+        b_i18n = ttk.Combobox(master=f_i18n, font=self.font, width=20, values=list(i18n_list.values()),
+                                        state="readonly")
+        b_i18n.pack(side="left")
+        b_i18n.current(0)
+        b_i18n.bind("<<ComboboxSelected>>", lambda evt: self.set_i18n(list(i18n_list.keys())[b_i18n.current()]))
+        
         f_src = tk.Frame()
-        tk.Label(master=f_src, text="Source Player Data Source", font=self.font).pack(side="left")
+        self.i18n['data_source'] = tk.Label(master=f_src, text="Source Player Data Source", font=self.font)
+        self.i18n['data_source'].pack(side="left")
         self.data_source = ttk.Combobox(master=f_src, font=self.font, width=20, values=['Main File', 'Backup File'],
                                         state="readonly")
+        self.i18n['data_source_list'] = self.data_source
         self.data_source.pack(side="left")
         self.data_source.current(0)
         self.data_source.bind("<<ComboboxSelected>>", self.change_datasource)
         g_open_file = tk.Button(master=f_src, font=self.font, text="Open File", command=self.open_file)
+        self.i18n['open_file'] = g_open_file
         g_open_file.pack(side="left")
         #
         f_src_player = tk.Frame()
-        tk.Label(master=f_src_player, text="Source Player", font=self.font).pack(side="left")
+        self.i18n['src_player'] = tk.Label(master=f_src_player, text="Source Player", font=self.font)
+        self.i18n['src_player'].pack(side="left")
         self.src_player = AutocompleteCombobox(master=f_src_player, font=self.font, width=50)
         self.src_player.pack(side="left")
         self.g_move_guild_owner = tk.Button(master=f_src_player, text="Set Guild Owner", font=self.font,
                            command=self.set_guild_owner)
+        self.i18n['set_guild_owner'] = self.g_move_guild_owner
         self.g_move_guild_owner.pack(side="left")
         #
         f_target_player = tk.Frame()
-        tk.Label(master=f_target_player, text="Target Player", font=self.font).pack(side="left")
+        self.i18n['target_player'] = tk.Label(master=f_target_player, text="Target Player", font=self.font)
+        self.i18n['target_player'].pack(side="left")
         self.target_player = AutocompleteCombobox(master=f_target_player, font=self.font, width=50)
         self.target_player.pack(side="left")
         self.target_player.bind("<<ComboboxSelected>>", self.select_target_player)
 
         f_target_guild = tk.Frame()
-        tk.Label(master=f_target_guild, text="Target Guild", font=self.font).pack(side="left")
+        self.i18n['target_guild'] = tk.Label(master=f_target_guild, text="Target Guild", font=self.font)
+        self.i18n['target_guild'].pack(side="left")
         self.target_guild = AutocompleteCombobox(master=f_target_guild, font=self.font, width=80)
         self.target_guild.pack(side="left", fill=tk.constants.X)
         self.target_guild.bind("<<ComboboxSelected>>", self.select_guild)
 
         f_target_guildbase = tk.Frame()
-        tk.Label(master=f_target_guildbase, text="Target Base ⛺️", font=self.font).pack(side="left")
+        self.i18n['target_base'] = tk.Label(master=f_target_guildbase, text="Target Base", font=self.font)
+        self.i18n['target_base'].pack(side="left")
         self.target_base = AutocompleteCombobox(master=f_target_guildbase, font=self.font, width=50)
         self.target_base.pack(side="left")
-        g_delete_base = tk.Button(master=f_target_guildbase, text="Delete Base Camp ⛺️", font=self.font,
+        self.i18n['delete_base'] = g_delete_base = tk.Button(master=f_target_guildbase, text="Delete Base Camp", font=self.font,
                                   command=self.delete_base)
         g_delete_base.pack(side="left")
         #
         f_target_instance = tk.Frame()
-        tk.Label(master=f_target_instance, text="Target Instance", font=self.font).pack(side="left")
+        self.i18n['target_instance'] = tk.Label(master=f_target_instance, text="Target Instance", font=self.font)
+        self.i18n['target_instance'].pack(side="left")
         self.target_instance = AutocompleteCombobox(master=f_target_instance, font=self.font, width=60)
         self.target_instance.pack(side="left")
-        g_btn_edit_instance = tk.Button(master=f_target_instance, text="Edit", font=self.font,
-                                        command=self.edit_instance).pack(side="left")
+        self.i18n['edit_instance'] = tk.Button(master=f_target_instance, text="Edit", font=self.font,
+                                        command=self.edit_instance)
+        self.i18n['edit_instance'].pack(side="left")
 
         g_multi_button_frame = tk.Frame()
         self.btn_migrate = tk.Button(master=g_multi_button_frame, text="⬆️ Migrate Player ⬇️", font=self.font,
                                      command=self.migrate)
+        self.i18n['migrate_player'] = self.btn_migrate
         self.btn_migrate.pack(side="left")
         g_copy = tk.Button(master=g_multi_button_frame, text="⬆️ Copy Player ⬇️", font=self.font,
                            command=self.copy_player)
+        self.i18n['copy_player'] = g_copy
         g_copy.pack(side="left")
 
         #
         # g_target_player_frame = tk.Frame(borderwidth=1, relief=tk.constants.GROOVE, pady=5)
         g_button_frame = tk.Frame(borderwidth=1, relief=tk.constants.GROOVE, pady=5)
-        tk.Label(master=g_button_frame, text="Operate for Target Player", font=self.font).pack(fill="x", side="top")
+        self.i18n['op_for_target'] = tk.Label(master=g_button_frame, text="Operate for Target Player", font=self.font)
+        self.i18n['op_for_target'].pack(fill="x", side="top")
         g_move = tk.Button(master=g_button_frame, text="Move To Guild", font=self.font, command=self.move_guild)
+        self.i18n['move_to_guild'] = g_move
         g_move.pack(side="left")
         g_rename = tk.Button(master=g_button_frame, text="Rename", font=self.font, command=self.rename_player)
+        self.i18n['rename_player'] = g_rename
         g_rename.pack(side="left")
         g_delete = tk.Button(master=g_button_frame, text="Delete", font=self.font, command=self.delete_player)
+        self.i18n['delete_player'] = g_delete
         g_delete.pack(side="left")
         g_edit = tk.Button(master=g_button_frame, text="Edit", font=self.font, command=self.edit_player)
+        self.i18n['edit_player'] = g_edit
         g_edit.pack(side="left")
         g_edit_item = tk.Button(master=g_button_frame, text="Edit Item", font=self.font, command=self.edit_player_item)
+        self.i18n['edit_item'] = g_edit_item
         g_edit_item.pack(side="left")
         g_edit_save = tk.Button(master=g_button_frame, text="Edit Save", font=self.font, command=self.edit_player_save)
+        self.i18n['edit_save'] = g_edit_save
         g_edit_save.pack(side="left")
 
+        f_i18n.pack(anchor=tk.constants.W)
         f_src.pack(anchor=tk.constants.W)
         f_src_player.pack(anchor=tk.constants.W)
         g_multi_button_frame.pack()
@@ -1686,10 +1735,12 @@ class GUI():
         f_target_instance.pack(anchor=tk.constants.W)
 
         g_pal = tk.Button(master=g_button_frame, text="Pal Edit", font=self.font, command=self.pal_edit)
+        self.i18n['edit_pal'] = g_pal
         g_pal.pack(side="left")
         g_button_frame.pack()
 
         g_save = tk.Button(text="Save & Exit", font=self.font, command=self.save)
+        self.i18n['save'] = g_save
         g_save.pack()
 
         self.progressbar = ttk.Progressbar()
@@ -1697,6 +1748,18 @@ class GUI():
 
         self.load_players()
         self.load_guilds()
+        self.set_i18n(list(i18n_list.keys())[0])
+    
+    def set_i18n(self, lang):
+        self.language = lang
+        with open("%s/resources/gui_%s.json" % (module_dir, lang)) as f:
+            lang_data = json.load(f)
+        for item in self.i18n:
+            if item in lang_data:
+                if isinstance(self.i18n[item], ttk.Combobox):
+                    self.i18n[item]['values'] = lang_data[item]
+                else:
+                    self.i18n[item].config(text=lang_data[item])
 
 
 def DumpSavDecompressData(filename):
