@@ -531,6 +531,101 @@ def main():
         Save()
 
 try:
+    class AutocompleteCombobox(ttk.Combobox):
+        def __init__(self, **kwargs):
+            super().__init__(**kwargs)
+            self._hits = None
+            self._hit_index = None
+            self._completion_list = None
+            self.position = None
+            if kwargs.get('values'):
+                self.set_completion_list(kwargs.get('values'))
+    
+        def __setitem__(self, key, value):
+            if key == 'value':
+                self.set_completion_list(value)
+            return super().__setitem__(key, value)
+    
+        def set_completion_list(self, completion_list):
+            """Use our completion list as our drop down selection menu, arrows move through menu."""
+            self._completion_list = sorted(filter(lambda x: x is not None, completion_list), key=str.lower)  # Work with a sorted list
+            self._hits = []
+            self._hit_index = 0
+            self.position = 0
+            self.bind('<KeyRelease>', self.handle_keyrelease)
+            # self['values'] = self._completion_list  # Setup our popup menu
+    
+        def autocomplete(self, delta=0):
+            """autocomplete the Combobox, delta may be 0/1/-1 to cycle through possible hits"""
+            if delta:  # need to delete selection otherwise we would fix the current position
+                self.delete(self.position, tk.constants.END)
+            else:  # set position to end so selection starts where textentry ended
+                self.position = len(self.get())
+            # collect hits
+            _hits = []
+            for element in self['values']:
+                if element.lower().startswith(self.get().lower()):  # Match case insensitively
+                    _hits.append(element)
+            # if we have a new hit list, keep this in mind
+            if _hits != self._hits:
+                self._hit_index = 0
+                self._hits = _hits
+            # only allow cycling if we are in a known hit list
+            if _hits == self._hits and self._hits:
+                self._hit_index = (self._hit_index + delta) % len(self._hits)
+            # now finally perform the auto completion
+            if self._hits:
+                self.delete(0, tk.constants.END)
+                self.insert(0, self._hits[self._hit_index])
+                self.select_range(self.position, tk.constants.END)
+    
+        def handle_keyrelease(self, event):
+            """event handler for the keyrelease event on this widget"""
+            # if event.keysym == "BackSpace":
+            #     self.delete(self.index(tk.constants.INSERT), tk.constants.END)
+            #     self.position = self.index(tk.constants.END)
+            # if event.keysym == "Left":
+            #     if self.position < self.index(tk.constants.END): # delete the selection
+            #         self.delete(self.position, tk.constants.END)
+            #     else:
+            #         self.position = self.position-1 # delete one character
+            #         self.delete(self.position, tk.constants.END)
+            # if event.keysym == "Right":
+            #     self.position = self.index(tk.constants.END) # go to end (no selection)
+            if len(event.keysym) == 1 and event.keysym in ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c',
+                                                           'd', 'e', 'f']:
+                self.autocomplete()
+            # No need for up/down, we'll jump to the popup
+            # list at the position of the autocompletion
+    
+    class AutocompleteComboBoxPopup(AutocompleteCombobox):
+        def __init__(self, parent, iid, column, **kw):
+            ''' If relwidth is set, then width is ignored '''
+            super().__init__(master=parent, **kw)
+            self._textvariable = kw['textvariable']
+            self.tv = parent
+            self.iid = iid
+            self.column = column
+            self['exportselection'] = False
+            self.focus_force()
+            self.bind("<Return>", self.on_return)
+            self.bind("<Control-a>", self.select_all)
+            self.bind("<Escape>", lambda *ignore: self.destroy())
+    
+        def destroy(self) -> None:
+            super().destroy()
+            self.tv.set(self.iid, column=self.column, value=self._textvariable.get())
+    
+        def on_return(self, event):
+            self.tv.item(self.iid, text=self.get())
+            self.destroy()
+    
+        def select_all(self, *ignore):
+            ''' Set selection on the whole text '''
+            self.selection_range(0, 'end')
+            # returns 'break' to interrupt default key-bindings
+            return 'break'
+
     class EntryPopup(tk.Entry):
         def __init__(self, parent, iid, column, **kw):
             ''' If relwidth is set, then width is ignored '''
@@ -539,11 +634,6 @@ try:
             self.tv = parent
             self.iid = iid
             self.column = column
-            global cc
-            cc = self
-            # self['state'] = 'readonly'
-            # self['readonlybackground'] = 'white'
-            # self['selectbackground'] = '#1BA1E2'
             self['exportselection'] = False
             self.focus_force()
             self.bind("<Return>", self.on_return)
@@ -572,9 +662,10 @@ try:
             self.gui = self
             self.parent = self
             #
-            self.font = tk.font.Font(family="Courier New")
+            # tk.font.Font(family=
+            self.font = ("Courier New", 12)
             ttk.Style().configure("custom.TButton",
-                              font=(self.font, 12))
+                              font=self.font)
         
         def build_subgui(self, g_frame, attribute_key, attrib_var, attrib):
             sub_frame = ttk.Frame(master=g_frame, borderwidth=1, relief=tk.constants.GROOVE, padding=2)
@@ -767,7 +858,6 @@ try:
                             try:
                                 index = list(self.var_options[attribute_key].values()).index(attrib_var[attribute_key].get())
                                 attrib_var[attribute_key].set(list(self.var_options[attribute_key].keys())[index])
-                                print("Assign Attrib ", list(self.var_options[attribute_key].keys())[index])
                             except ValueError:
                                 pass
                         storage_object[storage_key] = attrib_var[attribute_key].get()
@@ -934,7 +1024,7 @@ try:
                     }}, with_labelframe=False)
     
         @staticmethod
-        def on_table_gui_dblclk(event, popup_set, columns, attrib_var):
+        def on_table_gui_dblclk(event, popup_set, columns, attrib_var, var_options):
             """ Executed, when a row is double-clicked. Opens
             read-only EntryPopup above the item's column, so it is possible
             to select text """
@@ -950,7 +1040,12 @@ try:
             # y-axis offset
             # pady = height // 2
             pady = height // 2
-            popup_set.entryPopup = EntryPopup(event.widget, rowid, column, textvariable=attrib_var[int(rowid)][col_name])
+            # AutocompleteComboBoxPopup
+            if var_options is not None and col_name in var_options:
+                popup_set.entryPopup = AutocompleteComboBoxPopup(event.widget, rowid, column,
+                    values=list(filter(lambda x: x is not None, var_options[col_name].values())), textvariable=attrib_var[int(rowid)][col_name])
+            else:
+                popup_set.entryPopup = EntryPopup(event.widget, rowid, column, textvariable=attrib_var[int(rowid)][col_name])
             popup_set.entryPopup.place(x=x, y=y + pady, anchor=tk.constants.W, width=width)
     
         def build_array_gui_item(self, tables, idx, attrib_var, attrib_list):
@@ -962,9 +1057,8 @@ try:
                     self.assign_attrib_var(attrib_var[key], attrib)
                     if self.var_options is not None and key in self.var_options\
                             and attrib_var[key].get() in self.var_options[key]:
-                        values.append(self.var_options[key][attrib_var[key].get()])
-                    else:
-                        values.append(attrib_var[key].get())
+                        attrib_var[key].set(self.var_options[key][attrib_var[key].get()])
+                values.append(attrib_var[key].get())
             tables.insert(parent='', index='end', iid=idx, text='',
                           values=values)
     
@@ -989,7 +1083,7 @@ try:
             tables.heading("#0", text="", anchor=tk.constants.CENTER)
             for col in columns:
                 tables.heading(col, text=col, anchor=tk.constants.CENTER)
-            tables.bind("<Double-1>", lambda event: self.on_table_gui_dblclk(event, popup_set, columns, attrib_var))
+            tables.bind("<Double-1>", lambda event: self.on_table_gui_dblclk(event, popup_set, columns, attrib_var, var_options))
             return tables
     
     
@@ -1037,28 +1131,32 @@ try:
                 item_list = json.load(f)
             if MappingCache.ItemContainerSaveData is None:
                 LoadItemContainerMaps()
-    
+            
+            frame_index = {}
             for idx_key in ['CommonContainerId', 'DropSlotContainerId', 'EssentialContainerId', 'FoodEquipContainerId',
                             'PlayerEquipArmorContainerId', 'WeaponLoadOutContainerId']:
-                if player_gvas['inventoryInfo']['value'][idx_key]['value']['ID'][
-                    'value'] in MappingCache.ItemContainerSaveData:
+                if player_gvas['inventoryInfo']['value'][idx_key]['value']['ID']['value'] \
+                        in MappingCache.ItemContainerSaveData:
                     tab = tk.Frame(tabs)
                     tabs.add(tab, text=idx_key[:-11])
-                    self.item_container_vars[idx_key[:-11]] = []
-                    item_container = parse_item(
-                        MappingCache.ItemContainerSaveData[player_gvas['inventoryInfo']['value'][idx_key]['value']['ID'][
-                            'value']], "ItemContainerSaveData")
-                    self.item_containers[idx_key[:-11]] = [{
-                        'SlotIndex': item['SlotIndex'],
-                        'ItemId': item['ItemId']['value']['StaticId'],
-                        'StackCount': item['StackCount']
-                    } for item in item_container['value']['Slots']['value']['values']]
-                    tables = self.build_array_gui(tab, ("SlotIndex", "ItemId", "StackCount"),
-                                                  self.item_container_vars[idx_key[:-11]],
-                                                  {"ItemId": item_list})
-                    for idx, item in enumerate(self.item_containers[idx_key[:-11]]):
-                        self.item_container_vars[idx_key[:-11]].append({})
-                        self.build_array_gui_item(tables, idx, self.item_container_vars[idx_key[:-11]][idx], item)
+                    frame_index[idx_key] = tab
+            for idx_key in frame_index:
+                tab = frame_index[idx_key]
+                self.item_container_vars[idx_key[:-11]] = []
+                item_container = parse_item(
+                    MappingCache.ItemContainerSaveData[player_gvas['inventoryInfo']['value'][idx_key]['value']['ID'][
+                        'value']], "ItemContainerSaveData")
+                self.item_containers[idx_key[:-11]] = [{
+                    'SlotIndex': item['SlotIndex'],
+                    'ItemId': item['ItemId']['value']['StaticId'],
+                    'StackCount': item['StackCount']
+                } for item in item_container['value']['Slots']['value']['values']]
+                tables = self.build_array_gui(tab, ("SlotIndex", "ItemId", "StackCount"),
+                                              self.item_container_vars[idx_key[:-11]],
+                                              {"ItemId": item_list})
+                for idx, item in enumerate(self.item_containers[idx_key[:-11]]):
+                    self.item_container_vars[idx_key[:-11]].append({})
+                    self.build_array_gui_item(tables, idx, self.item_container_vars[idx_key[:-11]][idx], item)
             self.geometry("640x800")
     
         def savedata(self):
@@ -1126,7 +1224,6 @@ try:
                 self.destroy()
                 return
             self.group_data = groupMapping[group_id]['value']['RawData']
-            print(self.group_data)
             self.gui.title("Guild Edit - %s" % group_id)
             self.gui_attribute = {}
             self.build_variable_gui(self.gui, self.gui_attribute, self.group_data)
@@ -1139,72 +1236,6 @@ try:
     
     # g = GuildEditGUI("5cbf2999-92db-40e7-be6d-f96faf810453")
     
-    class AutocompleteCombobox(ttk.Combobox):
-        def __init__(self, **kwargs):
-            super().__init__(**kwargs)
-            self._hits = None
-            self._hit_index = None
-            self._completion_list = None
-            self.position = None
-            if kwargs.get('values'):
-                self.set_completion_list(kwargs.get('values'))
-    
-        def __setitem__(self, key, value):
-            if key == 'value':
-                self.set_completion_list(value)
-            return super().__setitem__(key, value)
-    
-        def set_completion_list(self, completion_list):
-            """Use our completion list as our drop down selection menu, arrows move through menu."""
-            self._completion_list = sorted(completion_list, key=str.lower)  # Work with a sorted list
-            self._hits = []
-            self._hit_index = 0
-            self.position = 0
-            self.bind('<KeyRelease>', self.handle_keyrelease)
-            # self['values'] = self._completion_list  # Setup our popup menu
-    
-        def autocomplete(self, delta=0):
-            """autocomplete the Combobox, delta may be 0/1/-1 to cycle through possible hits"""
-            if delta:  # need to delete selection otherwise we would fix the current position
-                self.delete(self.position, tk.constants.END)
-            else:  # set position to end so selection starts where textentry ended
-                self.position = len(self.get())
-            # collect hits
-            _hits = []
-            for element in self['values']:
-                if element.lower().startswith(self.get().lower()):  # Match case insensitively
-                    _hits.append(element)
-            # if we have a new hit list, keep this in mind
-            if _hits != self._hits:
-                self._hit_index = 0
-                self._hits = _hits
-            # only allow cycling if we are in a known hit list
-            if _hits == self._hits and self._hits:
-                self._hit_index = (self._hit_index + delta) % len(self._hits)
-            # now finally perform the auto completion
-            if self._hits:
-                self.delete(0, tk.constants.END)
-                self.insert(0, self._hits[self._hit_index])
-                self.select_range(self.position, tk.constants.END)
-    
-        def handle_keyrelease(self, event):
-            """event handler for the keyrelease event on this widget"""
-            # if event.keysym == "BackSpace":
-            #     self.delete(self.index(tk.constants.INSERT), tk.constants.END)
-            #     self.position = self.index(tk.constants.END)
-            # if event.keysym == "Left":
-            #     if self.position < self.index(tk.constants.END): # delete the selection
-            #         self.delete(self.position, tk.constants.END)
-            #     else:
-            #         self.position = self.position-1 # delete one character
-            #         self.delete(self.position, tk.constants.END)
-            # if event.keysym == "Right":
-            #     self.position = self.index(tk.constants.END) # go to end (no selection)
-            if len(event.keysym) == 1 and event.keysym in ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c',
-                                                           'd', 'e', 'f']:
-                self.autocomplete()
-            # No need for up/down, we'll jump to the popup
-            # list at the position of the autocompletion
 except NameError:
     pass
 
