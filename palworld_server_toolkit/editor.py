@@ -574,7 +574,7 @@ try:
             #
             self.font = tk.font.Font(family="Courier New")
             ttk.Style().configure("custom.TButton",
-                              font=self.font)
+                              font=(self.font, 12))
         
         def build_subgui(self, g_frame, attribute_key, attrib_var, attrib):
             sub_frame = ttk.Frame(master=g_frame, borderwidth=1, relief=tk.constants.GROOVE, padding=2)
@@ -1643,14 +1643,14 @@ class GUI():
         for font in font_list:
             if font in tkinter.font.families():
                 self.font = tk.font.Font(family=font)
+                ttk.Style().configure("custom.TButton",
+                              font=(font, 12))
                 break
         for font in mono_font_list:
             if font in tkinter.font.families():
                 self.mono_font = tk.font.Font(family=font)
                 break
                 
-        ttk.Style().configure("custom.TButton",
-                              font=self.font)
         self.gui.option_add('*TCombobox*Listbox.font', self.mono_font)
         # window.resizable(False, False)
         with open(module_dir+"/resources/gui.json", "r", encoding='utf-8') as f:
