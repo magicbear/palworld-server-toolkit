@@ -19,6 +19,7 @@ v0.3.9
 
 Merge:
 - i18n for Pals (Edit Instance dropdown menu) Pull Request #9 by KrisCris
+- BatchDeleteUnreferencedItemContainers by Kakoen
 
 Fix:
 

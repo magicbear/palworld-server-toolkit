@@ -1762,10 +1762,19 @@ class GUI():
         f_target_guildbase.pack(anchor=tk.constants.W)
         f_target_instance.pack(anchor=tk.constants.W)
 
-        g_pal = ttk.Button(master=g_button_frame, text="Pal Edit", style="custom.TButton", command=self.pal_edit)
+        g_wholefile = tk.Frame(borderwidth=1, relief=tk.constants.GROOVE, pady=5)
+        self.i18n['op_for_all'] = tk.Label(master=g_wholefile, text="Operate for All", font=self.font)
+        self.i18n['op_for_all'].pack(fill="x", side="top")
+        g_del_unref_item = ttk.Button(master=g_wholefile, text="Delete Unref Item", style="custom.TButton",
+                            command=lambda: BatchDeleteUnreferencedItemContainers())
+        self.i18n['del_unreference_item'] = g_del_unref_item
+        g_del_unref_item.pack(side="left")
+
+        g_pal = ttk.Button(master=g_wholefile, text="Pal Edit", style="custom.TButton", command=self.pal_edit)
         self.i18n['edit_pal'] = g_pal
         g_pal.pack(side="left")
-        g_button_frame.pack()
+        g_wholefile.pack(fill=tk.X)
+
 
         g_save = ttk.Button(text="Save & Exit", style="custom.TButton", command=self.save)
         self.i18n['save'] = g_save
@@ -2516,9 +2525,41 @@ def FindReferenceItemContainerIds():
         characterData = character['value']['RawData']['value']['object']['SaveParameter']['value']
         if 'EquipItemContainerId' in characterData:
             reference_ids.append(characterData['EquipItemContainerId']['value']['ID']['value'])
-
+            
+    for baseCamp in wsd['BaseCampSaveData']['value']:
+        reference_ids.append(baseCamp['value']['WorkerDirector']['value']['RawData']['value']['container_id'])
+    
     return reference_ids
 
+def GetReferencedItemContainerIdsByPlayer(player_uid):
+    err, player_gvas, player_sav_file, player_gvas_file = GetPlayerGvas(player_uid)
+    if err:
+        print("\033[33mWarning: Player Sav file Not exists: %s\033[0m" % player_sav_file)
+        return
+    player_container_ids = []
+    for key in ['OtomoCharacterContainerId', 'PalStorageContainerId']:
+        player_container_ids.append(player_gvas[key]['value']['ID']['value'])
+
+    for key in ['CommonContainerId', 'DropSlotContainerId', 'EssentialContainerId', 'FoodEquipContainerId',
+                'PlayerEquipArmorContainerId', 'WeaponLoadOutContainerId']:
+        player_container_ids.append(player_gvas['inventoryInfo']['value'][key]['value']['ID']['value'])
+    return player_container_ids
+
+
+def FindAllUnreferencedItemContainerIds():
+    LoadItemContainerMaps()
+    referencedContainerIds = set(FindReferenceItemContainerIds())
+    allContainerIds = set(MappingCache.ItemContainerSaveData.keys())
+    for playerId in playerMapping:
+        referencedContainerIds.update(GetReferencedItemContainerIdsByPlayer(playerId))
+
+    return list(allContainerIds - referencedContainerIds)
+
+
+def BatchDeleteUnreferencedItemContainers():
+    unreferencedContainerIds = FindAllUnreferencedItemContainerIds()
+    print(f"Delete Non-Referenced Item Containers: {len(unreferencedContainerIds)}")
+    BatchDeleteItemContainer(unreferencedContainerIds)
 
 def BatchDeleteItemContainer(itemContainerIds):
     LoadItemContainerMaps()
@@ -2532,6 +2573,8 @@ def BatchDeleteItemContainer(itemContainerIds):
             continue
 
         deleteItemContainerIds.append(itemContainerId)
+        if len(deleteItemContainerIds) % 10000 == 0:
+            print(f"Deleting Item Containers: {len(deleteItemContainerIds)} / {len(itemContainerIds)}")
         container = parse_item(MappingCache.ItemContainerSaveData[itemContainerId], "ItemContainerSaveData")
         containerSlots = container['value']['Slots']['value']['values']
         for slotItem in containerSlots:
