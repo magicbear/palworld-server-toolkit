@@ -1757,7 +1757,9 @@ class GUI():
         for item in self.i18n:
             if item in lang_data:
                 if isinstance(self.i18n[item], ttk.Combobox):
+                    index = self.i18n[item].current()
                     self.i18n[item]['values'] = lang_data[item]
+                    self.i18n[item].current(index)
                 else:
                     self.i18n[item].config(text=lang_data[item])
 
