@@ -1650,6 +1650,8 @@ class GUI():
                 return 'Player:%s' % repr(saveParameter['NickName']['value'])
             except UnicodeEncodeError:
                 return 'Player:%s' % repr(saveParameter['NickName']['value'])
+            except KeyError:
+                return 'Invalid Player'
         else:
             try:
                 return 'Pal:%s' % self.getPalTranslatedName(saveParameter)
