@@ -1117,31 +1117,6 @@ try:
     
     # g = GuildEditGUI("5cbf2999-92db-40e7-be6d-f96faf810453")
     
-    class PalEditGUI(PalEdit):
-        def createWindow(self):
-            root = tk.Toplevel()
-            root.title(f"PalEdit v{PalEditConfig.version}")
-            return root
-    
-        def load(self, file=None):
-            self.data = {
-                'gvas_file': gvas_file,
-                'properties': gvas_file.properties
-            }
-            paldata = self.data['properties']['worldSaveData']['value']['CharacterSaveParameterMap']['value']
-            self.palguidmanager = PalInfo.PalGuid(self.data)
-            self.loadpal(paldata)
-    
-        def build_menu(self):
-            self.menu = tk.Menu(self.gui)
-            tools = self.menu
-            self.gui.config(menu=tools)
-            toolmenu = tk.Menu(tools, tearoff=0)
-            toolmenu.add_command(label="Debug", command=self.toggleDebug)
-            toolmenu.add_command(label="Generate GUID", command=self.generateguid)
-            tools.add_cascade(label="Tools", menu=toolmenu, underline=0)
-    
-    
     class AutocompleteCombobox(ttk.Combobox):
         def __init__(self, **kwargs):
             super().__init__(**kwargs)
@@ -1211,6 +1186,33 @@ try:
 except NameError:
     pass
 
+try:
+    class PalEditGUI(PalEdit):
+        def createWindow(self):
+            root = tk.Toplevel()
+            root.title(f"PalEdit v{PalEditConfig.version}")
+            return root
+
+        def load(self, file=None):
+            self.data = {
+                'gvas_file': gvas_file,
+                'properties': gvas_file.properties
+            }
+            paldata = self.data['properties']['worldSaveData']['value']['CharacterSaveParameterMap']['value']
+            self.palguidmanager = PalInfo.PalGuid(self.data)
+            self.loadpal(paldata)
+
+        def build_menu(self):
+            self.menu = tk.Menu(self.gui)
+            tools = self.menu
+            self.gui.config(menu=tools)
+            toolmenu = tk.Menu(tools, tearoff=0)
+            toolmenu.add_command(label="Debug", command=self.toggleDebug)
+            toolmenu.add_command(label="Generate GUID", command=self.generateguid)
+            tools.add_cascade(label="Tools", menu=toolmenu, underline=0)
+except NameError:
+    print("Warning: PalEdit not found, PalEdit will not work")
+    
 class GUI():
     def __init__(self):
         self.g_move_guild_owner = None
