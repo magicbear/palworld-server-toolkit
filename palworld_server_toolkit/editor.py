@@ -573,7 +573,9 @@ try:
             self.parent = self
             #
             self.font = tk.font.Font(family="Courier New")
-    
+            ttk.Style().configure("custom.TButton",
+                              font=self.font)
+        
         def build_subgui(self, g_frame, attribute_key, attrib_var, attrib):
             sub_frame = ttk.Frame(master=g_frame, borderwidth=1, relief=tk.constants.GROOVE, padding=2)
             sub_frame.pack(side="right")
@@ -1025,7 +1027,7 @@ try:
             self.gui.title("Player Item Edit - %s" % player_uid)
             tabs = ttk.Notebook(master=self)
             tabs.pack(anchor=tk.constants.N, fill=tk.constants.BOTH, expand=True)
-            tk.Button(master=self.gui, font=self.font, text="Save", command=self.savedata).pack(fill=tk.constants.X,
+            ttk.Button(master=self.gui, style="custom.TButton", text="Save", command=self.savedata).pack(fill=tk.constants.X,
                                                                                                 anchor=tk.constants.S,
                                                                                                 expand=False)
             threading.Thread(target=self.load, args=[tabs, player_gvas]).start()
@@ -1079,7 +1081,7 @@ try:
             self.gui_attribute = {}
             self.gui.title("Player Save Edit - %s" % player_uid)
             self.build_variable_gui(self.gui, self.gui_attribute, self.player)
-            tk.Button(master=self.gui, font=self.font, text="Save", command=self.savedata).pack(fill=tk.constants.X)
+            ttk.Button(master=self.gui, style="custom.TButton", text="Save", command=self.savedata).pack(fill=tk.constants.X)
     
         def savedata(self):
             self.save(self.player, self.gui_attribute)
@@ -1107,7 +1109,7 @@ try:
                 "Player Edit - %s" % player_uid if player_uid is not None else "Character Edit - %s" % instanceId)
             self.gui_attribute = {}
             self.build_variable_gui(self.gui, self.gui_attribute, self.player)
-            tk.Button(master=self.gui, font=self.font, text="Save", command=self.savedata).pack(fill=tk.constants.X)
+            ttk.Button(master=self.gui, style="custom.TButton", text="Save", command=self.savedata).pack(fill=tk.constants.X)
     
         def savedata(self):
             self.save(self.player, self.gui_attribute)
@@ -1128,7 +1130,7 @@ try:
             self.gui.title("Guild Edit - %s" % group_id)
             self.gui_attribute = {}
             self.build_variable_gui(self.gui, self.gui_attribute, self.group_data)
-            tk.Button(master=self.gui, font=self.font, text="Save", command=self.savedata).pack(fill=tk.constants.X)
+            ttk.Button(master=self.gui, style="custom.TButton", text="Save", command=self.savedata).pack(fill=tk.constants.X)
     
         def savedata(self):
             self.save(self.group_data, self.gui_attribute)
@@ -1554,11 +1556,7 @@ class GUI():
         PlayerSaveEdit(target_uuid)
 
     def pal_edit(self):
-        font_list = ('微软雅黑', 'Courier New', 'Arial')
-        for font in font_list:
-            if font in tkinter.font.families():
-                PalEditConfig.font = font
-                break
+        PalEditConfig.font = self.font
         pal = PalEditGUI()
         pal.load(None)
         pal.mainloop()
@@ -1639,7 +1637,21 @@ class GUI():
         # self.gui.geometry('640x200')
         #
         self.font = tk.font.Font(family="Courier New")
-        self.gui.option_add('*TCombobox*Listbox.font', self.font)
+        self.mono_font = tk.font.Font(family="Courier New")
+        mono_font_list = ('Dejavu Sans', 'Courier New')
+        font_list = ('Apple LiGothic', 'PangMenZhengDao', 'Droid Sans Fallback', '微软雅黑', 'Courier New', 'Arial')
+        for font in font_list:
+            if font in tkinter.font.families():
+                self.font = tk.font.Font(family=font)
+                break
+        for font in mono_font_list:
+            if font in tkinter.font.families():
+                self.mono_font = tk.font.Font(family=font)
+                break
+                
+        ttk.Style().configure("custom.TButton",
+                              font=self.font)
+        self.gui.option_add('*TCombobox*Listbox.font', self.mono_font)
         # window.resizable(False, False)
         with open(module_dir+"/resources/gui.json", "r", encoding='utf-8') as f:
             i18n_list = json.load(f)
@@ -1660,16 +1672,16 @@ class GUI():
         self.data_source.pack(side="left")
         self.data_source.current(0)
         self.data_source.bind("<<ComboboxSelected>>", self.change_datasource)
-        g_open_file = tk.Button(master=f_src, font=self.font, text="Open File", command=self.open_file)
+        g_open_file = ttk.Button(master=f_src, style="custom.TButton", text="Open File", command=self.open_file)
         self.i18n['open_file'] = g_open_file
         g_open_file.pack(side="left")
         #
         f_src_player = tk.Frame()
         self.i18n['src_player'] = tk.Label(master=f_src_player, text="Source Player", font=self.font)
         self.i18n['src_player'].pack(side="left")
-        self.src_player = AutocompleteCombobox(master=f_src_player, font=self.font, width=50)
+        self.src_player = AutocompleteCombobox(master=f_src_player, font=self.mono_font, width=50)
         self.src_player.pack(side="left")
-        self.g_move_guild_owner = tk.Button(master=f_src_player, text="Set Guild Owner", font=self.font,
+        self.g_move_guild_owner = ttk.Button(master=f_src_player, text="Set Guild Owner", style="custom.TButton",
                            command=self.set_guild_owner)
         self.i18n['set_guild_owner'] = self.g_move_guild_owner
         self.g_move_guild_owner.pack(side="left")
@@ -1677,41 +1689,41 @@ class GUI():
         f_target_player = tk.Frame()
         self.i18n['target_player'] = tk.Label(master=f_target_player, text="Target Player", font=self.font)
         self.i18n['target_player'].pack(side="left")
-        self.target_player = AutocompleteCombobox(master=f_target_player, font=self.font, width=50)
+        self.target_player = AutocompleteCombobox(master=f_target_player, font=self.mono_font, width=50)
         self.target_player.pack(side="left")
         self.target_player.bind("<<ComboboxSelected>>", self.select_target_player)
 
         f_target_guild = tk.Frame()
         self.i18n['target_guild'] = tk.Label(master=f_target_guild, text="Target Guild", font=self.font)
         self.i18n['target_guild'].pack(side="left")
-        self.target_guild = AutocompleteCombobox(master=f_target_guild, font=self.font, width=80)
+        self.target_guild = AutocompleteCombobox(master=f_target_guild, font=self.mono_font, width=80)
         self.target_guild.pack(side="left", fill=tk.constants.X)
         self.target_guild.bind("<<ComboboxSelected>>", self.select_guild)
 
         f_target_guildbase = tk.Frame()
         self.i18n['target_base'] = tk.Label(master=f_target_guildbase, text="Target Base", font=self.font)
         self.i18n['target_base'].pack(side="left")
-        self.target_base = AutocompleteCombobox(master=f_target_guildbase, font=self.font, width=50)
+        self.target_base = AutocompleteCombobox(master=f_target_guildbase, font=self.mono_font, width=50)
         self.target_base.pack(side="left")
-        self.i18n['delete_base'] = g_delete_base = tk.Button(master=f_target_guildbase, text="Delete Base Camp", font=self.font,
+        self.i18n['delete_base'] = g_delete_base = ttk.Button(master=f_target_guildbase, text="Delete Base Camp", style="custom.TButton",
                                   command=self.delete_base)
         g_delete_base.pack(side="left")
         #
         f_target_instance = tk.Frame()
         self.i18n['target_instance'] = tk.Label(master=f_target_instance, text="Target Instance", font=self.font)
         self.i18n['target_instance'].pack(side="left")
-        self.target_instance = AutocompleteCombobox(master=f_target_instance, font=self.font, width=60)
+        self.target_instance = AutocompleteCombobox(master=f_target_instance, font=self.mono_font, width=60)
         self.target_instance.pack(side="left")
-        self.i18n['edit_instance'] = tk.Button(master=f_target_instance, text="Edit", font=self.font,
+        self.i18n['edit_instance'] = ttk.Button(master=f_target_instance, text="Edit", style="custom.TButton",
                                         command=self.edit_instance)
         self.i18n['edit_instance'].pack(side="left")
 
         g_multi_button_frame = tk.Frame()
-        self.btn_migrate = tk.Button(master=g_multi_button_frame, text="⬆️ Migrate Player ⬇️", font=self.font,
+        self.btn_migrate = ttk.Button(master=g_multi_button_frame, text="⬆️ Migrate Player ⬇️", style="custom.TButton",
                                      command=self.migrate)
         self.i18n['migrate_player'] = self.btn_migrate
         self.btn_migrate.pack(side="left")
-        g_copy = tk.Button(master=g_multi_button_frame, text="⬆️ Copy Player ⬇️", font=self.font,
+        g_copy = ttk.Button(master=g_multi_button_frame, text="⬆️ Copy Player ⬇️", style="custom.TButton",
                            command=self.copy_player)
         self.i18n['copy_player'] = g_copy
         g_copy.pack(side="left")
@@ -1721,22 +1733,22 @@ class GUI():
         g_button_frame = tk.Frame(borderwidth=1, relief=tk.constants.GROOVE, pady=5)
         self.i18n['op_for_target'] = tk.Label(master=g_button_frame, text="Operate for Target Player", font=self.font)
         self.i18n['op_for_target'].pack(fill="x", side="top")
-        g_move = tk.Button(master=g_button_frame, text="Move To Guild", font=self.font, command=self.move_guild)
+        g_move = ttk.Button(master=g_button_frame, text="Move To Guild", style="custom.TButton", command=self.move_guild)
         self.i18n['move_to_guild'] = g_move
         g_move.pack(side="left")
-        g_rename = tk.Button(master=g_button_frame, text="Rename", font=self.font, command=self.rename_player)
+        g_rename = ttk.Button(master=g_button_frame, text="Rename", style="custom.TButton", command=self.rename_player)
         self.i18n['rename_player'] = g_rename
         g_rename.pack(side="left")
-        g_delete = tk.Button(master=g_button_frame, text="Delete", font=self.font, command=self.delete_player)
+        g_delete = ttk.Button(master=g_button_frame, text="Delete", style="custom.TButton", command=self.delete_player)
         self.i18n['delete_player'] = g_delete
         g_delete.pack(side="left")
-        g_edit = tk.Button(master=g_button_frame, text="Edit", font=self.font, command=self.edit_player)
+        g_edit = ttk.Button(master=g_button_frame, text="Edit", style="custom.TButton", command=self.edit_player)
         self.i18n['edit_player'] = g_edit
         g_edit.pack(side="left")
-        g_edit_item = tk.Button(master=g_button_frame, text="Edit Item", font=self.font, command=self.edit_player_item)
+        g_edit_item = ttk.Button(master=g_button_frame, text="Edit Item", style="custom.TButton", command=self.edit_player_item)
         self.i18n['edit_item'] = g_edit_item
         g_edit_item.pack(side="left")
-        g_edit_save = tk.Button(master=g_button_frame, text="Edit Save", font=self.font, command=self.edit_player_save)
+        g_edit_save = ttk.Button(master=g_button_frame, text="Edit Save", style="custom.TButton", command=self.edit_player_save)
         self.i18n['edit_save'] = g_edit_save
         g_edit_save.pack(side="left")
 
@@ -1750,12 +1762,12 @@ class GUI():
         f_target_guildbase.pack(anchor=tk.constants.W)
         f_target_instance.pack(anchor=tk.constants.W)
 
-        g_pal = tk.Button(master=g_button_frame, text="Pal Edit", font=self.font, command=self.pal_edit)
+        g_pal = ttk.Button(master=g_button_frame, text="Pal Edit", style="custom.TButton", command=self.pal_edit)
         self.i18n['edit_pal'] = g_pal
         g_pal.pack(side="left")
         g_button_frame.pack()
 
-        g_save = tk.Button(text="Save & Exit", font=self.font, command=self.save)
+        g_save = ttk.Button(text="Save & Exit", style="custom.TButton", command=self.save)
         self.i18n['save'] = g_save
         g_save.pack()
 
