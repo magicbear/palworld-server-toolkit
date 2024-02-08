@@ -1026,7 +1026,7 @@ try:
             threading.Thread(target=self.load, args=[tabs, player_gvas]).start()
     
         def load(self, tabs, player_gvas):
-            with open(module_dir+"/resources/item_%s.json" % self.i18n, "r") as f:
+            with open(module_dir+"/resources/item_%s.json" % self.i18n, "r", encoding='utf-8') as f:
                 item_list = json.load(f)
             if MappingCache.ItemContainerSaveData is None:
                 LoadItemContainerMaps()
@@ -1623,7 +1623,7 @@ class GUI():
         self.font = tk.font.Font(family="Courier New")
         self.gui.option_add('*TCombobox*Listbox.font', self.font)
         # window.resizable(False, False)
-        with open(module_dir+"/resources/gui.json", "r") as f:
+        with open(module_dir+"/resources/gui.json", "r", encoding='utf-8') as f:
             i18n_list = json.load(f)
         f_i18n = tk.Frame()
         tk.Label(master=f_i18n, text="Language", font=self.font).pack(side="left")
@@ -1750,7 +1750,7 @@ class GUI():
     
     def set_i18n(self, lang):
         self.language = lang
-        with open("%s/resources/gui_%s.json" % (module_dir, lang)) as f:
+        with open("%s/resources/gui_%s.json" % (module_dir, lang), encoding='utf-8') as f:
             lang_data = json.load(f)
         for item in self.i18n:
             if item in lang_data:
