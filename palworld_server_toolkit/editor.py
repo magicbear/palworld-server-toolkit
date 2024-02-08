@@ -1553,11 +1553,7 @@ class GUI():
         PlayerSaveEdit(target_uuid)
 
     def pal_edit(self):
-        font_list = ('微软雅黑', 'Courier New', 'Arial')
-        for font in font_list:
-            if font in tkinter.font.families():
-                PalEditConfig.font = font
-                break
+        PalEditConfig.font = self.font
         pal = PalEditGUI()
         pal.load(None)
         pal.mainloop()
@@ -1626,6 +1622,17 @@ class GUI():
         # self.gui.geometry('640x200')
         #
         self.font = tk.font.Font(family="Courier New")
+        self.mono_font = tk.font.Font(family="Courier New")
+        mono_font_list = ('Dejavu Sans', 'Courier New')
+        font_list = ('PangMenZhengDao', 'Droid Sans Fallback', '微软雅黑', 'Courier New', 'Arial')
+        for font in font_list:
+            if font in tkinter.font.families():
+                self.font = tk.font.Font(family=font)
+                break
+        for font in mono_font_list:
+            if font in tkinter.font.families():
+                self.mono_font = tk.font.Font(family=font)
+                break
         self.gui.option_add('*TCombobox*Listbox.font', self.font)
         # window.resizable(False, False)
         with open(module_dir+"/resources/gui.json", "r", encoding='utf-8') as f:
@@ -1654,7 +1661,7 @@ class GUI():
         f_src_player = tk.Frame()
         self.i18n['src_player'] = tk.Label(master=f_src_player, text="Source Player", font=self.font)
         self.i18n['src_player'].pack(side="left")
-        self.src_player = AutocompleteCombobox(master=f_src_player, font=self.font, width=50)
+        self.src_player = AutocompleteCombobox(master=f_src_player, font=self.mono_font, width=50)
         self.src_player.pack(side="left")
         self.g_move_guild_owner = tk.Button(master=f_src_player, text="Set Guild Owner", font=self.font,
                            command=self.set_guild_owner)
@@ -1664,21 +1671,21 @@ class GUI():
         f_target_player = tk.Frame()
         self.i18n['target_player'] = tk.Label(master=f_target_player, text="Target Player", font=self.font)
         self.i18n['target_player'].pack(side="left")
-        self.target_player = AutocompleteCombobox(master=f_target_player, font=self.font, width=50)
+        self.target_player = AutocompleteCombobox(master=f_target_player, font=self.mono_font, width=50)
         self.target_player.pack(side="left")
         self.target_player.bind("<<ComboboxSelected>>", self.select_target_player)
 
         f_target_guild = tk.Frame()
         self.i18n['target_guild'] = tk.Label(master=f_target_guild, text="Target Guild", font=self.font)
         self.i18n['target_guild'].pack(side="left")
-        self.target_guild = AutocompleteCombobox(master=f_target_guild, font=self.font, width=80)
+        self.target_guild = AutocompleteCombobox(master=f_target_guild, font=self.mono_font, width=80)
         self.target_guild.pack(side="left", fill=tk.constants.X)
         self.target_guild.bind("<<ComboboxSelected>>", self.select_guild)
 
         f_target_guildbase = tk.Frame()
         self.i18n['target_base'] = tk.Label(master=f_target_guildbase, text="Target Base", font=self.font)
         self.i18n['target_base'].pack(side="left")
-        self.target_base = AutocompleteCombobox(master=f_target_guildbase, font=self.font, width=50)
+        self.target_base = AutocompleteCombobox(master=f_target_guildbase, font=self.mono_font, width=50)
         self.target_base.pack(side="left")
         self.i18n['delete_base'] = g_delete_base = tk.Button(master=f_target_guildbase, text="Delete Base Camp", font=self.font,
                                   command=self.delete_base)
@@ -1687,7 +1694,7 @@ class GUI():
         f_target_instance = tk.Frame()
         self.i18n['target_instance'] = tk.Label(master=f_target_instance, text="Target Instance", font=self.font)
         self.i18n['target_instance'].pack(side="left")
-        self.target_instance = AutocompleteCombobox(master=f_target_instance, font=self.font, width=60)
+        self.target_instance = AutocompleteCombobox(master=f_target_instance, font=self.mono_font, width=60)
         self.target_instance.pack(side="left")
         self.i18n['edit_instance'] = tk.Button(master=f_target_instance, text="Edit", font=self.font,
                                         command=self.edit_instance)
