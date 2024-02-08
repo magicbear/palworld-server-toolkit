@@ -35,12 +35,17 @@ try:
     from tkinter import messagebox
     from tkinter import filedialog
     from tkinter import simpledialog
-    import PalInfo
-    from PalEdit import PalEditConfig, PalEdit
 except ImportError:
     print("ERROR: Without Tkinter Environment, GUI not work")
     pass
 
+try:
+    import PalInfo
+    from PalEdit import PalEditConfig, PalEdit
+except ImportError as e:
+    print("ERROR: Include PalEdit failed")
+    traceback.print_exception(e)
+    pass
 
 class GvasPrettyPrint(pprint.PrettyPrinter):
     _dispatch = pprint.PrettyPrinter._dispatch.copy()

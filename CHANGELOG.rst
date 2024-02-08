@@ -14,6 +14,13 @@ Changelog
     Note that they these tags will not actually close the issue/PR until they
     are merged into the "default" branch.
 
+v0.3.8
+-------
+
+Fix:
+
+- Install packaage fail to install PalEdit for pip
+
 v0.3.7
 -------
 
