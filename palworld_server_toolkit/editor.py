@@ -2534,7 +2534,7 @@ def FindReferenceItemContainerIds():
 def GetReferencedItemContainerIdsByPlayer(player_uid):
     err, player_gvas, player_sav_file, player_gvas_file = GetPlayerGvas(player_uid)
     if err:
-        print("\033[33mWarning: Player Sav file Not exists: %s\033[0m" % player_sav_file)
+        print(f"\033[33mWarning: Player Sav file for {player_uid} Not exists: %s\033[0m" % player_sav_file)
         return []
     player_container_ids = []
     for key in ['OtomoCharacterContainerId', 'PalStorageContainerId']:
@@ -2547,6 +2547,7 @@ def GetReferencedItemContainerIdsByPlayer(player_uid):
 
 
 def FindAllUnreferencedItemContainerIds():
+    LoadCharacterSaveParameterMap()
     LoadItemContainerMaps()
     referencedContainerIds = set(FindReferenceItemContainerIds())
     allContainerIds = set(MappingCache.ItemContainerSaveData.keys())
