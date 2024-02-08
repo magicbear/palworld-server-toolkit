@@ -27,6 +27,7 @@ The world fastest PalWorld server save editor, parse Level.sav in 1.1s for JSON 
   - [Migrate Data Between Server](#migrate-difference-server-to-single-server)
   - [Migrate server to local](#migrate-server-to-local)
   - [Credits](#acknowledgements)
+  - [Video Operate - Chinese on bilibili](https://www.bilibili.com/video/BV1s2421A7jX/)
 
 
 ## GUI
