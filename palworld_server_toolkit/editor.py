@@ -1238,6 +1238,7 @@ except NameError:
 class GUI():
     def __init__(self):
         self.language = None
+        self.pal_i18n = None
         self.g_move_guild_owner = None
         global gui
         try:
@@ -1599,6 +1600,18 @@ class GUI():
             self.target_base['value'] = [str(x) for x in
                                          groupMapping[target_guild_uuid]['value']['RawData']['value']['base_ids']]
 
+    def getPalTranslatedName(self, saveParameter):
+        internal_name = saveParameter['CharacterID']['value']
+        name = ''
+        if 'NickName' in saveParameter:
+            name = " - %s" % saveParameter['NickName']['value']
+        try_split = internal_name.split("BOSS_",1)
+        if len(try_split) > 1 and try_split[1] in self.pal_i18n:
+            return "%s%s" % ('[BOSS] %s' % self.pal_i18n[try_split[1]], name)
+        if internal_name in self.pal_i18n:
+            return "%s%s" % (self.pal_i18n[internal_name], name)
+        return "%s%s" % (internal_name, name)
+
     def characterInstanceName(self, instance):
         saveParameter = instance['value']['RawData']['value']['object']['SaveParameter']['value']
         if 'IsPlayer' in saveParameter:
@@ -1608,7 +1621,7 @@ class GUI():
                 return 'Player:%s' % repr(saveParameter['NickName']['value'])
         else:
             try:
-                return 'Pal:%s' % saveParameter['CharacterID']['value']
+                return 'Pal:%s' % self.getPalTranslatedName(saveParameter)
             except UnicodeEncodeError:
                 return 'Pal:%s' % repr(saveParameter['CharacterID']['value'])
 
@@ -1761,14 +1774,17 @@ class GUI():
         self.progressbar = ttk.Progressbar()
         self.progressbar.pack(fill=tk.constants.X)
 
+        self.set_i18n(list(i18n_list.keys())[0])
         self.load_players()
         self.load_guilds()
-        self.set_i18n(list(i18n_list.keys())[0])
     
     def set_i18n(self, lang):
         self.language = lang
         with open("%s/resources/gui_%s.json" % (module_dir, lang), encoding='utf-8') as f:
             lang_data = json.load(f)
+        with open("%s/resources/pal_%s.json" % (module_dir, lang), encoding='utf-8') as f:
+            self.pal_i18n = json.load(f)
+
         for item in self.i18n:
             if item in lang_data:
                 if isinstance(self.i18n[item], ttk.Combobox):
@@ -1777,6 +1793,9 @@ class GUI():
                     self.i18n[item].current(index)
                 else:
                     self.i18n[item].config(text=lang_data[item])
+
+        if self.target_instance['value'] != '':
+            self.load_players()
 
 
 def DumpSavDecompressData(filename):
