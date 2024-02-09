@@ -72,7 +72,8 @@ This tools is for cleanup the unreference item, rename the player name, migrate 
 > [!CAUTION]
 > 
 > :warning: This tool is experimental. Be careful of data loss and *always* make a backup.
-
+>
+> Open `Level.sav` need to be on the SaveGames directory, or copied with `Players`, the editor will also reference to `Players` 's file for working, if you didn't may be corrupted the save file.
 
 > [!NOTE]
 > 
