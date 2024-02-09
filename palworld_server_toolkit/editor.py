@@ -1819,7 +1819,7 @@ class GUI():
         g_del_unref_item.pack(side="left")
         g_del_damange_container_obj = ttk.Button(master=g_wholefile, text="Del Damage Object", style="custom.TButton",
                             command=lambda: FixBrokenDamageRefItemContainer())
-        self.i18n['del_damange_obj'] = g_del_damange_container_obj
+        self.i18n['del_damage_obj'] = g_del_damange_container_obj
         g_del_damange_container_obj.pack(side="left")
 
         g_pal = ttk.Button(master=g_wholefile, text="Pal Edit", style="custom.TButton", command=self.pal_edit)
