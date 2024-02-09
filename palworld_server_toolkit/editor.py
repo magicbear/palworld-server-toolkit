@@ -1653,12 +1653,20 @@ class GUI():
             except UnicodeEncodeError:
                 return 'Player:%s' % repr(saveParameter['NickName']['value'])
             except KeyError:
+                print("Invalid Player")
+                gp(saveParameter)
+                print()
                 return 'Invalid Player'
         else:
             try:
                 return 'Pal:%s' % self.getPalTranslatedName(saveParameter)
             except UnicodeEncodeError:
                 return 'Pal:%s' % repr(saveParameter['CharacterID']['value'])
+            except KeyError:
+                print("Invalid Pal")
+                gp(saveParameter)
+                print()
+                return 'Invalid Pal'
 
     def build_gui(self):
         #

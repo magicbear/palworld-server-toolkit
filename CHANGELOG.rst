@@ -14,6 +14,13 @@ Changelog
     Note that they these tags will not actually close the issue/PR until they
     are merged into the "default" branch.
 
+v0.4.3
+-------
+
+Fix:
+
+- Invalid character for opening cheated file
+
 v0.4.2
 -------
 
