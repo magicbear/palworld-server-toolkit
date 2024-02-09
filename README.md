@@ -51,14 +51,28 @@
 
 3. 使用 `pip install palworld-server-toolkit` 安装
 
+## 使用 `pip` 自动安装
+
+- 安装
+
+	```
+	pip3 install palworld-save-tools
+	```
+
+- 运行
+
+	```
+	python3 -m palworld_server_toolkit.editor [options] <Level.sav>
+	```
+
 ## 使用源码前置安装需求
 
 1. Python 3.9或以上版本.
     - Windows用户: 可从 [Microsoft Store下载Python 3.12](https://apps.microsoft.com/detail/9NCVDN91XZQP) or [python.org](https://www.python.org/)
 
-2. 使用 `pip install palworld-save-tools` 和 `git submodule update --init --recursive` 或 下载 [https://github.com/cheahjs/palworld-save-tools](https://github.com/cheahjs/palworld-save-tools) 并放置 `palworld-save-tools` 内容至 `save_tools` 目录下
+2. 通过 `git clone https://github.com/magicbear/palworld-server-toolkit.git` 下载源码
 
-3. Windows 用户建议使用 `Windows Terminal` 取代 `cmd`，否则不显示色彩
+3. 执行 `git submodule update --init --recursive`
 
 ## 问题交流
 
@@ -217,6 +231,7 @@ options:
 - 你需要至少 3 个文件来完成转移：源玩家角色存档文件（在 Players/中），源世界的 level.sav 文件，以及目标世界的 Level.sav 文件
 - 对于本地合作模式的存档，如果你是主机，角色文件始终是 `000000...001.sav`
 - 对于其他玩家的存档，只需知道他们的 `ID` 在不同世界间不会改变，因此他们在你的合作世界和服务器世界的角色文件名是相同的。
+- Windows 用户建议使用 `Windows Terminal` 取代 `cmd`，否则不显示色彩
 
 - 存档结构如下
 	- 源世界

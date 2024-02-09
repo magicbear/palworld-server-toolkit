@@ -38,6 +38,21 @@ The world fastest PalWorld server save editor, parse Level.sav in 1.1s for JSON 
 
 Visit [Release Pages](https://github.com/magicbear/palworld-server-toolkit/releases) to download and run.
 
+## Auto install by pip
+
+- Install
+
+	```
+	pip3 install palworld-save-tools
+	```
+
+- Execute
+
+	```
+	python3 -m palworld_server_toolkit.editor [options] <Level.sav>
+	```
+
+
 ## Manual Install
 
 1. Python 3.9 or newer.
@@ -54,9 +69,9 @@ Visit [Release Pages](https://github.com/magicbear/palworld-server-toolkit/relea
 1. Python 3.9 or newer.
     - Windows users: You can install [Python 3.12 from the Microsoft Store](https://apps.microsoft.com/detail/9NCVDN91XZQP) or from [python.org](https://www.python.org/)
 
-2. Use `pip install palworld-save-tools` and `git submodule update --init --recursive` or Download [https://github.com/cheahjs/palworld-save-tools](https://github.com/cheahjs/palworld-save-tools) and put `palworld-save-tools` contents to `save_tools` directory
+2. Download source code by `git clone https://github.com/magicbear/palworld-server-toolkit.git`
 
-3. Windows User present use `Windows Terminal` instance of `cmd` for color
+3. Execute `git submodule update --init --recursive`
 
 ## Question?
 
@@ -225,7 +240,7 @@ Tools for set cpu affinity to CPU performance core (Linux only)
 	- The target world's `Level.sav` file
 - For co-op saves, the player character save file is always `000000...001.sav`
 - For another server saves, their `ID` will not change between worlds, so that have the same name in target server, you only need the source world's `000000...000.sav`
-
+- Windows User present use `Windows Terminal` instance of `cmd` for color
 
 - Data Struct
 	- Source World
