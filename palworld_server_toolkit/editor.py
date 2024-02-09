@@ -1810,6 +1810,10 @@ class GUI():
                             command=lambda: BatchDeleteUnreferencedItemContainers())
         self.i18n['del_unreference_item'] = g_del_unref_item
         g_del_unref_item.pack(side="left")
+        g_del_damange_container_obj = ttk.Button(master=g_wholefile, text="Del Damage Object", style="custom.TButton",
+                            command=lambda: FixBrokenDamageRefItemContainer())
+        self.i18n['del_damange_obj'] = g_del_damange_container_obj
+        g_del_damange_container_obj.pack(side="left")
 
         g_pal = ttk.Button(master=g_wholefile, text="Pal Edit", style="custom.TButton", command=self.pal_edit)
         self.i18n['edit_pal'] = g_pal
@@ -2407,23 +2411,83 @@ def LoadGroupSaveDataMap():
     MappingCache.GroupSaveDataMap = {group['key']: group for group in wsd['GroupSaveDataMap']['value']}
 
 
+def FindReferenceMapObject(mapObjectId, level=0, recursive_mapObjectIds=set()):
+    if MappingCache.MapObjectSaveData is None:
+        LoadMapObjectMaps()
+    mapObjectId = toUUID(mapObjectId)
+    if mapObjectId not in MappingCache.MapObjectSaveData:
+        print(f"Invalid {mapObjectId}")
+        return False
+    mapObject = MappingCache.MapObjectSaveData[mapObjectId]
+    connector = mapObject['Model']['value']['Connector']['value']['RawData']
+    reference_ids = []
+    if 'value' in connector:
+        # Parent of this object
+        if 'connect' in connector['value']:
+            if 'any_place' in connector['value']['connect']:
+                for connection_item in connector['value']['connect']['any_place']:
+                    recursive_mapObjectIds.add(mapObjectId)
+                    # reference_ids['sub_id'].append(connection_item['connect_to_model_instance_id'])
+                    if connection_item['connect_to_model_instance_id'] in recursive_mapObjectIds:
+                        continue
+                    # print("%sAny_Place: %s -> %s" % ("  " * level, mapObjectId, connection_item['connect_to_model_instance_id']))
+                    reference_ids.append(connection_item['connect_to_model_instance_id'])
+                    reference_ids += FindReferenceMapObject(connection_item['connect_to_model_instance_id'], level+1, recursive_mapObjectIds)
+        if 'other_connectors' in connector['value']:
+            for other_connection_list in connector['value']['other_connectors']:
+                for connection_item in other_connection_list['connect']:
+                    recursive_mapObjectIds.add(mapObjectId)
+                    # reference_ids['sub_id'].append(connection_item['connect_to_model_instance_id'])
+                    # print("%sOther: %s -> %s" % ("  " * level, mapObjectId, connection_item['connect_to_model_instance_id']))
+                    if connection_item['connect_to_model_instance_id'] in recursive_mapObjectIds:
+                        continue
+                    # recursive_mapObjectIds.append(connection_item['connect_to_model_instance_id'])
+                    reference_ids.append(connection_item['connect_to_model_instance_id'])
+                    reference_ids += FindReferenceMapObject(connection_item['connect_to_model_instance_id'], level + 1, recursive_mapObjectIds)
+        
+    return reference_ids
+
+def PrintReferenceMapObjects():
+    if MappingCache.MapObjectSaveData is None:
+        LoadMapObjectMaps()
+    
+    for mapObjectId in MappingCache.MapObjectSaveData:
+        x = FindReferenceMapObject(mapObjectId, 0, set())
+        # print("G -> %d" % len(x.keys()))
+        if len(x.keys()) == 0:
+            continue
+        print(x)
+
 def BatchDeleteMapObject(map_object_ids):
     load_skiped_decode(wsd, ['MapObjectSpawnerInStageSaveData'], False)
     if MappingCache.MapObjectSaveData is None:
         LoadMapObjectMaps()
 
-    delete_map_object_ids = {}
+    delete_map_object_ids = set()
     delete_item_container_ids = []
     delete_owners = {}
+
+    map_object_ids = set(map_object_ids)
+    for map_object_id in list(map_object_ids):
+        sub_ids = FindReferenceMapObject(map_object_id)
+        for sub_id in sub_ids:
+            map_object_ids.add(sub_id)
+        
     for map_object_id in map_object_ids:
         map_object_id = toUUID(map_object_id)
         if map_object_id not in MappingCache.MapObjectSaveData:
             continue
-        delete_map_object_ids[map_object_id] = None
+        delete_map_object_ids.add(map_object_id)
         mapObject = MappingCache.MapObjectSaveData[map_object_id]
         for concrete in mapObject['ConcreteModel']['value']['ModuleMap']['value']:
             if concrete['key'] == "EPalMapObjectConcreteModelModuleType::ItemContainer":
                 delete_item_container_ids.append(concrete['value']['RawData']['value']['target_container_id'])
+            if concrete['key'] == "EPalMapObjectConcreteModelModuleType::StatusObserver":
+                pass
+            # if concrete['RawData']['value']['concrete_model_type'] == "PalMapObjectItemDropOnDamagModel":
+        # Connected MapObject
+        connected_mapObjects = []
+             
         owner_spawner_level_object_instance_id = mapObject['Model']['value']['RawData']['value'][
             'owner_spawner_level_object_instance_id']
         delete_owners[owner_spawner_level_object_instance_id] = None
@@ -2444,7 +2508,7 @@ def BatchDeleteMapObject(map_object_ids):
     wsd['MapObjectSpawnerInStageSaveData']['value'][0]['value']['SpawnerDataMapByLevelObjectInstanceId'][
         'value'] = new_spawner_objects
     BatchDeleteItemContainer(delete_item_container_ids)
-    print(f"Delete MapObjectSaveData: {len(delete_map_object_ids.keys())} / {len(map_object_ids)}")
+    print(f"Delete MapObjectSaveData: {len(delete_map_object_ids)} / {len(map_object_ids)}")
     LoadMapObjectMaps()
 
 
@@ -2461,6 +2525,11 @@ def DeleteMapObject(map_object_id):
         wsd['MapObjectSaveData']['value']['values'].remove(mapObject)
     except ValueError:
         return False
+    sub_ids = FindReferenceMapObject(map_object_id)
+    for sub_id in sub_ids:
+        if sub_id == map_object_id:
+            continue
+        DeleteMapObject(sub_id)
     # MapObjectConcreteModelInstanceId = mapObject['MapObjectConcreteModelInstanceId']['value']
     # concrete_model_instance_id = mapObject['Model']['value']['RawValue']['value']['concrete_model_instance_id']   > = Referer To mapObject['ConcreteModel']
     for concrete in mapObject['ConcreteModel']['value']['ModuleMap']['value']:
@@ -2515,6 +2584,8 @@ def DeleteCharacter(characterId):
     characterData = character['value']['RawData']['value']['object']['SaveParameter']['value']
     if 'EquipItemContainerId' in characterData:
         DeleteItemContainer(characterData['EquipItemContainerId']['value']['ID']['value'])
+    if 'ItemContainerId' in characterData:
+        DeleteItemContainer(characterData['ItemContainerId']['value']['ID']['value'])
 
     if 'group_id' in character['value']['RawData']['value']:
         if MappingCache.GroupSaveDataMap is None:
@@ -2566,11 +2637,57 @@ def FindReferenceItemContainerIds():
         characterData = character['value']['RawData']['value']['object']['SaveParameter']['value']
         if 'EquipItemContainerId' in characterData:
             reference_ids.append(characterData['EquipItemContainerId']['value']['ID']['value'])
-            
-    for baseCamp in wsd['BaseCampSaveData']['value']:
-        reference_ids.append(baseCamp['value']['WorkerDirector']['value']['RawData']['value']['container_id'])
+        if 'ItemContainerId' in characterData:
+            reference_ids.append(characterData['ItemContainerId']['value']['ID']['value'])
+    
+    # CharacterContainerId
+    # for baseCamp in wsd['BaseCampSaveData']['value']:
+    #     reference_ids.append(baseCamp['value']['WorkerDirector']['value']['RawData']['value']['container_id'])
     
     return reference_ids
+
+def FindDamageRefItemContainer():
+    if MappingCache.ItemContainerSaveData is None:
+        LoadItemContainerMaps()
+    
+    InvalidObjects = {
+        "MapObject": [],
+        'Character': {
+            "EquipItemContainerId": [],
+            "ItemContainerId": []
+        }
+    }
+    
+    InvalidCharacters = []
+    for character in wsd['CharacterSaveParameterMap']['value']:
+        characterData = character['value']['RawData']['value']['object']['SaveParameter']['value']
+        if 'EquipItemContainerId' in characterData:
+            if characterData['EquipItemContainerId']['value']['ID']['value'] not in MappingCache.ItemContainerSaveData:
+                InvalidObjects['Character']['EquipItemContainerId'].append(character['key']['InstanceId']['value'])
+                print(f"Character {character['key']['InstanceId']['value']} -> EqualItemContainerID {characterData['EquipItemContainerId']['value']['ID']['value']} Invalid")
+        if 'ItemContainerId' in characterData:
+            if characterData['ItemContainerId']['value']['ID']['value'] not in MappingCache.ItemContainerSaveData:
+                InvalidObjects['Character']['ItemContainerId'].append(character['key']['InstanceId']['value'])
+                print(
+                    f"Character {character['key']['InstanceId']['value']} -> ItemContainerId {characterData['ItemContainerId']['value']['ID']['value']} Invalid")
+    
+    for mapObject in wsd['MapObjectSaveData']['value']['values']:
+        for concrete in mapObject['ConcreteModel']['value']['ModuleMap']['value']:
+            if concrete['key'] == "EPalMapObjectConcreteModelModuleType::ItemContainer":
+                if concrete['value']['RawData']['value']['target_container_id'] not in MappingCache.ItemContainerSaveData:
+                    InvalidObjects['MapObject'].append(mapObject['MapObjectInstanceId']['value'])
+                    print(
+                        f"MapObject {mapObject['MapObjectInstanceId']['value']} -> ItemContainer {concrete['value']['RawData']['value']['target_container_id']} Invalid")
+    return InvalidObjects
+
+def FixBrokenDamageRefItemContainer():
+    BrokenObjects = FindDamageRefItemContainer()
+    
+    BatchDeleteMapObject(BrokenObjects['MapObject'])
+    for characterId in BrokenObjects['Character']['EquipItemContainerId']:
+        DeleteCharacter(characterId)
+    for characterId in BrokenObjects['Character']['ItemContainerId']:
+        DeleteCharacter(characterId)
 
 def GetReferencedItemContainerIdsByPlayer(player_uid):
     err, player_gvas, player_sav_file, player_gvas_file = GetPlayerGvas(player_uid)
@@ -2597,6 +2714,17 @@ def FindAllUnreferencedItemContainerIds():
 
     return list(allContainerIds - referencedContainerIds)
 
+
+def DoubleCheckForUnreferenceItemContainers():
+    load_skiped_decode(wsd, ['MapObjectSaveData', 'FoliageGridSaveDataMap', 'MapObjectSpawnerInStageSaveData',
+                             'ItemContainerSaveData', 'DynamicItemSaveData', 'CharacterContainerSaveData'])
+    unreferencedContainerIds = FindAllUnreferencedItemContainerIds()
+    guid_mapping = search_guid(wsd, printout=False)
+    for id in unreferencedContainerIds:
+        if id in guid_mapping and len(guid_mapping[id]) > 1:
+            print("Error: ID %s:" % id)
+            gp(guid_mapping[id])
+            print()
 
 def BatchDeleteUnreferencedItemContainers():
     unreferencedContainerIds = FindAllUnreferencedItemContainerIds()
@@ -2779,30 +2907,49 @@ def search_keys(dicts, key, level=""):
                 search_keys(l, key, level + "[%d]" % idx)
 
 
-def search_gpid(dicts, level=""):
-    isFound = False
+def search_guid(dicts, level="", printout=True):
+    isFound = {}
     empty_uuid = toUUID("00000000-0000-0000-0000-000000000000")
     if isinstance(dicts, dict):
         for k in dicts:
-            if level == "":
+            if level == "" and len(list(dicts.keys())) < 100:
                 set_loadingTitle("Searching %s" % k)
             if isinstance(dicts[k], UUID) and dicts[k] != empty_uuid:
-                isFound = True
-                print("wsd%s['%s'] = '%s'" % (level, k, dicts[k]))
+                if dicts[k] not in isFound:
+                    isFound[dicts[k]] = []
+                isFound[dicts[k]].append(level)
+                if printout:
+                    print("wsd%s['%s'] = '%s'" % (level, k, dicts[k]))
             if isinstance(dicts[k], dict) or isinstance(dicts[k], list):
-                isFound |= search_gpid(dicts[k], level + "['%s']" % k)
+                rcs = search_guid(dicts[k], level + "['%s']" % k, printout=printout)
+                for _uuid in rcs:
+                    if _uuid not in isFound:
+                        isFound[_uuid] = []
+                    isFound[_uuid] += rcs[_uuid]
     elif isinstance(dicts, list):
         for idx, l in enumerate(dicts):
-            if level == "":
+            if level == "" and len(dicts) < 100:
                 set_loadingTitle("Searching %s" % l)
             if isinstance(l, UUID) and l != empty_uuid:
-                isFound = True
-                print("wsd%s[%d] = '%s'" % (level, idx, l))
+                if l not in isFound:
+                    isFound[l] = []
+                isFound[l].append(level)
+                if printout:
+                    print("wsd%s[%d] = '%s'" % (level, idx, l))
             if isinstance(l, dict) or isinstance(l, list):
-                isFound |= search_gpid(l, level + "[%d]" % idx)
+                rcs = search_guid(l, level + "[%d]" % idx, printout=printout)
+                for _uuid in rcs:
+                    if _uuid not in isFound:
+                        isFound[_uuid] = []
+                    isFound[_uuid] += rcs[_uuid]
     if level == "":
         set_loadingTitle("")
     return isFound
+
+import re
+def find_partten(p):
+    partten = re.compile(r"\d+")
+    return list(set([partten.sub("{NUM}", x) for x in p]))
 
 
 def search_values(dicts, key, level=""):
@@ -2819,7 +2966,7 @@ def search_values(dicts, key, level=""):
             print("wsd%s['%s']" % (level, list(dicts.keys())[list(dicts.values()).index(uuid_match)]))
             isFound = True
         for k in dicts:
-            if level == "":
+            if level == "" and len(list(dicts.keys())) < 100:
                 set_loadingTitle("Searching %s" % k)
             if isinstance(dicts[k], dict) or isinstance(dicts[k], list):
                 isFound |= search_values(dicts[k], key, level + "['%s']" % k)
@@ -2831,7 +2978,7 @@ def search_values(dicts, key, level=""):
             print("wsd%s[%d]" % (level, dicts.index(uuid_match)))
             isFound = True
         for idx, l in enumerate(dicts):
-            if level == "":
+            if level == "" and len(dicts) < 100:
                 set_loadingTitle("Searching %s" % l)
             if isinstance(l, dict) or isinstance(l, list):
                 isFound |= search_values(l, key, level + "[%d]" % idx)

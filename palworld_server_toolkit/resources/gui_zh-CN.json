@@ -22,5 +22,6 @@
   "migrate_player": "迁移玩家",
   "copy_player": "复制玩家",
   "op_for_all": "对文件进行操作",
-  "del_unreference_item": "删除未引用的物品库"
+  "del_unreference_item": "删除未引用的物品库",
+  "del_damage_obj": "删除损坏对象"
 }

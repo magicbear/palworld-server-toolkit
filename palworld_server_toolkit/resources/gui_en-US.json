@@ -22,5 +22,6 @@
   "migrate_player": "⬆️ Migrate Player ⬇️",
   "copy_player": "⬆️ Copy Player ⬇️",
   "op_for_all": "Operate for File",
-  "del_unreference_item": "Delete Unreference Item Containers"
+  "del_unreference_item": "Delete Unreference Item Containers",
+  "del_damage_obj": "Del Damage Instance"
 }

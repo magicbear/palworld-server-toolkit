@@ -14,6 +14,17 @@ Changelog
     Note that they these tags will not actually close the issue/PR until they
     are merged into the "default" branch.
 
+v0.4.4
+-------
+
+Fix:
+
+- font chagne for open sub editor
+- broken flags on the PalEdit
+- broken game save when BatchDeleteUnreferencedItemContainers didn't check for ItemContainerId on CharacterSaveParameterMap
+- delete Damange Instance feature
+
+
 v0.4.3
 -------
 
