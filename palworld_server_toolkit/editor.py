@@ -663,9 +663,7 @@ try:
             self.parent = self
             #
             # tk.font.Font(family=
-            self.font = ("Courier New", 12)
-            ttk.Style().configure("custom.TButton",
-                              font=self.font)
+            self.__font = ("Courier New", 12)
         
         def build_subgui(self, g_frame, attribute_key, attrib_var, attrib):
             sub_frame = ttk.Frame(master=g_frame, borderwidth=1, relief=tk.constants.GROOVE, padding=2)
@@ -673,8 +671,8 @@ try:
             sub_frame_c = ttk.Frame(master=sub_frame)
     
             sub_frame_item = ttk.Frame(master=sub_frame)
-            tk.Label(master=sub_frame_item, font=self.font, text=attrib['array_type']).pack(side="left")
-            cmbx = ttk.Combobox(master=sub_frame_item, font=self.font, width=20, state="readonly",
+            tk.Label(master=sub_frame_item, font=self.__font, text=attrib['array_type']).pack(side="left")
+            cmbx = ttk.Combobox(master=sub_frame_item, font=self.__font, width=20, state="readonly",
                                 values=["Item %d" % i for i in range(len(attrib['value']['values']))])
             cmbx.bind("<<ComboboxSelected>>",
                       lambda evt: self.cmb_array_selected(evt, sub_frame_c, attribute_key, attrib_var, attrib))
@@ -905,7 +903,7 @@ try:
                     if with_labelframe:
                         g_frame = tk.Frame(master=parent)
                         g_frame.pack(anchor=tk.constants.W, fill=tk.constants.X, expand=True)
-                        tk.Label(master=g_frame, text=attribute_key, font=self.font).pack(side="left")
+                        tk.Label(master=g_frame, text=attribute_key, font=self.__font).pack(side="left")
                     else:
                         g_frame = parent
     
@@ -925,41 +923,41 @@ try:
                                         'EPalWorkSuitability::MonsterFarm']
                         if attrib['value']['value'] not in enum_options:
                             enum_options.append(attrib['value']['value'])
-                        ttk.Combobox(master=g_frame, font=self.font, state="readonly", width=40,
+                        ttk.Combobox(master=g_frame, font=self.__font, state="readonly", width=40,
                                      textvariable=attrib_var[attribute_key],
                                      values=enum_options).pack(side="right")
                         self.assign_attrib_var(attrib_var[attribute_key], attrib)
                     elif attrib['type'] == "ArrayProperty" and attrib['array_type'] in ["StructProperty", "NameProperty"]:
                         self.build_subgui(g_frame, attribute_key, attrib_var[attribute_key], attrib)
                     elif attrib['type'] == "StructProperty" and attrib['struct_type'] in ["Guid", "PalContainerId"]:
-                        tk.Entry(font=self.font, master=g_frame, width=50,
+                        tk.Entry(font=self.__font, master=g_frame, width=50,
                                  textvariable=attrib_var[attribute_key]).pack(
                             side="right", fill=tk.constants.X)
                         self.assign_attrib_var(attrib_var[attribute_key], attrib)
                     elif attrib['type'] == "StructProperty" and attrib['struct_type'] == "Vector":
                         valid_cmd = (self.register(self.valid_float), '%P')
-                        tk.Entry(font=self.font, master=g_frame, width=16,
+                        tk.Entry(font=self.__font, master=g_frame, width=16,
                                  validate='all', validatecommand=valid_cmd,
                                  textvariable=attrib_var[attribute_key][2]).pack(side="right", fill=tk.constants.X)
-                        tk.Entry(font=self.font, master=g_frame, width=16,
+                        tk.Entry(font=self.__font, master=g_frame, width=16,
                                  validate='all', validatecommand=valid_cmd,
                                  textvariable=attrib_var[attribute_key][1]).pack(side="right", fill=tk.constants.X)
-                        tk.Entry(font=self.font, master=g_frame, width=16,
+                        tk.Entry(font=self.__font, master=g_frame, width=16,
                                  validate='all', validatecommand=valid_cmd,
                                  textvariable=attrib_var[attribute_key][0]).pack(side="right", fill=tk.constants.X)
                         self.assign_attrib_var(attrib_var[attribute_key], attrib)
                     elif attrib['type'] == "StructProperty" and attrib['struct_type'] in ["Quat", "LinearColor"]:
                         valid_cmd = (self.register(self.valid_float), '%P')
-                        tk.Entry(font=self.font, master=g_frame, width=12,
+                        tk.Entry(font=self.__font, master=g_frame, width=12,
                                  validate='all', validatecommand=valid_cmd,
                                  textvariable=attrib_var[attribute_key][3]).pack(side="right", fill=tk.constants.X)
-                        tk.Entry(font=self.font, master=g_frame, width=12,
+                        tk.Entry(font=self.__font, master=g_frame, width=12,
                                  validate='all', validatecommand=valid_cmd,
                                  textvariable=attrib_var[attribute_key][2]).pack(side="right", fill=tk.constants.X)
-                        tk.Entry(font=self.font, master=g_frame, width=12,
+                        tk.Entry(font=self.__font, master=g_frame, width=12,
                                  validate='all', validatecommand=valid_cmd,
                                  textvariable=attrib_var[attribute_key][1]).pack(side="right", fill=tk.constants.X)
-                        tk.Entry(font=self.font, master=g_frame, width=12,
+                        tk.Entry(font=self.__font, master=g_frame, width=12,
                                  validate='all', validatecommand=valid_cmd,
                                  textvariable=attrib_var[attribute_key][0]).pack(side="right", fill=tk.constants.X)
                         self.assign_attrib_var(attrib_var[attribute_key], attrib)
@@ -972,7 +970,7 @@ try:
                         elif attrib['type'] == "FloatProperty":
                             valid_cmd = (self.register(self.valid_float), '%P')
     
-                        tk.Entry(font=self.font, master=g_frame,
+                        tk.Entry(font=self.__font, master=g_frame,
                                  validate='all', validatecommand=valid_cmd,
                                  textvariable=attrib_var[attribute_key],
                                  width=50).pack(
