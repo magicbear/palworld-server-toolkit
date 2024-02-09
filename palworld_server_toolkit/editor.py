@@ -1263,6 +1263,7 @@ try:
             toolmenu.add_command(label="Debug", command=self.toggleDebug)
             toolmenu.add_command(label="Generate GUID", command=self.generateguid)
             tools.add_cascade(label="Tools", menu=toolmenu, underline=0)
+            
 except NameError:
     print("Warning: PalEdit not found, PalEdit will not work")
     
@@ -1589,6 +1590,7 @@ class GUI():
     def pal_edit(self):
         PalEditConfig.font = self.font
         pal = PalEditGUI()
+        pal.load_i18n(self.language)
         pal.load(None)
         pal.mainloop()
 
