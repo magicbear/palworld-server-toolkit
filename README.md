@@ -52,7 +52,7 @@
 3. 安装包
 
 	```
-	pip3 install palworld-save-tools
+	pip3 install palworld-server-toolkit
 	```
 
 4. 运行

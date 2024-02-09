@@ -52,7 +52,7 @@ Visit [Release Pages](https://github.com/magicbear/palworld-server-toolkit/relea
 3. Install by `pip`
 
 	```
-	pip3 install palworld-save-tools
+	pip3 install palworld-server-toolkit
 	```
 
 4. Execute
