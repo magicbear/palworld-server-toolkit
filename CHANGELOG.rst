@@ -14,6 +14,17 @@ Changelog
     Note that they these tags will not actually close the issue/PR until they
     are merged into the "default" branch.
 
+v0.4.6
+-------
+
+Fix:
+
+- Not load corrently for Del damange instance
+
+Feature:
+
+- Instance relative to target player
+
 v0.4.5
 -------
 

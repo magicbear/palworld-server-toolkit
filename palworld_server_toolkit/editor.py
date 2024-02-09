@@ -231,6 +231,8 @@ class skip_loading_progress(threading.Thread):
                 time.sleep(0.02)
         except ValueError:
             pass
+        if gui is not None:
+            gui.progressbar['value'] = 100
 
 
 class FProgressArchiveReader(FArchiveReader):
@@ -1086,7 +1088,7 @@ try:
     
     
     def GetPlayerGvas(player_uid):
-        player_sav_file = os.path.dirname(os.path.abspath(args.filename)) + "/Players/" + player_uid.upper().replace(
+        player_sav_file = os.path.dirname(os.path.abspath(args.filename)) + "/Players/" + str(player_uid).upper().replace(
             "-",
             "") + ".sav"
         if not os.path.exists(player_sav_file):
@@ -1420,12 +1422,25 @@ class GUI():
                 src_value_lists.append(player_uid[0:8] + " - *** CHEATER ***")
 
         self.target_player['value'] = target_value_lists
-
+        self.load_instances()
+    
+    def isCharacterRelativeToUID(self, instance, uuid):
+        if uuid is None:
+            return True
+        saveParameter = instance['value']['RawData']['value']['object']['SaveParameter']['value']
+        if 'IsPlayer' in saveParameter:
+            if instance['key']['PlayerUId']['value'] == uuid:
+                return True
+        elif 'OwnerPlayerUId' in saveParameter and saveParameter['OwnerPlayerUId']['value'] == uuid:
+            return True
+        return False
+    
+    def load_instances(self, specified_parent=None):
         if MappingCache.CharacterSaveParameterMap is None:
             LoadCharacterSaveParameterMap()
         self.target_instance['value'] = sorted([
             "%s - %s" % (str(k), self.characterInstanceName(MappingCache.CharacterSaveParameterMap[k]))
-            for k in MappingCache.CharacterSaveParameterMap.keys()
+            for k in filter(lambda x: self.isCharacterRelativeToUID(MappingCache.CharacterSaveParameterMap[x], specified_parent), MappingCache.CharacterSaveParameterMap.keys())
         ])
 
     def load_guilds(self):
@@ -1621,6 +1636,7 @@ class GUI():
                     self.target_guild.current(idx)
                     self.select_guild(evt)
                     break
+            self.load_instances(target_uuid)
 
     def select_guild(self, evt):
         target_guild_uuid = self.target_guild.get().split(" - ")[0]
@@ -1814,11 +1830,11 @@ class GUI():
         self.i18n['op_for_all'] = tk.Label(master=g_wholefile, text="Operate for All", font=self.font)
         self.i18n['op_for_all'].pack(fill="x", side="top")
         g_del_unref_item = ttk.Button(master=g_wholefile, text="Delete Unref Item", style="custom.TButton",
-                            command=lambda: BatchDeleteUnreferencedItemContainers())
+                            command=lambda: (BatchDeleteUnreferencedItemContainers(), self.load_players()))
         self.i18n['del_unreference_item'] = g_del_unref_item
         g_del_unref_item.pack(side="left")
         g_del_damange_container_obj = ttk.Button(master=g_wholefile, text="Del Damage Object", style="custom.TButton",
-                            command=lambda: FixBrokenDamageRefItemContainer())
+                            command=lambda: (FixBrokenDamageRefItemContainer(), self.load_players()))
         self.i18n['del_damage_obj'] = g_del_damange_container_obj
         g_del_damange_container_obj.pack(side="left")
 
@@ -2656,14 +2672,29 @@ def FindReferenceItemContainerIds():
 def FindDamageRefItemContainer():
     if MappingCache.ItemContainerSaveData is None:
         LoadItemContainerMaps()
+    if MappingCache.MapObjectSaveData is None:
+        LoadMapObjectMaps()
     
     InvalidObjects = {
         "MapObject": [],
         'Character': {
+            "SaveContainers": [],
             "EquipItemContainerId": [],
             "ItemContainerId": []
         }
     }
+
+    for playerId in MappingCache.PlayerIdMapping:
+        container_ids = GetReferencedItemContainerIdsByPlayer(playerId)
+        if container_ids == []:
+            print(f"Character {playerId} -> SaveContainers Cannot Get")
+            InvalidObjects['Character']['SaveContainers'].append(
+                MappingCache.PlayerIdMapping[playerId]['key']['InstanceId']['value'])
+        for containerId in container_ids:
+            if containerId not in MappingCache.ItemContainerSaveData:
+                InvalidObjects['Character']['SaveContainers'].append(MappingCache.PlayerIdMapping[playerId]['key']['InstanceId']['value'])
+                print(f"Character {playerId} -> SaveContainers {containerId} Invalid")
+                break
     
     InvalidCharacters = []
     for character in wsd['CharacterSaveParameterMap']['value']:
@@ -2695,6 +2726,8 @@ def FixBrokenDamageRefItemContainer():
         DeleteCharacter(characterId)
     for characterId in BrokenObjects['Character']['ItemContainerId']:
         DeleteCharacter(characterId)
+    for characterId in BrokenObjects['Character']['SaveContainers']:
+        DeleteCharacter(characterId)
 
 def GetReferencedItemContainerIdsByPlayer(player_uid):
     err, player_gvas, player_sav_file, player_gvas_file = GetPlayerGvas(player_uid)
@@ -2702,8 +2735,8 @@ def GetReferencedItemContainerIdsByPlayer(player_uid):
         print(f"\033[33mWarning: Player Sav file for {player_uid} Not exists: %s\033[0m" % player_sav_file)
         return []
     player_container_ids = []
-    for key in ['OtomoCharacterContainerId', 'PalStorageContainerId']:
-        player_container_ids.append(player_gvas[key]['value']['ID']['value'])
+    # for key in ['OtomoCharacterContainerId', 'PalStorageContainerId']:
+    #     player_container_ids.append(player_gvas[key]['value']['ID']['value'])
 
     for key in ['CommonContainerId', 'DropSlotContainerId', 'EssentialContainerId', 'FoodEquipContainerId',
                 'PlayerEquipArmorContainerId', 'WeaponLoadOutContainerId']:
@@ -2814,35 +2847,31 @@ def DeletePlayer(player_uid, InstanceId=None, dry_run=False):
     if isinstance(player_uid, int):
         player_uid = str(uuid.UUID("%08x-0000-0000-0000-000000000000" % player_uid))
 
+    player_container_ids = []
     err, player_gvas, player_sav_file, player_gvas_file = GetPlayerGvas(player_uid)
     if err:
         print("\033[33mWarning: Player Sav file Not exists: %s\033[0m" % player_sav_file)
-        return
-    player_container_ids = []
-    playerInstanceId = None
-    if InstanceId is None:
-        print("Player Container ID:")
-        player_gvas = player_gvas_file.properties['SaveData']['value']
-        playerInstanceId = player_gvas['IndividualId']['value']['InstanceId']['value']
-        for key in ['OtomoCharacterContainerId', 'PalStorageContainerId']:
-            print("  %s" % player_gvas[key]['value']['ID']['value'])
-
-            print("\033[31mDelete Character Container\033[0m  UUID: %s" % (
-                str(player_gvas[key]['value']['ID']['value'])))
-            if not dry_run:
-                DeleteCharacterContainer(player_gvas[key]['value']['ID']['value'])
-            player_container_ids.append(player_gvas[key]['value']['ID']['value'])
-        for key in ['CommonContainerId', 'DropSlotContainerId', 'EssentialContainerId', 'FoodEquipContainerId',
-                    'PlayerEquipArmorContainerId', 'WeaponLoadOutContainerId']:
-            print("  %s" % player_gvas['inventoryInfo']['value'][key]['value']['ID']['value'])
-
-            print("\033[31mDelete Item Container\033[0m  UUID: %s" % (
-                str(player_gvas['inventoryInfo']['value'][key]['value']['ID']['value'])))
-            if not dry_run:
-                DeleteItemContainer(player_gvas['inventoryInfo']['value'][key]['value']['ID']['value'])
-            player_container_ids.append(player_gvas['inventoryInfo']['value'][key]['value']['ID']['value'])
     else:
-        playerInstanceId = InstanceId
+        if InstanceId is None:
+            print("Player Container ID:")
+            player_gvas = player_gvas_file.properties['SaveData']['value']
+            for key in ['OtomoCharacterContainerId', 'PalStorageContainerId']:
+                print("  %s" % player_gvas[key]['value']['ID']['value'])
+    
+                print("\033[31mDelete Character Container\033[0m  UUID: %s" % (
+                    str(player_gvas[key]['value']['ID']['value'])))
+                if not dry_run:
+                    DeleteCharacterContainer(player_gvas[key]['value']['ID']['value'])
+                player_container_ids.append(player_gvas[key]['value']['ID']['value'])
+            for key in ['CommonContainerId', 'DropSlotContainerId', 'EssentialContainerId', 'FoodEquipContainerId',
+                        'PlayerEquipArmorContainerId', 'WeaponLoadOutContainerId']:
+                print("  %s" % player_gvas['inventoryInfo']['value'][key]['value']['ID']['value'])
+    
+                print("\033[31mDelete Item Container\033[0m  UUID: %s" % (
+                    str(player_gvas['inventoryInfo']['value'][key]['value']['ID']['value'])))
+                if not dry_run:
+                    DeleteItemContainer(player_gvas['inventoryInfo']['value'][key]['value']['ID']['value'])
+                player_container_ids.append(player_gvas['inventoryInfo']['value'][key]['value']['ID']['value'])
     # Remove item from CharacterSaveParameterMap
     for item in wsd['CharacterSaveParameterMap']['value']:
         player = item['value']['RawData']['value']['object']['SaveParameter']['value']
