@@ -1401,6 +1401,8 @@ class GUI():
                 src_value_lists.append(player_uid[0:8] + " - " + _player['NickName'])
             except UnicodeEncodeError:
                 src_value_lists.append(player_uid[0:8] + " - *** ERROR ***")
+            except KeyError:
+                src_value_lists.append(player_uid[0:8] + " - *** CHEATER ***")
 
         self.src_player.set("")
         self.src_player['value'] = src_value_lists
@@ -1414,6 +1416,8 @@ class GUI():
                 target_value_lists.append(player_uid[0:8] + " - " + _player['NickName'])
             except UnicodeEncodeError:
                 target_value_lists.append(player_uid[0:8] + " - *** ERROR ***")
+            except KeyError:
+                src_value_lists.append(player_uid[0:8] + " - *** CHEATER ***")
 
         self.target_player['value'] = target_value_lists
 
@@ -1492,6 +1496,9 @@ class GUI():
         except UnicodeEncodeError:
             new_player_name = simpledialog.askstring(title="Rename Player", prompt="New player name",
                                                      initialvalue=repr(playerMapping[target_uuid]['NickName']))
+        except KeyError:
+            new_player_name = simpledialog.askstring(title="Rename Player", prompt="New player name",
+                                                     initialvalue="*** CHEATER PLAYER ***")
         if new_player_name:
             try:
                 RenamePlayer(target_uuid, new_player_name)
@@ -1899,7 +1906,7 @@ def RenamePlayer(player_uid, new_name):
             print(
                 "\033[32mRename User\033[0m  UUID: %s  Level: %d  CharacterID: \033[93m%s\033[0m -> %s" % (
                     str(item['key']['InstanceId']['value']), player['Level']['value'],
-                    repr(player['NickName']['value']), new_name))
+                    repr(player['NickName']['value']) if 'NickName' in player else "*** INVALID ***", new_name))
             player['NickName']['value'] = new_name
     for group_data in wsd['GroupSaveDataMap']['value']:
         if str(group_data['value']['GroupType']['value']['value']) == "EPalGroupType::Guild":
@@ -2845,7 +2852,7 @@ def DeletePlayer(player_uid, InstanceId=None, dry_run=False):
             print(
                 "\033[31mDelete User\033[0m  UUID: %s  Level: %d  CharacterID: \033[93m%s\033[0m" % (
                     str(item['key']['InstanceId']['value']), player['Level']['value'] if 'Level' in player else -1,
-                    player['NickName']['value']))
+                    player['NickName']['value'] if 'NickName' in player else "*** INVALID ***"))
             if not dry_run:
                 DeleteCharacter(item['key']['InstanceId']['value'])
         elif 'OwnerPlayerUId' in player and str(player['OwnerPlayerUId']['value']) == player_uid and InstanceId is None:
