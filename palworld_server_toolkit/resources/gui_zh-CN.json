@@ -1,5 +1,5 @@
 {
-  "data_source": "源角色数据来源",
+  "data_source": "复制数据来源",
   "data_source_list": ["主文件", "备份文件"],
   "open_file": "打开文件",
   "src_player":  "源角色",
