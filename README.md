@@ -49,17 +49,13 @@
 	- For Linux users: `python -m ensurepip --upgrade`
 	- For Windows users: `py -m ensurepip --upgrade`
 
-3. 使用 `pip install palworld-server-toolkit` 安装
-
-## 使用 `pip` 自动安装
-
-- 安装
+3. 安装包
 
 	```
 	pip3 install palworld-save-tools
 	```
 
-- 运行
+4. 运行
 
 	```
 	python3 -m palworld_server_toolkit.editor [options] <Level.sav>

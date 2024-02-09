@@ -38,20 +38,6 @@ The world fastest PalWorld server save editor, parse Level.sav in 1.1s for JSON 
 
 Visit [Release Pages](https://github.com/magicbear/palworld-server-toolkit/releases) to download and run.
 
-## Auto install by pip
-
-- Install
-
-	```
-	pip3 install palworld-save-tools
-	```
-
-- Execute
-
-	```
-	python3 -m palworld_server_toolkit.editor [options] <Level.sav>
-	```
-
 
 ## Manual Install
 
@@ -62,7 +48,18 @@ Visit [Release Pages](https://github.com/magicbear/palworld-server-toolkit/relea
 	- For Linux users: `python -m ensurepip --upgrade`
 	- For Windows users: `py -m ensurepip --upgrade`
 
-3. Use pip to install `pip install palworld-server-toolkit` or `python -m pip install palworld-server-toolkit`
+
+3. Install by `pip`
+
+	```
+	pip3 install palworld-save-tools
+	```
+
+4. Execute
+
+	```
+	python3 -m palworld_server_toolkit.editor [options] <Level.sav>
+	```
 
 ## Source Code Prerequisites
 
