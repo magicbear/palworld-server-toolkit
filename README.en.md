@@ -115,6 +115,8 @@ This tools is for cleanup the unreference item, rename the player name, migrate 
 	- `OpenBackup(filename)` - Open Backup Level.sav file and assign to `backup_wsd`
 	- `MigratePlayer(old_uid,new_uid)` - Migrate the player from old PlayerUId to new PlayerUId
 	- `CopyPlayer(old_uid,new_uid, backup_wsd)` - Copy the player from old PlayerUId to new PlayerUId `backup_wsd` is the OpenBackup file, `wsd` is current file
+	- `BatchDeleteUnreferencedItemContainers()` - Delete Unreference Item Containers
+	- `FixBrokenDamageRefItemContainer()` - Delete Damage Instance
 	- `Save()` - Save the file and exit
 
 
