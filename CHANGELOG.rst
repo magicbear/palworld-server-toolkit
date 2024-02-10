@@ -21,6 +21,7 @@ Feature:
 
 - Editor with scroll
 - Editor array with add / del
+- Merge from #29 export "Delete Unref Item" and "Delete Damage Object" for cli
 
 v0.5.3
 -------
