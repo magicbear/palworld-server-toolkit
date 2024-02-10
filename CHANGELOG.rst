@@ -17,6 +17,10 @@ Changelog
 v0.5.0
 -------
 
+Major
+
+- Performance Improvement
+
 Fix:
 
 - Multiple function loading error
