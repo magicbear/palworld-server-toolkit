@@ -316,17 +316,18 @@ class skip_loading_progress(threading.Thread):
                 print("\033]0;%s - %3.1f%%\a" % (loadingTitle, 100 * self.reader.progress() / self.size), end="",
                       flush=True)
                 print("%3.0f%%" % (100 * self.reader.progress() / self.size), end="\b\b\b\b", flush=True)
-                if gui is not None:
-                    gui.progressbar['value'] = 100 * self.reader.data.tell() / self.size
-                time.sleep(0.02)
+                try:
+                    if gui is not None:
+                        gui.progressbar['value'] = 100 * self.reader.data.tell() / self.size
+                except AttributeError:
+                    pass
+                time.sleep(0.05)
         except ValueError:
-            pass
-        except NameError:
             pass
         try:
             if gui is not None:
                 gui.progressbar['value'] = 100
-        except NameError:
+        except AttributeError:
             pass
 
 
@@ -1494,7 +1495,7 @@ class GUI():
             messagebox.showinfo("Result", "Copy success")
             self.load_players()
         except Exception as e:
-            messagebox.showerror("Copy Error", str(e))
+            messagebox.showerror("Copy Error", "\n".join(traceback.format_exception(e)))
 
     def load_players(self):
         _playerMapping = LoadPlayers(wsd if self.data_source.current() == 0 else backup_wsd)
@@ -2095,6 +2096,10 @@ def SetGuildOwner(group_id, new_player_uid):
     MappingCache.GroupSaveDataMap[toUUID(group_id)]['value']['RawData']['value']['admin_player_uid'] = new_player_uid
     return True
 
+def CopyItemContainers(src_containers, targetInstanceId):
+    new_containers = parse_item(copy.deepcopy(src_containers), "ItemContainerSaveData")
+    new_containers['key']['ID']['value'] = targetInstanceId
+    wsd['ItemContainerSaveData']['value'].append(new_containers)
 
 def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
     load_skiped_decode(wsd, ['DynamicItemSaveData', 'CharacterSaveParameterMap', 'GroupSaveDataMap'], False)
@@ -2117,28 +2122,27 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
     player_gvas['IndividualId']['value']['InstanceId']['value'] = toUUID(uuid.uuid4())
     # Clone Item from CharacterContainerSaveData
     for idx_key in ['OtomoCharacterContainerId', 'PalStorageContainerId']:
-        for container in parse_item(old_wsd['CharacterContainerSaveData'], "CharacterContainerSaveData")['value']:
-            if container['key']['ID']['value'] == player_gvas[idx_key]['value']['ID']['value']:
-                new_item = copy.deepcopy(container)
-                IsFound = False
-                if player_gvas[idx_key]['value']['ID']['value'] in MappingCache.CharacterContainerSaveData:
-                    player_gvas[idx_key]['value']['ID']['value'] = toUUID(uuid.uuid4())
-                    new_item['key']['ID']['value'] = player_gvas[idx_key]['value']['ID']['value']
-                    IsFound = True
-                container_mapping[idx_key] = new_item
-                if not dry_run:
-                    wsd['CharacterContainerSaveData']['value'].append(new_item)
-                if IsFound:
-                    print(
-                        "\033[32mCopy Character Container\033[0m %s UUID: %s -> %s" % (idx_key,
-                                                                                       str(container['key']['ID'][
-                                                                                               'value']), str(
-                            new_item['key']['ID']['value'])))
-                else:
-                    print(
-                        "\033[32mCopy Character Container\033[0m %s UUID: %s" % (idx_key,
-                                                                                 str(container['key']['ID']['value'])))
-                break
+        if player_gvas[idx_key]['value']['ID']['value'] in srcMappingCache.CharacterContainerSaveData:
+            container = parse_item(srcMappingCache.CharacterContainerSaveData[player_gvas[idx_key]['value']['ID']['value']], "CharacterContainerSaveData")
+            new_item = copy.deepcopy(container)
+            IsFound = False
+            if player_gvas[idx_key]['value']['ID']['value'] in MappingCache.CharacterContainerSaveData:
+                player_gvas[idx_key]['value']['ID']['value'] = toUUID(uuid.uuid4())
+                new_item['key']['ID']['value'] = player_gvas[idx_key]['value']['ID']['value']
+                IsFound = True
+            container_mapping[idx_key] = new_item
+            if not dry_run:
+                wsd['CharacterContainerSaveData']['value'].append(new_item)
+            if IsFound:
+                print(
+                    "\033[32mCopy Character Container\033[0m %s UUID: %s -> %s" % (idx_key,
+                                                                                   str(container['key']['ID'][
+                                                                                           'value']), str(
+                        new_item['key']['ID']['value'])))
+            else:
+                print(
+                    "\033[32mCopy Character Container\033[0m %s UUID: %s" % (idx_key,
+                                                                             str(container['key']['ID']['value'])))
 
     cloneDynamicItemIds = []
     for idx_key in ['CommonContainerId', 'DropSlotContainerId', 'EssentialContainerId', 'FoodEquipContainerId',
@@ -2211,12 +2215,22 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
         if 'IsPlayer' not in player and 'OwnerPlayerUId' in player and player['OwnerPlayerUId']['value'] == player_uid:
             isFound = item['key']['InstanceId']['value'] in MappingCache.CharacterSaveParameterMap
             new_item = copy.deepcopy(item)
-            new_item['value']['RawData']['value']['object']['SaveParameter']['value']['OwnerPlayerUId']['value'] = \
-                player_gvas['PlayerUId']['value']
-            new_item['value']['RawData']['value']['object']['SaveParameter']['value']['SlotID']['value']['ContainerId'][
-                'value']['ID'][
-                'value'] = player_gvas['PalStorageContainerId']['value']['ID']['value']
+            newCharacterData = new_item['value']['RawData']['value']['object']['SaveParameter']['value'] 
+            newCharacterData['OwnerPlayerUId']['value'] = player_gvas['PlayerUId']['value']
+            newCharacterData['SlotID']['value']['ContainerId']['value']['ID']['value'] = player_gvas['PalStorageContainerId']['value']['ID']['value']
             if isFound:
+                if 'EquipItemContainerId' in player:
+                    newCharacterData['EquipItemContainerId']['value']['ID']['value'] = toUUID(uuid.uuid4())
+                    print(f"Copy EquipItemContainerId Containers {player['EquipItemContainerId']['value']['ID']['value']} -> {newCharacterData['EquipItemContainerId']['value']['ID']['value']}")
+                    if player['EquipItemContainerId']['value']['ID']['value'] in srcMappingCache.ItemContainerSaveData:
+                        cloneItemContainers = srcMappingCache.ItemContainerSaveData[player['EquipItemContainerId']['value']['ID']['value']]
+                        CopyItemContainers(cloneItemContainers, newCharacterData['EquipItemContainerId']['value']['ID']['value'])
+                if 'ItemContainerId' in player:
+                    newCharacterData['ItemContainerId']['value']['ID']['value'] = toUUID(uuid.uuid4())
+                    print(f"Copy ItemContainerId Containers {player['ItemContainerId']['value']['ID']['value']} -> {newCharacterData['ItemContainerId']['value']['ID']['value']}")
+                    if player['ItemContainerId']['value']['ID']['value'] in srcMappingCache.ItemContainerSaveData:
+                        cloneItemContainers = srcMappingCache.ItemContainerSaveData[player['ItemContainerId']['value']['ID']['value']]
+                        CopyItemContainers(cloneItemContainers, newCharacterData['ItemContainerId']['value']['ID']['value'])
                 new_item['key']['InstanceId']['value'] = toUUID(uuid.uuid4())
                 print(
                     "\033[32mCopy Pal\033[0m  UUID: %s -> %s  Owner: %s  CharacterID: %s" % (
@@ -2647,9 +2661,6 @@ def DeleteCharacter(characterId):
         wsd['CharacterSaveParameterMap']['value'].remove(character)
     except ValueError:
         return False
-    MappingCache.LoadGroupSaveDataMap()
-    MappingCache.LoadCharacterSaveParameterMap()
-    MappingCache.LoadCharacterContainerMaps()
     return True
 
 
@@ -2681,6 +2692,14 @@ def FindReferenceItemContainerIds():
 
     return list(reference_ids)
 
+def CharacterDescription(character):
+    characterData = character['value']['RawData']['value']['object']['SaveParameter']['value']
+    if 'IsPlayer' in characterData:
+        return "Player \033[33m%s\033[0m" % (characterData['NickName']['value'] if 'NickName' in characterData else "Invalid")
+    else:
+        return "Pal %s Own \033[32m%s\033[0m" % (characterData['CharacterID']['value'] if 'CharacterID' in characterData else "Invalid",
+                                    characterData['OwnerPlayerUId']['value'])
+
 
 def FindDamageRefItemContainer():
     InvalidObjects = {
@@ -2695,29 +2714,29 @@ def FindDamageRefItemContainer():
     for playerId in MappingCache.PlayerIdMapping:
         container_ids = GetReferencedItemContainerIdsByPlayer(playerId)
         if container_ids == []:
-            print(f"Character {playerId} -> SaveContainers Cannot Get")
+            print(f"%s {playerId} -> SaveContainers Cannot Get" % CharacterDescription(MappingCache.PlayerIdMapping[playerId]))
             InvalidObjects['Character']['SaveContainers'].append(
                 MappingCache.PlayerIdMapping[playerId]['key']['InstanceId']['value'])
         for containerId in container_ids:
             if containerId not in MappingCache.ItemContainerSaveData:
                 InvalidObjects['Character']['SaveContainers'].append(
                     MappingCache.PlayerIdMapping[playerId]['key']['InstanceId']['value'])
-                print(f"Character {playerId} -> SaveContainers {containerId} Invalid")
+                print(f"%s {playerId} -> SaveContainers {containerId} Invalid" % CharacterDescription(MappingCache.PlayerIdMapping[playerId]))
                 break
 
     InvalidCharacters = []
     for character in wsd['CharacterSaveParameterMap']['value']:
         characterData = character['value']['RawData']['value']['object']['SaveParameter']['value']
-        if 'EquipItemContainerId' in characterData:
-            if characterData['EquipItemContainerId']['value']['ID']['value'] not in MappingCache.ItemContainerSaveData:
-                InvalidObjects['Character']['EquipItemContainerId'].append(character['key']['InstanceId']['value'])
-                print(
-                    f"Character {character['key']['InstanceId']['value']} -> EqualItemContainerID {characterData['EquipItemContainerId']['value']['ID']['value']} Invalid")
+        # Ignored for Boss, Boss will have empty EquipItemContainerId but work
+        # if 'EquipItemContainerId' in characterData:
+        #     if characterData['EquipItemContainerId']['value']['ID']['value'] not in MappingCache.ItemContainerSaveData:
+        #         InvalidObjects['Character']['EquipItemContainerId'].append(character['key']['InstanceId']['value'])
+        #         print(f"%-60s {character['key']['InstanceId']['value']} -> EqualItemContainerID {characterData['EquipItemContainerId']['value']['ID']['value']} Invalid" %
+        #               CharacterDescription(character))
         if 'ItemContainerId' in characterData:
             if characterData['ItemContainerId']['value']['ID']['value'] not in MappingCache.ItemContainerSaveData:
                 InvalidObjects['Character']['ItemContainerId'].append(character['key']['InstanceId']['value'])
-                print(
-                    f"Character {character['key']['InstanceId']['value']} -> ItemContainerId {characterData['ItemContainerId']['value']['ID']['value']} Invalid")
+                print(f"%-60s {character['key']['InstanceId']['value']} -> ItemContainerId {characterData['ItemContainerId']['value']['ID']['value']} Invalid" % CharacterDescription(character))
 
     for mapObject in parse_item(wsd['MapObjectSaveData'], 'MapObjectSaveData')['value']['values']:
         for concrete in mapObject['ConcreteModel']['value']['ModuleMap']['value']:
@@ -2734,13 +2753,15 @@ def FixBrokenDamageRefItemContainer():
     BrokenObjects = FindDamageRefItemContainer()
 
     BatchDeleteMapObject(BrokenObjects['MapObject'])
-    for characterId in BrokenObjects['Character']['EquipItemContainerId']:
-        DeleteCharacter(characterId)
+    # for characterId in BrokenObjects['Character']['EquipItemContainerId']:
+    #     DeleteCharacter(characterId)
     for characterId in BrokenObjects['Character']['ItemContainerId']:
         DeleteCharacter(characterId)
     for characterId in BrokenObjects['Character']['SaveContainers']:
         DeleteCharacter(characterId)
-
+    MappingCache.LoadGroupSaveDataMap()
+    MappingCache.LoadCharacterSaveParameterMap()
+    MappingCache.LoadCharacterContainerMaps()
 
 def GetReferencedItemContainerIdsByPlayer(player_uid):
     err, player_gvas, player_sav_file, player_gvas_file = GetPlayerGvas(player_uid)
@@ -2853,8 +2874,6 @@ def DeleteItemContainer(itemContainerId):
 
     print(f"Delete Item Container {itemContainerId}")
     wsd['ItemContainerSaveData']['value'].remove(container)
-    MappingCache.LoadItemContainerMaps()
-
 
 # DeleteMapObject("6137354f-422d-73af-5791-2faf850bdaed")
 
@@ -2935,6 +2954,10 @@ def DeletePlayer(player_uid, InstanceId=None, dry_run=False):
                     break
     for guild in remove_guilds:
         wsd['GroupSaveDataMap']['value'].remove(guild)
+
+    MappingCache.LoadGroupSaveDataMap()
+    MappingCache.LoadCharacterSaveParameterMap()
+    MappingCache.LoadCharacterContainerMaps()
 
     delete_map_ids = []
     for map_data in wsd['MapObjectSaveData']['value']['values']:
