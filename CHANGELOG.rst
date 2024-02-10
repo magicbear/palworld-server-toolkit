@@ -14,6 +14,18 @@ Changelog
     Note that they these tags will not actually close the issue/PR until they
     are merged into the "default" branch.
 
+v0.4.7
+-------
+
+Fix:
+
+- Delete Unreference item containers damage the save file (didn't chk BelongInfo->GroupID reference for ItemContainerSaveData)
+- Migrate User will not delete the target user Pals
+
+TODO:
+
+- Check Damage save after delete base
+
 v0.4.6
 -------
 

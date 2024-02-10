@@ -287,18 +287,15 @@ class ProgressGvasFile(GvasFile):
 
 def parse_item(properties, skip_path):
     if isinstance(properties, dict):
-        for key in properties:
-            call_skip_path = skip_path + "." + key[0].upper() + key[1:]
-            if isinstance(properties[key], dict) and \
-                    'type' in properties[key] and \
-                    properties[key]['type'] in ['StructProperty', 'ArrayProperty', 'MapProperty']:
-                if 'skip_type' in properties[key]:
-                    # print("Parsing worldSaveData.%s..." % call_skip_path, end="", flush=True)
-                    properties[key] = parse_skiped_item(properties[key], call_skip_path, False, True)
-                    # print("Done")
-                else:
-                    properties[key]['value'] = parse_item(properties[key]['value'], call_skip_path)
-            else:
+        if 'skip_type' in properties:
+            # print("Parsing worldSaveData.%s..." % skip_path, end="", flush=True)
+            properties_parsed = parse_skiped_item(properties, skip_path, False, True)
+            for k in properties_parsed:
+                properties[k] = properties_parsed[k]
+            # print("Done")
+        else:
+            for key in properties:
+                call_skip_path = skip_path + "." + key[0].upper() + key[1:]
                 properties[key] = parse_item(properties[key], call_skip_path)
     elif isinstance(properties, list):
         top_skip_path = ".".join(skip_path.split(".")[:-1])
@@ -1353,7 +1350,7 @@ class GUI():
             return
         target_guild_uuid = self.target_guild.get().split(" - ")[0]
         try:
-            uuid.UUID(target_guild_uuid)
+            target_guild_uuid = uuid.UUID(target_guild_uuid)
         except Exception as e:
             traceback.print_exception(e)
             messagebox.showerror("Target Guild Error", "\n".join(traceback.format_exception(e)))
@@ -1520,7 +1517,7 @@ class GUI():
                 messagebox.showinfo("Result", "Rename success")
                 self.load_players()
             except Exception as e:
-                messagebox.showerror("Rename Error", str(e))
+                messagebox.showerror("Rename Error", "\n".join(traceback.format_exception(e)))
 
     def delete_player(self):
         target_uuid = self.parse_target_uuid()
@@ -2306,7 +2303,7 @@ def MigratePlayer(player_uid, new_player_uid):
         return
     new_player_sav_file = os.path.dirname(
         os.path.abspath(args.filename)) + "/Players/" + new_player_uid.upper().replace("-", "") + ".sav"
-    DeletePlayer(new_player_uid)
+    DeletePlayer(new_player_uid, InstanceId=player_gvas['IndividualId']['value']['InstanceId']['value'])
 
     player_uid = player_gvas['PlayerUId']['value']
     player_gvas['PlayerUId']['value'] = toUUID(uuid.UUID(new_player_uid))
@@ -2649,25 +2646,36 @@ def DeleteCharacter(characterId):
 
 def FindReferenceItemContainerIds():
     load_skiped_decode(wsd, ['MapObjectSaveData'], False)
-    reference_ids = []
-
+    reference_ids = set()
+    if MappingCache.CharacterSaveParameterMap is None:
+        LoadCharacterSaveParameterMap()
+    if MappingCache.ItemContainerSaveData is None:
+        LoadItemContainerMaps()
+    if MappingCache.GroupSaveDataMap is None:
+        LoadGroupSaveDataMap()
+    
     for mapObject in wsd['MapObjectSaveData']['value']['values']:
         for concrete in mapObject['ConcreteModel']['value']['ModuleMap']['value']:
             if concrete['key'] == "EPalMapObjectConcreteModelModuleType::ItemContainer":
-                reference_ids.append(concrete['value']['RawData']['value']['target_container_id'])
-
+                reference_ids.add(concrete['value']['RawData']['value']['target_container_id'])
+    
     for character in wsd['CharacterSaveParameterMap']['value']:
         characterData = character['value']['RawData']['value']['object']['SaveParameter']['value']
         if 'EquipItemContainerId' in characterData:
-            reference_ids.append(characterData['EquipItemContainerId']['value']['ID']['value'])
+            reference_ids.add(characterData['EquipItemContainerId']['value']['ID']['value'])
         if 'ItemContainerId' in characterData:
-            reference_ids.append(characterData['ItemContainerId']['value']['ID']['value'])
-    
+            reference_ids.add(characterData['ItemContainerId']['value']['ID']['value'])
     # CharacterContainerId
     # for baseCamp in wsd['BaseCampSaveData']['value']:
     #     reference_ids.append(baseCamp['value']['WorkerDirector']['value']['RawData']['value']['container_id'])
+    empty_uuid = toUUID("00000000-0000-0000-0000-000000000000")
+    for uuid in MappingCache.ItemContainerSaveData:
+        containers = MappingCache.ItemContainerSaveData[uuid]
+        belongInfo = parse_item(containers['value']['BelongInfo'], "ItemContainerSaveData.Value.BelongInfo")
+        if 'GroupID' in belongInfo['value'] and belongInfo['value']['GroupID']['value'] != empty_uuid and belongInfo['value']['GroupID']['value'] in MappingCache.GroupSaveDataMap:
+            reference_ids.add(uuid)
     
-    return reference_ids
+    return list(reference_ids)
 
 def FindDamageRefItemContainer():
     if MappingCache.ItemContainerSaveData is None:
@@ -2759,10 +2767,50 @@ def DoubleCheckForUnreferenceItemContainers():
     load_skiped_decode(wsd, ['MapObjectSaveData', 'FoliageGridSaveDataMap', 'MapObjectSpawnerInStageSaveData',
                              'ItemContainerSaveData', 'DynamicItemSaveData', 'CharacterContainerSaveData'])
     unreferencedContainerIds = FindAllUnreferencedItemContainerIds()
+    deleteDynamicIds = []
+    empty_uuid = toUUID("00000000-0000-0000-0000-000000000000")
+    for nRunning, itemContainerId in enumerate(unreferencedContainerIds):
+        if nRunning % 100 == 0:
+            print(f"Checking {nRunning} / {len(unreferencedContainerIds)}")
+        itemContainerId = toUUID(itemContainerId)
+        if itemContainerId not in MappingCache.ItemContainerSaveData:
+            print(f"Error: Item Container {itemContainerId} not found")
+            continue
+
+        container = parse_item(MappingCache.ItemContainerSaveData[itemContainerId], "ItemContainerSaveData")
+        guids = set(search_guid(container, printout=False).keys())
+        guids.remove(itemContainerId)
+        containerSlots = container['value']['Slots']['value']['values']
+        for slotItem in containerSlots:
+            dynamicItemId = slotItem['ItemId']['value']['DynamicId']['value']['LocalIdInCreatedWorld']['value']
+            if dynamicItemId == '00000000-0000-0000-0000-000000000000':
+                continue
+            guids.remove(dynamicItemId)
+            if dynamicItemId not in MappingCache.DynamicItemSaveData:
+                print(
+                    f"\033[31m  Error missed DynamicItemContainer UUID [\033[33m {str(dynamicItemId)}\033[0m]  Item \033[32m {slotItem['ItemId']['value']['StaticId']['value']} \033[0m")
+                continue
+            guids.update(search_guid(MappingCache.DynamicItemSaveData[dynamicItemId], printout=False))
+            guids.remove(dynamicItemId)
+            deleteDynamicIds.append(dynamicItemId)
+    
+        belongInfo = parse_item(container['value']['BelongInfo'], "ItemContainerSaveData.Value.BelongInfo")
+        if 'GroupID' in belongInfo['value'] and belongInfo['value']['GroupID']['value'] != empty_uuid and \
+                belongInfo['value']['GroupID']['value'] in MappingCache.GroupSaveDataMap:
+            guids.remove(belongInfo['value']['GroupID']['value'])
+        if len(guids) > 0:
+            print("Get Unknow Referer UUID")
+            gp(guids)
+
     guid_mapping = search_guid(wsd, printout=False)
     for id in unreferencedContainerIds:
         if id in guid_mapping and len(guid_mapping[id]) > 1:
             print("Error: ID %s:" % id)
+            gp(guid_mapping[id])
+            print()
+    for id in deleteDynamicIds:
+        if id in guid_mapping and len(guid_mapping[id]) > 3:
+            print("Error: Dynamic Item ID %s:" % id)
             gp(guid_mapping[id])
             print()
 
@@ -2948,7 +2996,7 @@ def search_guid(dicts, level="", printout=True):
     empty_uuid = toUUID("00000000-0000-0000-0000-000000000000")
     if isinstance(dicts, dict):
         for k in dicts:
-            if level == "" and len(list(dicts.keys())) < 100:
+            if level == "" and len(list(dicts.keys())) < 100 and printout:
                 set_loadingTitle("Searching %s" % k)
             if isinstance(dicts[k], UUID) and dicts[k] != empty_uuid:
                 if dicts[k] not in isFound:
@@ -2964,7 +3012,7 @@ def search_guid(dicts, level="", printout=True):
                     isFound[_uuid] += rcs[_uuid]
     elif isinstance(dicts, list):
         for idx, l in enumerate(dicts):
-            if level == "" and len(dicts) < 100:
+            if level == "" and len(dicts) < 100 and printout:
                 set_loadingTitle("Searching %s" % l)
             if isinstance(l, UUID) and l != empty_uuid:
                 if l not in isFound:
