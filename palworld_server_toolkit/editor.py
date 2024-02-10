@@ -765,6 +765,8 @@ try:
             #
             # tk.font.Font(family=
             self.__font = ("Courier New", 12)
+            with open(f"{module_dir}/resources/enum.json", "r", encoding="utf-8") as f:
+                self.enum_options = json.load(f) 
 
         def build_subgui(self, g_frame, attribute_key, attrib_var, attrib):
             sub_frame = ttk.Frame(master=g_frame, borderwidth=1, relief=tk.constants.GROOVE, padding=2)
@@ -1014,20 +1016,12 @@ try:
                         tk.Checkbutton(master=g_frame, text="Enabled", variable=attrib_var[attribute_key]).pack(
                             side="left")
                         self.assign_attrib_var(attrib_var[attribute_key], attrib)
-                    elif attrib['type'] == "EnumProperty" and attrib['value']['type'] == "EPalWorkSuitability":
-                        enum_options = ['EPalWorkSuitability::EmitFlame', 'EPalWorkSuitability::Watering',
-                                        'EPalWorkSuitability::Seeding',
-                                        'EPalWorkSuitability::GenerateElectricity', 'EPalWorkSuitability::Handcraft',
-                                        'EPalWorkSuitability::Collection', 'EPalWorkSuitability::Deforest',
-                                        'EPalWorkSuitability::Mining',
-                                        'EPalWorkSuitability::OilExtraction', 'EPalWorkSuitability::ProductMedicine',
-                                        'EPalWorkSuitability::Cool', 'EPalWorkSuitability::Transport',
-                                        'EPalWorkSuitability::MonsterFarm']
-                        if attrib['value']['value'] not in enum_options:
-                            enum_options.append(attrib['value']['value'])
-                        ttk.Combobox(master=g_frame, font=self.__font, state="readonly", width=40,
+                    elif attrib['type'] == "EnumProperty" and attrib['value']['type'] in self.enum_options:
+                        if attrib['value']['value'] not in self.enum_options[attrib['value']['type']]:
+                            self.enum_options[attrib['value']['type']].append(attrib['value']['value'])
+                        AutocompleteCombobox(master=g_frame, font=self.__font, width=40,
                                      textvariable=attrib_var[attribute_key],
-                                     values=enum_options).pack(side="right")
+                                     values=self.enum_options[attrib['value']['type']]).pack(side="right")
                         self.assign_attrib_var(attrib_var[attribute_key], attrib)
                     elif attrib['type'] == "ArrayProperty" and attrib['array_type'] in ["StructProperty",
                                                                                         "NameProperty"]:
@@ -1711,10 +1705,16 @@ class GUI():
 
     def pal_edit(self):
         PalEditConfig.font = self.font
-        pal = PalEditGUI()
-        pal.load_i18n(self.language)
-        pal.load(None)
-        pal.mainloop()
+        global paledit
+        try:
+            if paledit is not None:
+                paledit.gui.destroy()
+        except NameError:
+            pass
+        paledit = PalEditGUI()
+        paledit.load_i18n(self.language)
+        paledit.load(None)
+        paledit.mainloop()
 
     def delete_base(self):
         target_guild_uuid = self.target_guild.get().split(" - ")[0]
@@ -3063,6 +3063,34 @@ def search_values(dicts, key, level=""):
                 isFound |= search_values(l, key, level + "[%d]" % idx)
     if level == "":
         set_loadingTitle("")
+    return isFound
+
+
+
+def dump_enums(dicts, level=""):
+    isFound = {}
+    if isinstance(dicts, dict):
+        if 'type' in dicts and dicts['type'] == "EnumProperty":
+            if dicts['value']['type'] not in isFound:
+                isFound[dicts['value']['type']] = set()
+            isFound[dicts['value']['type']].add(dicts['value']['value'])
+        for k in dicts:
+            if isinstance(dicts[k], dict) or isinstance(dicts[k], list):
+                _dump = dump_enums(dicts[k], level + "['%s']" % k)
+                for _type in _dump:
+                    if _type in isFound:
+                        isFound[_type].update(_dump[_type])
+                    else:
+                        isFound[_type] = _dump[_type]
+    elif isinstance(dicts, list):
+        for idx, l in enumerate(dicts):
+            if isinstance(l, dict) or isinstance(l, list):
+                _dump = dump_enums(l, level + "[%d]" % idx)
+                for _type in _dump:
+                    if _type in isFound:
+                        isFound[_type].update(_dump[_type])
+                    else:
+                        isFound[_type] = _dump[_type]
     return isFound
 
 

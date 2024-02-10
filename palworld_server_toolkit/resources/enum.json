@@ -1,0 +1,70 @@
+{
+    "EPalWorkSuitability": [
+        "EPalWorkSuitability::OilExtraction",
+        "EPalWorkSuitability::Seeding",
+        "EPalWorkSuitability::GenerateElectricity",
+        "EPalWorkSuitability::ProductMedicine",
+        "EPalWorkSuitability::Watering",
+        "EPalWorkSuitability::Deforest",
+        "EPalWorkSuitability::Cool",
+        "EPalWorkSuitability::Collection",
+        "EPalWorkSuitability::Handcraft",
+        "EPalWorkSuitability::MonsterFarm",
+        "EPalWorkSuitability::Mining",
+        "EPalWorkSuitability::Transport",
+        "EPalWorkSuitability::EmitFlame"
+    ],
+    "EPalGenderType": [
+        "EPalGenderType::Female",
+        "EPalGenderType::Male"
+    ],
+    "EPalBaseCampWorkerSickType": [
+        "EPalBaseCampWorkerSickType::Weakness",
+        "EPalBaseCampWorkerSickType::Fracture",
+        "EPalBaseCampWorkerSickType::Bulimia",
+        "EPalBaseCampWorkerSickType::Cold",
+        "EPalBaseCampWorkerSickType::GastricUlcer",
+        "EPalBaseCampWorkerSickType::DepressionSprain",
+        "EPalBaseCampWorkerSickType::Sprain"
+    ],
+    "EPalStatusPhysicalHealthType": [
+        "EPalStatusPhysicalHealthType::MinorInjury",
+        "EPalStatusPhysicalHealthType::Dying",
+        "EPalStatusPhysicalHealthType::Severe"
+    ],
+    "EPalStatusHungerType": [
+        "EPalStatusHungerType::Hunger",
+        "EPalStatusHungerType::Starvation"
+    ],
+    "EPalBaseCampWorkerEventType": [
+        "EPalBaseCampWorkerEventType::EatTooMuch",
+        "EPalBaseCampWorkerEventType::DodgeWork_Sleep",
+        "EPalBaseCampWorkerEventType::DodgeWork_Short",
+        "EPalBaseCampWorkerEventType::DodgeWork"
+    ],
+    "EPalWorkableType": [
+        "EPalWorkableType::MonsterFarm",
+        "EPalWorkableType::Repair",
+        "EPalWorkableType::OnlyJoin",
+        "EPalWorkableType::Progress",
+        "EPalWorkableType::OnlyJoinAndWalkAround",
+        "EPalWorkableType::Defense"
+    ],
+    "EPalTribeID": [
+        "EPalTribeID::None",
+        "EPalTribeID::GrassMammoth"
+    ],
+    "EPalGroupType": [
+        "EPalGroupType::Organization",
+        "EPalGroupType::Guild",
+        "EPalGroupType::Neutral"
+    ],
+    "EPalDungeonType": [
+        "EPalDungeonType::Fixed",
+        "EPalDungeonType::Normal"
+    ],
+    "EPalDungeonInstanceBossState": [
+        "EPalDungeonInstanceBossState::Dead",
+        "EPalDungeonInstanceBossState::Spawned"
+    ]
+}
