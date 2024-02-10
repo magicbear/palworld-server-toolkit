@@ -782,7 +782,46 @@ try:
             # tk.font.Font(family=
             self.__font = ("Courier New", 12)
             with open(f"{module_dir}/resources/enum.json", "r", encoding="utf-8") as f:
-                self.enum_options = json.load(f) 
+                self.enum_options = json.load(f)
+        
+        def create_base_frame(self):
+            # master = tk.Frame(master=self.gui)
+            canvas = tk.Canvas(self.gui)
+            y_scroll = tk.Scrollbar(self.gui, orient=tk.VERTICAL, command=canvas.yview)
+            scrollable_frame = tk.Frame(canvas)
+            scrollable_frame.bind(
+                "<Configure>",
+                lambda e: canvas.configure(
+                    scrollregion=canvas.bbox("all")
+                )
+            )
+            canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+            canvas.configure(yscrollcommand=y_scroll.set)
+            y_scroll.pack(side=tk.constants.RIGHT, fill=tk.constants.Y)
+            
+            # tables = ttk.Treeview(master, yscrollcommand=y_scroll.set)
+            # tables.pack(fill=tk.constants.BOTH, expand=True)
+            canvas.pack(fill=tk.constants.BOTH, expand=True)
+            # self.maxsize(self.winfo_screenwidth(), self.winfo_screenheight() - 100)
+            return scrollable_frame
+
+        def delete_select_item(self, g_frame, attribute_key, attrib_var, attrib, cmbx):
+            if cmbx.current() == -1:
+                return
+            if len(attrib['value']['values']) == 1:
+                messagebox.showwarning("At lease keep one variable")
+                return
+            del attrib['value']['values'][cmbx.current()]
+            del attrib_var[cmbx.current()]
+            cmbx['values'] = ["Item %d" % i for i in range(len(attrib['value']['values']))]
+
+        def add_select_item(self, g_frame, attribute_key, attrib_var, attrib, cmbx):
+            if cmbx.current() == -1:
+                return
+            attrib['value']['values'].append(copy.deepcopy(attrib['value']['values'][cmbx.current()]))
+            attrib_var.append({})
+            cmbx['values'] = ["Item %d" % i for i in range(len(attrib['value']['values']))]
+            cmbx.current(len(attrib['value']['values']) - 1)
 
         def build_subgui(self, g_frame, attribute_key, attrib_var, attrib):
             sub_frame = ttk.Frame(master=g_frame, borderwidth=1, relief=tk.constants.GROOVE, padding=2)
@@ -795,8 +834,13 @@ try:
                                 values=["Item %d" % i for i in range(len(attrib['value']['values']))])
             cmbx.bind("<<ComboboxSelected>>",
                       lambda evt: self.cmb_array_selected(evt, sub_frame_c, attribute_key, attrib_var, attrib))
-            cmbx.pack(side="right")
-            sub_frame_item.pack(side="top")
+            cmbx.pack(side=tk.LEFT)
+            ttk.Button(master=sub_frame_item, style="custom.TButton", text="✳️", width=3, padding=0, command=lambda: self.add_select_item(g_frame, attribute_key, attrib_var, attrib, cmbx)).pack(
+                side=tk.LEFT)
+            ttk.Button(master=sub_frame_item, style="custom.TButton", text="❌", width=3, padding=0, command=lambda: self.delete_select_item(g_frame, attribute_key, attrib_var, attrib, cmbx)).pack(
+                side=tk.LEFT)
+            
+            sub_frame_item.pack(side=tk.TOP, anchor=tk.NE)
             sub_frame_c.pack(side="bottom")
 
         def valid_int(self, value):
@@ -1029,8 +1073,8 @@ try:
 
                     attrib_var[attribute_key] = self.make_attrib_var(master=parent, attrib=attrib)
                     if attrib['type'] == "BoolProperty":
-                        tk.Checkbutton(master=g_frame, text="Enabled", variable=attrib_var[attribute_key]).pack(
-                            side="left")
+                        tk.Checkbutton(master=g_frame, text="Enabled", variable=attrib_var[attribute_key], width=40).pack(
+                            side=tk.RIGHT)
                         self.assign_attrib_var(attrib_var[attribute_key], attrib)
                     elif attrib['type'] == "EnumProperty" and attrib['value']['type'] in self.enum_options:
                         if attrib['value']['value'] not in self.enum_options[attrib['value']['type']]:
@@ -1218,13 +1262,16 @@ try:
             self.player = MappingCache.PlayerIdMapping[toUUID(player_uid)]['value']['RawData']['value']['object'][
                 'SaveParameter']['value']
             self.gui.title("Player Item Edit - %s" % player_uid)
-            tabs = ttk.Notebook(master=self)
+            tabs = self.create_base_frame()
             tabs.pack(anchor=tk.constants.N, fill=tk.constants.BOTH, expand=True)
             ttk.Button(master=self.gui, style="custom.TButton", text="Save", command=self.savedata).pack(
                 fill=tk.constants.X,
                 anchor=tk.constants.S,
                 expand=False)
             threading.Thread(target=self.load, args=[tabs, player_gvas]).start()
+        
+        def create_base_frame(self):
+            return ttk.Notebook(master=self)
 
         def load(self, tabs, player_gvas):
             with open(module_dir + "/resources/item_%s.json" % self.i18n, "r", encoding='utf-8') as f:
@@ -1275,7 +1322,7 @@ try:
             self.player = player_gvas
             self.gui_attribute = {}
             self.gui.title("Player Save Edit - %s" % player_uid)
-            self.build_variable_gui(self.gui, self.gui_attribute, self.player)
+            self.build_variable_gui(self.create_base_frame(), self.gui_attribute, self.player)
             ttk.Button(master=self.gui, style="custom.TButton", text="Save", command=self.savedata).pack(
                 fill=tk.constants.X)
 
@@ -1303,7 +1350,7 @@ try:
             self.gui.title(
                 "Player Edit - %s" % player_uid if player_uid is not None else "Character Edit - %s" % instanceId)
             self.gui_attribute = {}
-            self.build_variable_gui(self.gui, self.gui_attribute, self.player)
+            self.build_variable_gui(self.create_base_frame(), self.gui_attribute, self.player)
             ttk.Button(master=self.gui, style="custom.TButton", text="Save", command=self.savedata).pack(
                 fill=tk.constants.X)
 
@@ -1324,7 +1371,7 @@ try:
             self.group_data = groupMapping[group_id]['value']['RawData']
             self.gui.title("Guild Edit - %s" % group_id)
             self.gui_attribute = {}
-            self.build_variable_gui(self.gui, self.gui_attribute, self.group_data)
+            self.build_variable_gui(self.create_base_frame(), self.gui_attribute, self.group_data)
             ttk.Button(master=self.gui, style="custom.TButton", text="Save", command=self.savedata).pack(
                 fill=tk.constants.X)
 

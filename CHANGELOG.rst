@@ -14,6 +14,14 @@ Changelog
     Note that they these tags will not actually close the issue/PR until they
     are merged into the "default" branch.
 
+v0.5.4
+-------
+
+Feature:
+
+- Editor with scroll
+- Editor array with add / del
+
 v0.5.3
 -------
 
