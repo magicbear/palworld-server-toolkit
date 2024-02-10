@@ -2728,11 +2728,11 @@ def FindDamageRefItemContainer():
     for character in wsd['CharacterSaveParameterMap']['value']:
         characterData = character['value']['RawData']['value']['object']['SaveParameter']['value']
         # Ignored for Boss, Boss will have empty EquipItemContainerId but work
-        # if 'EquipItemContainerId' in characterData:
-        #     if characterData['EquipItemContainerId']['value']['ID']['value'] not in MappingCache.ItemContainerSaveData:
-        #         InvalidObjects['Character']['EquipItemContainerId'].append(character['key']['InstanceId']['value'])
-        #         print(f"%-60s {character['key']['InstanceId']['value']} -> EqualItemContainerID {characterData['EquipItemContainerId']['value']['ID']['value']} Invalid" %
-        #               CharacterDescription(character))
+        if 'EquipItemContainerId' in characterData:
+            if characterData['EquipItemContainerId']['value']['ID']['value'] not in MappingCache.ItemContainerSaveData:
+                InvalidObjects['Character']['EquipItemContainerId'].append(character['key']['InstanceId']['value'])
+                print(f"%-60s {character['key']['InstanceId']['value']} -> EqualItemContainerID {characterData['EquipItemContainerId']['value']['ID']['value']} Invalid" %
+                      CharacterDescription(character))
         if 'ItemContainerId' in characterData:
             if characterData['ItemContainerId']['value']['ID']['value'] not in MappingCache.ItemContainerSaveData:
                 InvalidObjects['Character']['ItemContainerId'].append(character['key']['InstanceId']['value'])
@@ -2741,22 +2741,23 @@ def FindDamageRefItemContainer():
     for mapObject in parse_item(wsd['MapObjectSaveData'], 'MapObjectSaveData')['value']['values']:
         for concrete in mapObject['ConcreteModel']['value']['ModuleMap']['value']:
             if concrete['key'] == "EPalMapObjectConcreteModelModuleType::ItemContainer":
-                if concrete['value']['RawData']['value'][
-                    'target_container_id'] not in MappingCache.ItemContainerSaveData:
+                if concrete['value']['RawData']['value']['target_container_id'] not in MappingCache.ItemContainerSaveData:
                     InvalidObjects['MapObject'].append(mapObject['MapObjectInstanceId']['value'])
                     print(
                         f"MapObject {mapObject['MapObjectInstanceId']['value']} -> ItemContainer {concrete['value']['RawData']['value']['target_container_id']} Invalid")
     return InvalidObjects
 
 
-def FixBrokenDamageRefItemContainer():
+def FixBrokenDamageRefItemContainer(withInvalidEqualItemContainer=False, withInvalidItemContainer=False):
     BrokenObjects = FindDamageRefItemContainer()
 
     BatchDeleteMapObject(BrokenObjects['MapObject'])
-    # for characterId in BrokenObjects['Character']['EquipItemContainerId']:
-    #     DeleteCharacter(characterId)
-    for characterId in BrokenObjects['Character']['ItemContainerId']:
-        DeleteCharacter(characterId)
+    if withInvalidEqualItemContainer:
+        for characterId in BrokenObjects['Character']['EquipItemContainerId']:
+            DeleteCharacter(characterId)
+    if withInvalidItemContainer:
+        for characterId in BrokenObjects['Character']['ItemContainerId']:
+            DeleteCharacter(characterId)
     for characterId in BrokenObjects['Character']['SaveContainers']:
         DeleteCharacter(characterId)
     MappingCache.LoadGroupSaveDataMap()

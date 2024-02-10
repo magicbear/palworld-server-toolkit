@@ -14,6 +14,13 @@ Changelog
     Note that they these tags will not actually close the issue/PR until they
     are merged into the "default" branch.
 
+v0.5.2
+-------
+
+Change:
+
+- FixBrokenDamageRefItemContainer will not automate delete invalid on EquipItemContainerId and ItemContainerId
+
 v0.5.1
 -------
 
