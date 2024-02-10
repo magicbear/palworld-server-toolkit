@@ -559,6 +559,8 @@ def main():
             args.fix_missing = False
             args.fix_capture = False
             args.fix_duplicate = False
+            args.del_unref_item = False
+            args.del_damage_object = False
             args.output = None
         else:
             args = parser.parse_args()
@@ -583,9 +585,13 @@ def main():
     else:
         output_path = args.output
 
-    ShowGuild()
-    playerMapping = LoadPlayers(data_source=wsd)
-    ShowPlayers()
+    try:
+        ShowGuild()
+        playerMapping = LoadPlayers(data_source=wsd)
+        ShowPlayers()
+    except KeyError:
+        print("ERROR: Corrupted Save File")
+        Statistics()
 
     if args.fix_missing:
         FixMissing()
