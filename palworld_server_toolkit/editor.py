@@ -114,7 +114,7 @@ pp = pprint.PrettyPrinter(width=80, compact=True, depth=6)
 gvas_pp = GvasPrettyPrint(width=1, compact=True, depth=6)
 gp = gvas_pp.pprint
 
-wsd = None
+wsd: Optional[dict] = None
 output_file = None
 gvas_file = None
 backup_gvas_file = None
@@ -2564,6 +2564,7 @@ def BatchDeleteMapObject(map_object_ids):
             mapObject['Model']['value']['BuildProcess']['value']['RawData']['value']['id']:
         _DeleteWorkSaveData(mapObject['Model']['value']['BuildProcess']['value']['RawData']['value']['id'])
 
+    new_mapobjects = []
     for mapObject in wsd['MapObjectSaveData']['value']['values']:
         if mapObject['MapObjectInstanceId']['value'] not in delete_map_object_ids:
             new_mapobjects.append(mapObject)

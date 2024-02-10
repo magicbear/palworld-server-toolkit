@@ -14,6 +14,17 @@ Changelog
     Note that they these tags will not actually close the issue/PR until they
     are merged into the "default" branch.
 
+v0.4.9
+-------
+
+Major:
+
+- Performance Improvement (upstream palworld-save-tools)
+
+Fix:
+
+- MigratePlayer failed on v0.4.8
+
 v0.4.8
 -------
 
