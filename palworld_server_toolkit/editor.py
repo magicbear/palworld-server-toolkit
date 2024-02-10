@@ -528,6 +528,16 @@ def main():
         help="Fix duplicate user data",
     )
     parser.add_argument(
+        "--del-unref-item",
+        action="store_true",
+        help="Delete Unref Item",
+    )
+    parser.add_argument(
+        "--del-damage-object",
+        action="store_true",
+        help="Delete Damage Object",
+    )
+    parser.add_argument(
         "--output",
         "-o",
         help="Output file (default: <filename>_fixed.sav)",
@@ -583,6 +593,10 @@ def main():
         FixCaptureLog()
     if args.fix_duplicate:
         FixDuplicateUser()
+    if args.del_unref_item:
+        BatchDeleteUnreferencedItemContainers()
+    if args.del_damage_object:
+        FixBrokenDamageRefItemContainer()
 
     if args.gui and sys.flags.interactive:
         threading.Thread(target=gui_thread).start()
@@ -611,6 +625,8 @@ def main():
         print("  CopyPlayer(old_uid,new_uid, backup_wsd)    - Copy the player from old PlayerUId to new PlayerUId ")
         print("                                               Note: be sure you have already use the new playerUId to ")
         print("                                               login the game.")
+        print("  BatchDeleteUnreferencedItemContainers()    - Delete Unref Item")
+        print("  FixBrokenDamageRefItemContainer()          - Delete Damage Object")
         print("  Statistics()                               - Counting wsd block data size")
         print("  Save()                                     - Save the file and exit")
         print()
@@ -1185,22 +1201,6 @@ try:
             tables.bind("<Double-1>",
                         lambda event: self.on_table_gui_dblclk(event, popup_set, columns, attrib_var, var_options))
             return tables
-
-
-    def GetPlayerGvas(player_uid):
-        player_sav_file = os.path.dirname(os.path.abspath(args.filename)) + "/Players/" + str(
-            player_uid).upper().replace(
-            "-",
-            "") + ".sav"
-        if not os.path.exists(player_sav_file):
-            return player_sav_file, None, None, None
-
-        with open(player_sav_file, "rb") as f:
-            raw_gvas, _ = decompress_sav_to_gvas(f.read())
-            player_gvas_file = GvasFile.read(raw_gvas, PALWORLD_TYPE_HINTS, PALWORLD_CUSTOM_PROPERTIES)
-        player_gvas = player_gvas_file.properties['SaveData']['value']
-
-        return None, player_gvas, player_sav_file, player_gvas_file
 
 
     class PlayerItemEdit(ParamEditor):
@@ -2010,6 +2010,20 @@ def Statistics():
     for key in wsd:
         print("%40s\t%.3f MB\tKey: %d" % (key, len(str(wsd[key])) / 1048576, len(wsd[key]['value'])))
 
+def GetPlayerGvas(player_uid):
+    player_sav_file = os.path.dirname(os.path.abspath(args.filename)) + "/Players/" + str(
+        player_uid).upper().replace(
+        "-",
+        "") + ".sav"
+    if not os.path.exists(player_sav_file):
+        return player_sav_file, None, None, None
+
+    with open(player_sav_file, "rb") as f:
+        raw_gvas, _ = decompress_sav_to_gvas(f.read())
+        player_gvas_file = GvasFile.read(raw_gvas, PALWORLD_TYPE_HINTS, PALWORLD_CUSTOM_PROPERTIES)
+    player_gvas = player_gvas_file.properties['SaveData']['value']
+
+    return None, player_gvas, player_sav_file, player_gvas_file
 
 def EditPlayer(player_uid):
     global player
