@@ -113,6 +113,8 @@ QQ群 139107098
 	- `OpenBackup(filename)` - 打开备份`Level.sav`文件并指向变量`backup_wsd`
 	- `MigratePlayer(old_uid,new_uid)` - 从`old_uid`向`new_uid`迁移玩家数据
 	- `CopyPlayer(old_uid,new_uid, backup_wsd)` - 复制玩家数据 `backup_wsd` 为OpenBackup备份文件 `wsd`为当前主文件
+	- `BatchDeleteUnreferencedItemContainers()` - 删除未引用的物品库
+	- `FixBrokenDamageRefItemContainer()` - 删除损坏对象
 	- `Save()` - 保存修改并退出
 
 ### 操作示例
