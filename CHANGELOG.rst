@@ -14,6 +14,18 @@ Changelog
     Note that they these tags will not actually close the issue/PR until they
     are merged into the "default" branch.
 
+v0.4.8
+-------
+
+Major:
+
+- MappingCache to be autoloaded, prevent bugs for feature.
+- Performance Improvement
+
+Fix:
+
+- Corrupted save file after delete base
+
 v0.4.7
 -------
 
