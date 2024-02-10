@@ -129,75 +129,57 @@ gui = None
 
 
 class __MappingCache:
-    _PlayerIdMapping = None
-    _CharacterSaveParameterMap = None
-    _MapObjectSaveData = None
-    _MapObjectSpawnerInStageSaveData = None
-    _ItemContainerSaveData = None
-    _DynamicItemSaveData = None
-    _CharacterContainerSaveData = None
-    _GroupSaveDataMap = None
-    _WorkSaveData = None
-    _BaseCampMapping = None
-
-    _worldSaveData = None
+    __slots__ = ("_worldSaveData",
+                 "PlayerIdMapping", "CharacterSaveParameterMap", "MapObjectSaveData", "MapObjectSpawnerInStageSaveData",
+                 "ItemContainerSaveData", "DynamicItemSaveData", "CharacterContainerSaveData", "GroupSaveDataMap",
+                 "WorkSaveData", "BaseCampMapping")
 
     def __init__(self, worldSaveData):
         self._worldSaveData = worldSaveData
 
     def __getattr__(self, item):
         if item == 'WorkSaveData':
-            if self._WorkSaveData is None:
-                self.LoadWorkSaveData()
-            return self._WorkSaveData
+            self.LoadWorkSaveData()
+            return self.WorkSaveData
         elif item == 'MapObjectSaveData':
-            if self._MapObjectSaveData is None:
-                self.LoadMapObjectMaps()
-            return self._MapObjectSaveData
+            self.LoadMapObjectMaps()
+            return self.MapObjectSaveData
         elif item == 'MapObjectSpawnerInStageSaveData':
-            if self._MapObjectSpawnerInStageSaveData is None:
-                self.LoadMapObjectMaps()
-            return self._MapObjectSpawnerInStageSaveData
+            self.LoadMapObjectMaps()
+            return self.MapObjectSpawnerInStageSaveData
         elif item == 'PlayerIdMapping':
-            if self._PlayerIdMapping is None:
-                self.LoadCharacterSaveParameterMap()
-            return self._PlayerIdMapping
+            self.LoadCharacterSaveParameterMap()
+            return self.PlayerIdMapping
         elif item == 'CharacterSaveParameterMap':
-            if self._CharacterSaveParameterMap is None:
-                self.LoadCharacterSaveParameterMap()
-            return self._CharacterSaveParameterMap
+            self.LoadCharacterSaveParameterMap()
+            return self.CharacterSaveParameterMap
         elif item == 'ItemContainerSaveData':
-            if self._ItemContainerSaveData is None:
-                self.LoadItemContainerMaps()
-            return self._ItemContainerSaveData
+            self.LoadItemContainerMaps()
+            return self.ItemContainerSaveData
         elif item == 'DynamicItemSaveData':
-            if self._DynamicItemSaveData is None:
-                self.LoadItemContainerMaps()
-            return self._DynamicItemSaveData
+            self.LoadItemContainerMaps()
+            return self.DynamicItemSaveData
         elif item == 'CharacterContainerSaveData':
-            if self._CharacterContainerSaveData is None:
-                self.LoadCharacterContainerMaps()
-            return self._CharacterContainerSaveData
+            self.LoadCharacterContainerMaps()
+            return self.CharacterContainerSaveData
         elif item == 'GroupSaveDataMap':
-            if self._GroupSaveDataMap is None:
-                self.LoadGroupSaveDataMap()
-            return self._GroupSaveDataMap
+            self.LoadGroupSaveDataMap()
+            return self.GroupSaveDataMap
         elif item == 'BaseCampMapping':
-            if self._BaseCampMapping is None:
-                self.LoadBaseCampMapping()
-            return self._BaseCampMapping
+            self.LoadBaseCampMapping()
+            return self.BaseCampMapping
 
     def LoadWorkSaveData(self):
         load_skiped_decode(self._worldSaveData, ['WorkSaveData'], False)
-        self._WorkSaveData = {wrk['RawData']['value']['id']: wrk for wrk in
-                              self._worldSaveData['WorkSaveData']['value']['values']}
+        self.WorkSaveData = {wrk['RawData']['value']['id']: wrk for wrk in
+                             self._worldSaveData['WorkSaveData']['value']['values']}
 
     def LoadMapObjectMaps(self):
         load_skiped_decode(self._worldSaveData, ['MapObjectSaveData', 'MapObjectSpawnerInStageSaveData'], False)
-        self._MapObjectSaveData = {
+        self.MapObjectSaveData = {
             mapobj['MapObjectInstanceId']['value']: mapobj for mapobj in
             self._worldSaveData['MapObjectSaveData']['value']['values']}
-        self._MapObjectSpawnerInStageSaveData = {
+        self.MapObjectSpawnerInStageSaveData = {
             mapObj['key']: mapObj
             for mapObj in
             self._worldSaveData['MapObjectSpawnerInStageSaveData']['value'][0]['value'][
@@ -205,31 +187,31 @@ class __MappingCache:
         }
 
     def LoadCharacterSaveParameterMap(self):
-        self._CharacterSaveParameterMap = {character['key']['InstanceId']['value']: character for character in
-                                           self._worldSaveData['CharacterSaveParameterMap']['value']}
-        self._PlayerIdMapping = {character['key']['PlayerUId']['value']: character for character in
-                                 filter(lambda x: 'IsPlayer' in
-                                                  x['value']['RawData']['value']['object']['SaveParameter']['value'],
-                                        self._worldSaveData['CharacterSaveParameterMap']['value'])}
+        self.CharacterSaveParameterMap = {character['key']['InstanceId']['value']: character for character in
+                                          self._worldSaveData['CharacterSaveParameterMap']['value']}
+        self.PlayerIdMapping = {character['key']['PlayerUId']['value']: character for character in
+                                filter(lambda x: 'IsPlayer' in
+                                                 x['value']['RawData']['value']['object']['SaveParameter']['value'],
+                                       self._worldSaveData['CharacterSaveParameterMap']['value'])}
 
     def LoadItemContainerMaps(self):
         load_skiped_decode(self._worldSaveData, ['ItemContainerSaveData', 'DynamicItemSaveData'], False)
-        self._ItemContainerSaveData = {container['key']['ID']['value']: container for container in
-                                       self._worldSaveData['ItemContainerSaveData']['value']}
-        self._DynamicItemSaveData = {dyn_item_data['ID']['value']['LocalIdInCreatedWorld']['value']: dyn_item_data
-                                     for
-                                     dyn_item_data in self._worldSaveData['DynamicItemSaveData']['value']['values']}
+        self.ItemContainerSaveData = {container['key']['ID']['value']: container for container in
+                                      self._worldSaveData['ItemContainerSaveData']['value']}
+        self.DynamicItemSaveData = {dyn_item_data['ID']['value']['LocalIdInCreatedWorld']['value']: dyn_item_data
+                                    for
+                                    dyn_item_data in self._worldSaveData['DynamicItemSaveData']['value']['values']}
 
     def LoadCharacterContainerMaps(self):
         load_skiped_decode(self._worldSaveData, ['CharacterContainerSaveData'], False)
-        self._CharacterContainerSaveData = {container['key']['ID']['value']: container for container in
-                                            self._worldSaveData['CharacterContainerSaveData']['value']}
+        self.CharacterContainerSaveData = {container['key']['ID']['value']: container for container in
+                                           self._worldSaveData['CharacterContainerSaveData']['value']}
 
     def LoadGroupSaveDataMap(self):
-        self._GroupSaveDataMap = {group['key']: group for group in self._worldSaveData['GroupSaveDataMap']['value']}
+        self.GroupSaveDataMap = {group['key']: group for group in self._worldSaveData['GroupSaveDataMap']['value']}
 
     def LoadBaseCampMapping(self):
-        self._BaseCampMapping = {base['key']: base for base in self._worldSaveData['BaseCampSaveData']['value']}
+        self.BaseCampMapping = {base['key']: base for base in self._worldSaveData['BaseCampSaveData']['value']}
 
 
 MappingCache: __MappingCache = None
@@ -339,8 +321,13 @@ class skip_loading_progress(threading.Thread):
                 time.sleep(0.02)
         except ValueError:
             pass
-        if gui is not None:
-            gui.progressbar['value'] = 100
+        except NameError:
+            pass
+        try:
+            if gui is not None:
+                gui.progressbar['value'] = 100
+        except NameError:
+            pass
 
 
 class FProgressArchiveReader(FArchiveReader):
@@ -2086,7 +2073,7 @@ def OpenBackup(filename):
 
         print(f"Parsing {filename}...", end="", flush=True)
         start_time = time.time()
-        backup_gvas_file = ProgressGvasFile.read(raw_gvas, PALWORLD_TYPE_HINTS, PALWORLD_CUSTOM_PROPERTIES)
+        backup_gvas_file = ProgressGvasFile.read(raw_gvas, PALWORLD_TYPE_HINTS, SKP_PALWORLD_CUSTOM_PROPERTIES)
         print("Done in %.2fs." % (time.time() - start_time))
     backup_wsd = backup_gvas_file.properties['worldSaveData']['value']
     ShowPlayers(backup_wsd)
@@ -2110,6 +2097,11 @@ def SetGuildOwner(group_id, new_player_uid):
 
 
 def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
+    load_skiped_decode(wsd, ['DynamicItemSaveData', 'CharacterSaveParameterMap', 'GroupSaveDataMap'], False)
+    # load_skiped_decode(old_wsd, ['DynamicItemSaveData', 'CharacterSaveParameterMap', 'GroupSaveDataMap'], False)
+    srcMappingCache = __MappingCache(old_wsd)
+    MappingCache.LoadItemContainerMaps()
+
     err, player_gvas, player_sav_file, player_gvas_file = GetPlayerGvas(player_uid)
     if err:
         print("\033[33mWarning: Player Sav file Not exists: %s\033[0m" % player_sav_file)
@@ -2125,7 +2117,7 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
     player_gvas['IndividualId']['value']['InstanceId']['value'] = toUUID(uuid.uuid4())
     # Clone Item from CharacterContainerSaveData
     for idx_key in ['OtomoCharacterContainerId', 'PalStorageContainerId']:
-        for container in parse_item(old_wsd['CharacterContainerSaveData']['value'], "CharacterContainerSaveData"):
+        for container in parse_item(old_wsd['CharacterContainerSaveData'], "CharacterContainerSaveData")['value']:
             if container['key']['ID']['value'] == player_gvas[idx_key]['value']['ID']['value']:
                 new_item = copy.deepcopy(container)
                 IsFound = False
@@ -2148,16 +2140,12 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
                                                                                  str(container['key']['ID']['value'])))
                 break
 
-    srcDynamicItemContainer = {dyn_item_data['ID']['value']['LocalIdInCreatedWorld']['value']: dyn_item_data for
-                               dyn_item_data in old_wsd['DynamicItemSaveData']['value']['values']}
-    srcItemContainers = {container['key']['ID']['value']: container for container in
-                         old_wsd['ItemContainerSaveData']['value']}
     cloneDynamicItemIds = []
     for idx_key in ['CommonContainerId', 'DropSlotContainerId', 'EssentialContainerId', 'FoodEquipContainerId',
                     'PlayerEquipArmorContainerId', 'WeaponLoadOutContainerId']:
         container_id = player_gvas['inventoryInfo']['value'][idx_key]['value']['ID']['value']
-        if container_id in srcItemContainers:
-            container = parse_item(srcItemContainers[container_id], "ItemContainerSaveData")
+        if container_id in srcMappingCache.ItemContainerSaveData:
+            container = parse_item(srcMappingCache.ItemContainerSaveData[container_id], "ItemContainerSaveData")
             new_item = copy.deepcopy(container)
             if container_id in MappingCache.ItemContainerSaveData:
                 player_gvas['inventoryInfo']['value'][idx_key]['value']['ID']['value'] = toUUID(uuid.uuid4())
@@ -2173,7 +2161,7 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
                 dynamicItemId = slotItem['ItemId']['value']['DynamicId']['value']['LocalIdInCreatedWorld']['value']
                 if str(dynamicItemId) == '00000000-0000-0000-0000-000000000000':
                     continue
-                if dynamicItemId not in srcDynamicItemContainer:
+                if dynamicItemId not in srcMappingCache.DynamicItemSaveData:
                     print(
                         f"\033[31m  Error missed DynamicItemContainer UUID [\033[33m {str(dynamicItemId)}\033[0m]  Item \033[32m {slotItem['ItemId']['value']['StaticId']['value']} \033[0m")
                     continue
@@ -2181,7 +2169,8 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
                     print(
                         f"\033[32m  Copy DynamicItemContainer  \033[33m {str(dynamicItemId)}\033[0m  Item \033[32m {slotItem['ItemId']['value']['StaticId']['value']} \033[0m")
                     if not dry_run:
-                        wsd['DynamicItemSaveData']['value']['values'].append(srcDynamicItemContainer[dynamicItemId])
+                        wsd['DynamicItemSaveData']['value']['values'].append(
+                            srcMappingCache.DynamicItemSaveData[dynamicItemId])
             dynamicItemIds = list(filter(lambda x: str(x) != '00000000-0000-0000-0000-000000000000',
                                          [x['ItemId']['value']['DynamicId']['value']['LocalIdInCreatedWorld'][
                                               'value'] for x in
@@ -2271,7 +2260,7 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
                             item['guild_name'], item['group_id']))
                     break
     if player_group is None:
-        for group_data in old_wsd['GroupSaveDataMap']['value']:
+        for group_data in parse_item(old_wsd['GroupSaveDataMap'], "GroupSaveData")['value']:
             if str(group_data['value']['GroupType']['value']['value']) == "EPalGroupType::Guild":
                 item = group_data['value']['RawData']['value']
                 for old_gplayer in item['players']:
@@ -2329,13 +2318,7 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
 
 def MoveToGuild(player_uid, group_id):
     player_uid = toUUID(player_uid)
-    target_group = None
-    for group_data in wsd['GroupSaveDataMap']['value']:
-        if str(group_data['value']['GroupType']['value']['value']) == "EPalGroupType::Guild":
-            group_info = group_data['value']['RawData']['value']
-            if group_info['group_id'] == toUUID(group_id):
-                target_group = group_info
-    if target_group is None:
+    if toUUID(group_id) not in MappingCache.GroupSaveDataMap:
         print("\033[31mError: cannot found target guild")
         return
 
@@ -2359,36 +2342,34 @@ def MoveToGuild(player_uid, group_id):
             })
             remove_instance_ids.append(item['key']['InstanceId']['value'])
 
-    remove_guilds = []
-    for group_data in wsd['GroupSaveDataMap']['value']:
-        if str(group_data['value']['GroupType']['value']['value']) == "EPalGroupType::Guild":
-            group_info = group_data['value']['RawData']['value']
-            delete_g_players = []
-            for g_player in group_info['players']:
-                if g_player['player_uid'] == player_uid:
-                    delete_g_players.append(g_player)
-                    print(
-                        "\033[31mDelete player \033[93m %s \033[31m on guild \033[93m %s \033[0m [\033[92m %s \033[0m] " % (
-                            g_player['player_info']['player_name'], group_info['guild_name'], group_info['group_id']))
+    group_data = parse_item(MappingCache.GroupSaveDataMap[toUUID(group_id)], "GroupSaveDataMap")
+    group_info = group_data['value']['RawData']['value']
+    delete_g_players = []
+    for g_player in group_info['players']:
+        if g_player['player_uid'] == player_uid:
+            delete_g_players.append(g_player)
+            print(
+                "\033[31mDelete player \033[93m %s \033[31m on guild \033[93m %s \033[0m [\033[92m %s \033[0m] " % (
+                    g_player['player_info']['player_name'], group_info['guild_name'], group_info['group_id']))
 
-            for g_player in delete_g_players:
-                group_info['players'].remove(g_player)
+    for g_player in delete_g_players:
+        group_info['players'].remove(g_player)
 
-            if len(group_info['players']) == 0 and group_info['group_id'] != toUUID(group_id):
-                DeleteGuild(group_info['group_id'])
+    if len(group_info['players']) == 0 and group_info['group_id'] != toUUID(group_id):
+        DeleteGuild(group_info['group_id'])
 
-            remove_items = []
-            for ind_id in group_info['individual_character_handle_ids']:
-                if ind_id['instance_id'] in remove_instance_ids:
-                    remove_items.append(ind_id)
-                    print(
-                        "\033[31mDelete guild [\033[92m %s \033[31m] character handle GUID \033[92m %s \033[0m [InstanceID \033[92m %s \033[0m] " % (
-                            group_info['group_id'], ind_id['guid'], ind_id['instance_id']))
-            for item in remove_items:
-                group_info['individual_character_handle_ids'].remove(item)
+    remove_items = []
+    for ind_id in group_info['individual_character_handle_ids']:
+        if ind_id['instance_id'] in remove_instance_ids:
+            remove_items.append(ind_id)
+            print(
+                "\033[31mDelete guild [\033[92m %s \033[31m] character handle GUID \033[92m %s \033[0m [InstanceID \033[92m %s \033[0m] " % (
+                    group_info['group_id'], ind_id['guid'], ind_id['instance_id']))
+    for item in remove_items:
+        group_info['individual_character_handle_ids'].remove(item)
 
     print("\033[32mAppend character and players to guild\033[0m")
-    target_group['players'].append({
+    group_info['players'].append({
         'player_uid': player_uid,
         'player_info': {
             'last_online_real_time': 0,
@@ -2396,11 +2377,11 @@ def MoveToGuild(player_uid, group_id):
                 playerInstance['NickName']['value']
         }
     })
-    target_group['individual_character_handle_ids'] += instances
+    group_info['individual_character_handle_ids'] += instances
 
 
 def MigratePlayer(player_uid, new_player_uid):
-    load_skiped_decode(wsd, ['MapObjectSaveData'], False)
+    load_skiped_decode(wsd, ['MapObjectSaveData', 'GroupSaveDataMap'], False)
 
     err, player_gvas, player_sav_file, player_gvas_file = GetPlayerGvas(player_uid)
     if err:
@@ -2523,7 +2504,7 @@ def PrintReferenceMapObjects():
 
 # NON FINISHED
 def BatchDeleteMapObject(map_object_ids):
-    load_skiped_decode(wsd, ['MapObjectSpawnerInStageSaveData'], False)
+    load_skiped_decode(wsd, ['MapObjectSpawnerInStageSaveData', 'MapObjectSaveData'], False)
 
     delete_map_object_ids = set()
     delete_item_container_ids = []
@@ -2556,13 +2537,14 @@ def BatchDeleteMapObject(map_object_ids):
             'owner_spawner_level_object_instance_id']
         delete_owners[owner_spawner_level_object_instance_id] = None
 
-    if 'repair_work_id' in mapObject['Model']['value']['RawData']['value'] and \
-            mapObject['Model']['value']['RawData']['value']['repair_work_id'] != "00000000-0000-0000-0000-000000000000":
-        _DeleteWorkSaveData(mapObject['Model']['value']['RawData']['value']['repair_work_id'])
+        if 'repair_work_id' in mapObject['Model']['value']['RawData']['value'] and \
+                mapObject['Model']['value']['RawData']['value'][
+                    'repair_work_id'] != "00000000-0000-0000-0000-000000000000":
+            _DeleteWorkSaveData(mapObject['Model']['value']['RawData']['value']['repair_work_id'])
 
-    if 'BuildProcess' in mapObject['Model']['value'] and "00000000-0000-0000-0000-000000000000" != \
-            mapObject['Model']['value']['BuildProcess']['value']['RawData']['value']['id']:
-        _DeleteWorkSaveData(mapObject['Model']['value']['BuildProcess']['value']['RawData']['value']['id'])
+        if 'BuildProcess' in mapObject['Model']['value'] and "00000000-0000-0000-0000-000000000000" != \
+                mapObject['Model']['value']['BuildProcess']['value']['RawData']['value']['id']:
+            _DeleteWorkSaveData(mapObject['Model']['value']['BuildProcess']['value']['RawData']['value']['id'])
 
     new_mapobjects = []
     for mapObject in wsd['MapObjectSaveData']['value']['values']:
@@ -2737,7 +2719,7 @@ def FindDamageRefItemContainer():
                 print(
                     f"Character {character['key']['InstanceId']['value']} -> ItemContainerId {characterData['ItemContainerId']['value']['ID']['value']} Invalid")
 
-    for mapObject in wsd['MapObjectSaveData']['value']['values']:
+    for mapObject in parse_item(wsd['MapObjectSaveData'], 'MapObjectSaveData')['value']['values']:
         for concrete in mapObject['ConcreteModel']['value']['ModuleMap']['value']:
             if concrete['key'] == "EPalMapObjectConcreteModelModuleType::ItemContainer":
                 if concrete['value']['RawData']['value'][

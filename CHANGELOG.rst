@@ -14,6 +14,13 @@ Changelog
     Note that they these tags will not actually close the issue/PR until they
     are merged into the "default" branch.
 
+v0.5.0
+-------
+
+Fix:
+
+- Multiple function loading error
+
 v0.4.9
 -------
 
