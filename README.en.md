@@ -87,6 +87,12 @@ This tools is for cleanup the unreference item, rename the player name, migrate 
 >
 > Open `Level.sav` need to be on the SaveGames directory, or copied with `Players`, the editor will also reference to `Players` 's file for working, if you didn't may be corrupted the save file.
 
+
+> [!WARNING]
+>
+> Delete user, delete base camp, delete unreference item containers are beta feature, may be cause the server error. Please *anways* backup the file, if have any issue, please provide your `Level.sav` file to issues.
+
+
 > [!NOTE]
 > 
 > Without -o params, default save file is `Level_fixed.sav`
