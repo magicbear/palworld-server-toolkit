@@ -20,6 +20,8 @@ v0.5.7
 Feature:
 
 - Item edit with code name #33
+- CleanupWorkerSick() on cli
+- Delete Attrib for Player
 
 Fix:
 

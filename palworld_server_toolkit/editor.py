@@ -633,6 +633,7 @@ def main():
         print("                                               login the game.")
         print("  BatchDeleteUnreferencedItemContainers()    - Delete Unref Item")
         print("  FixBrokenDamageRefItemContainer()          - Delete Damage Object")
+        print("  CleanupWorkerSick()                        - Cleanup WorkerSick flags for all Pals")
         print("  Statistics()                               - Counting wsd block data size")
         print("  Save()                                     - Save the file and exit")
         print()
@@ -789,7 +790,32 @@ try:
             self.__font = ("Courier New", 12)
             with open(f"{module_dir}/resources/enum.json", "r", encoding="utf-8") as f:
                 self.enum_options = json.load(f)
-        
+
+        def delete_select_attribute(self, master, cmbx, attrib):
+            if cmbx.current() == -1:
+                return
+            del attrib[cmbx.get()]
+            global ss
+            ss = master.children
+            for child in master.children:
+                child_obj = master.children[child]
+                cfg_text = list(child_obj.children.values())[0].config("text")
+                if cfg_text[4] == cmbx.get():
+                    child_obj.destroy()
+                    break
+            cmbx['value'] = list(attrib.keys())
+
+        def build_delete_attrib_gui(self, master, attrib):
+            g_frame = tk.Frame(master=master)
+            g_frame.pack(anchor=tk.constants.W, fill=tk.constants.X, expand=True)
+            gp(self)
+            tk.Label(master=g_frame, text="Attribute", font=self.__font).pack(side="left")
+            cmb_box = AutocompleteCombobox(master=g_frame, font=self.__font, width=30, values=list(attrib.keys()))
+            cmb_box.pack(side=tk.RIGHT)
+
+            ttk.Button(master=g_frame, style="custom.TButton", text="❌", width=3, padding=0,
+                       command=lambda: self.delete_select_attribute(master, cmb_box, attrib)).pack(side=tk.RIGHT)
+
         def create_base_frame(self):
             # master = tk.Frame(master=self.gui)
             canvas = tk.Canvas(self.gui)
@@ -808,7 +834,7 @@ try:
             # tables = ttk.Treeview(master, yscrollcommand=y_scroll.set)
             # tables.pack(fill=tk.constants.BOTH, expand=True)
             canvas.pack(fill=tk.constants.BOTH, expand=True)
-            # self.maxsize(self.winfo_screenwidth(), self.winfo_screenheight() - 100)
+            self.maxsize(self.winfo_screenwidth(), self.winfo_screenheight() - 100)
             return scrollable_frame
 
         def delete_select_item(self, g_frame, attribute_key, attrib_var, attrib, cmbx):
@@ -1334,7 +1360,10 @@ try:
             self.player = player_gvas
             self.gui_attribute = {}
             self.gui.title("Player Save Edit - %s" % player_uid)
-            self.build_variable_gui(self.create_base_frame(), self.gui_attribute, self.player)
+            base_frame = self.create_base_frame()
+            self.build_delete_attrib_gui(base_frame, self.player)
+            self.build_variable_gui(base_frame, self.gui_attribute, self.player)
+            
             ttk.Button(master=self.gui, style="custom.TButton", text="Save", command=self.savedata).pack(
                 fill=tk.constants.X)
 
@@ -1362,7 +1391,9 @@ try:
             self.gui.title(
                 "Player Edit - %s" % player_uid if player_uid is not None else "Character Edit - %s" % instanceId)
             self.gui_attribute = {}
-            self.build_variable_gui(self.create_base_frame(), self.gui_attribute, self.player)
+            base_frame = self.create_base_frame()
+            self.build_delete_attrib_gui(base_frame, self.player)
+            self.build_variable_gui(base_frame, self.gui_attribute, self.player)
             ttk.Button(master=self.gui, style="custom.TButton", text="Save", command=self.savedata).pack(
                 fill=tk.constants.X)
 
@@ -2469,6 +2500,15 @@ def MoveToGuild(player_uid, group_id):
         }
     })
     group_info['individual_character_handle_ids'] += instances
+    MappingCache.LoadGroupSaveDataMap()
+
+
+def CleanupWorkerSick():
+    for instanceId in MappingCache.CharacterSaveParameterMap:
+        characterData = MappingCache.CharacterSaveParameterMap[instanceId]['value']['RawData']['value']['object']['SaveParameter']['value']
+        if 'WorkerSick' in characterData:
+            print("Delete WorkerSick on %s" % CharacterDescription(MappingCache.CharacterSaveParameterMap[instanceId]))
+            del characterData['WorkerSick']
 
 
 def MigratePlayer(player_uid, new_player_uid):
