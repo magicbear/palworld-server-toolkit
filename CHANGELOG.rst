@@ -14,6 +14,17 @@ Changelog
     Note that they these tags will not actually close the issue/PR until they
     are merged into the "default" branch.
 
+v0.5.7
+-------
+
+Feature:
+
+- Item edit with code name #33
+
+Fix:
+
+- Move Guild feature not work on some case.
+
 v0.5.6
 -------
 

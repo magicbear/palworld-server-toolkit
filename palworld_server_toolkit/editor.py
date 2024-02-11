@@ -673,7 +673,7 @@ try:
             self._hit_index = 0
             self.position = 0
             self.bind('<KeyRelease>', self.handle_keyrelease)
-            # self['values'] = self._completion_list  # Setup our popup menu
+            self['values'] = self._completion_list  # Setup our popup menu
 
         def autocomplete(self, delta=0):
             """autocomplete the Combobox, delta may be 0/1/-1 to cycle through possible hits"""
@@ -1023,10 +1023,11 @@ try:
                             pass
                         if self.var_options is not None and attribute_key in self.var_options:
                             try:
-                                index = list(self.var_options[attribute_key].values()).index(
-                                    attrib_var[attribute_key].get())
+                                index = list(self.var_options[attribute_key].values()).index(attrib_var[attribute_key].get())
                                 attrib_var[attribute_key].set(list(self.var_options[attribute_key].keys())[index])
                             except ValueError:
+                                if len(attrib_var[attribute_key].get().split(": ")) >= 2:
+                                    attrib_var[attribute_key].set(attrib_var[attribute_key].get().split(": ")[-1].strip())
                                 pass
                         storage_object[storage_key] = attrib_var[attribute_key].get()
                     elif attrib['type'] == "EnumProperty":
@@ -1282,6 +1283,11 @@ try:
         def load(self, tabs, player_gvas):
             with open(module_dir + "/resources/item_%s.json" % self.i18n, "r", encoding='utf-8') as f:
                 item_list = json.load(f)
+            for itemCodeName in item_list:
+                if item_list[itemCodeName] is None:
+                    item_list[itemCodeName] = f": {itemCodeName}"
+                else:
+                    item_list[itemCodeName] = f"{item_list[itemCodeName]}: {itemCodeName}"
             frame_index = {}
             for idx_key in ['CommonContainerId', 'DropSlotContainerId', 'EssentialContainerId', 'FoodEquipContainerId',
                             'PlayerEquipArmorContainerId', 'WeaponLoadOutContainerId']:
@@ -2423,33 +2429,37 @@ def MoveToGuild(player_uid, group_id):
             })
             remove_instance_ids.append(item['key']['InstanceId']['value'])
 
-    group_data = parse_item(MappingCache.GroupSaveDataMap[toUUID(group_id)], "GroupSaveDataMap")
-    group_info = group_data['value']['RawData']['value']
-    delete_g_players = []
-    for g_player in group_info['players']:
-        if g_player['player_uid'] == player_uid:
-            delete_g_players.append(g_player)
-            print(
-                "\033[31mDelete player \033[93m %s \033[31m on guild \033[93m %s \033[0m [\033[92m %s \033[0m] " % (
-                    g_player['player_info']['player_name'], group_info['guild_name'], group_info['group_id']))
+    for _group_id in MappingCache.GroupSaveDataMap:
+        group_data = parse_item(MappingCache.GroupSaveDataMap[_group_id], "GroupSaveDataMap")
+        if group_data['value']['GroupType']['value']['value'] == "EPalGroupType::Guild":
+            group_info = group_data['value']['RawData']['value']
+            delete_g_players = []
+            for g_player in group_info['players']:
+                if g_player['player_uid'] == player_uid:
+                    delete_g_players.append(g_player)
+                    print("\033[31mDelete player \033[93m %s \033[31m on guild \033[93m %s \033[0m [\033[92m %s \033[0m] " % (
+                            g_player['player_info']['player_name'], group_info['guild_name'], group_info['group_id']))
 
-    for g_player in delete_g_players:
-        group_info['players'].remove(g_player)
+            for g_player in delete_g_players:
+                group_info['players'].remove(g_player)
+                
+            if len(group_info['players']) == 0 and group_info['group_id'] != toUUID(group_id):
+                DeleteGuild(group_info['group_id'])
 
-    if len(group_info['players']) == 0 and group_info['group_id'] != toUUID(group_id):
-        DeleteGuild(group_info['group_id'])
-
-    remove_items = []
-    for ind_id in group_info['individual_character_handle_ids']:
-        if ind_id['instance_id'] in remove_instance_ids:
-            remove_items.append(ind_id)
-            print(
-                "\033[31mDelete guild [\033[92m %s \033[31m] character handle GUID \033[92m %s \033[0m [InstanceID \033[92m %s \033[0m] " % (
-                    group_info['group_id'], ind_id['guid'], ind_id['instance_id']))
-    for item in remove_items:
-        group_info['individual_character_handle_ids'].remove(item)
+            remove_items = []
+            for ind_id in group_info['individual_character_handle_ids']:
+                if ind_id['instance_id'] in remove_instance_ids:
+                    remove_items.append(ind_id)
+                    print(
+                        "\033[31mDelete guild [\033[92m %s \033[31m] character handle GUID \033[92m %s \033[0m [InstanceID \033[92m %s \033[0m] " % (
+                            group_info['group_id'], ind_id['guid'], ind_id['instance_id']))
+            for item in remove_items:
+                group_info['individual_character_handle_ids'].remove(item)
 
     print("\033[32mAppend character and players to guild\033[0m")
+    MappingCache.PlayerIdMapping[player_uid]['value']['RawData']['value']['group_id'] = toUUID(group_id)
+    group_data = parse_item(MappingCache.GroupSaveDataMap[toUUID(group_id)], "GroupSaveDataMap")
+    group_info = group_data['value']['RawData']['value']
     group_info['players'].append({
         'player_uid': player_uid,
         'player_info': {
