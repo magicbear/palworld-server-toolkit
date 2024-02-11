@@ -120,7 +120,6 @@ gvas_file = None
 backup_gvas_file = None
 backup_wsd = None
 playerMapping = None
-guildInstanceMapping = None
 output_path = None
 args = None
 player = None
@@ -128,12 +127,22 @@ filetime = -1
 gui = None
 
 
-class __MappingCache:
+class MappingCacheObject:
     __slots__ = ("_worldSaveData",
                  "PlayerIdMapping", "CharacterSaveParameterMap", "MapObjectSaveData", "MapObjectSpawnerInStageSaveData",
                  "ItemContainerSaveData", "DynamicItemSaveData", "CharacterContainerSaveData", "GroupSaveDataMap",
-                 "WorkSaveData", "BaseCampMapping")
+                 "WorkSaveData", "BaseCampMapping", "GuildSaveDataMap", "GuildInstanceMapping")
 
+    _MappingCacheInstances = {
+
+    }
+    
+    @staticmethod
+    def get(worldSaveData):
+        if id(worldSaveData) not in MappingCacheObject._MappingCacheInstances:
+            MappingCacheObject._MappingCacheInstances[id(worldSaveData)] = MappingCacheObject(worldSaveData)
+        return MappingCacheObject._MappingCacheInstances[id(worldSaveData)]
+    
     def __init__(self, worldSaveData):
         self._worldSaveData = worldSaveData
 
@@ -165,9 +174,15 @@ class __MappingCache:
         elif item == 'GroupSaveDataMap':
             self.LoadGroupSaveDataMap()
             return self.GroupSaveDataMap
+        elif item == 'GuildSaveDataMap':
+            self.LoadGroupSaveDataMap()
+            return self.GuildSaveDataMap
         elif item == 'BaseCampMapping':
             self.LoadBaseCampMapping()
             return self.BaseCampMapping
+        elif item == 'GuildInstanceMapping':
+            self.LoadGuildInstanceMapping()
+            return self.GuildInstanceMapping
 
     def LoadWorkSaveData(self):
         load_skiped_decode(self._worldSaveData, ['WorkSaveData'], False)
@@ -209,12 +224,20 @@ class __MappingCache:
 
     def LoadGroupSaveDataMap(self):
         self.GroupSaveDataMap = {group['key']: group for group in self._worldSaveData['GroupSaveDataMap']['value']}
+        self.GuildSaveDataMap = {group['key']: group for group in filter(lambda x: x['value']['GroupType']['value']['value'] == "EPalGroupType::Guild", self._worldSaveData['GroupSaveDataMap']['value'])}
 
     def LoadBaseCampMapping(self):
         self.BaseCampMapping = {base['key']: base for base in self._worldSaveData['BaseCampSaveData']['value']}
+    
+    def LoadGuildInstanceMapping(self):
+        self.GuildInstanceMapping = {}
+        for group_id in self.GuildSaveDataMap:
+            group_data = self.GuildSaveDataMap[group_id]
+            item = group_data['value']['RawData']['value']
+            self.GuildInstanceMapping.update({ind_char['guid']: ind_char['instance_id'] for ind_char in item['individual_character_handle_ids']})
 
 
-MappingCache: __MappingCache = None
+MappingCache: MappingCacheObject = None
 
 
 def skip_decode(
@@ -629,8 +652,8 @@ def main():
         print("                                               when use to fix broken save, you can rename the old ")
         print("                                               player save to another UID and put in old_uid field.")
         print("  CopyPlayer(old_uid,new_uid, backup_wsd)    - Copy the player from old PlayerUId to new PlayerUId ")
-        print("                                               Note: be sure you have already use the new playerUId to ")
-        print("                                               login the game.")
+        print("  CopyBaseCamp(base_id,new_group_id, backup_wsd) ")
+        print("                                             - Copy the basecamp base_id to new guild group id ")
         print("  BatchDeleteUnreferencedItemContainers()    - Delete Unref Item")
         print("  FixBrokenDamageRefItemContainer()          - Delete Damage Object")
         print("  CleanupWorkerSick()                        - Cleanup WorkerSick flags for all Pals")
@@ -2093,7 +2116,7 @@ def LoadFile(filename):
         print("Done in %.2fs." % (time.time() - start_time))
 
     wsd = gvas_file.properties['worldSaveData']['value']
-    MappingCache = __MappingCache(wsd)
+    MappingCache = MappingCacheObject.get(wsd)
 
 
 def Statistics():
@@ -2182,6 +2205,7 @@ def OpenBackup(filename):
         print("Done in %.2fs." % (time.time() - start_time))
     backup_wsd = backup_gvas_file.properties['worldSaveData']['value']
     ShowPlayers(backup_wsd)
+    ShowGuild(backup_wsd)
 
 
 def toUUID(uuid_str):
@@ -2201,6 +2225,7 @@ def SetGuildOwner(group_id, new_player_uid):
     return True
 
 def CopyItemContainers(src_containers, targetInstanceId):
+    load_skiped_decode(wsd, ['ItemContainerSaveData'], False)
     new_containers = parse_item(copy.deepcopy(src_containers), "ItemContainerSaveData")
     new_containers['key']['ID']['value'] = targetInstanceId
     wsd['ItemContainerSaveData']['value'].append(new_containers)
@@ -2208,7 +2233,7 @@ def CopyItemContainers(src_containers, targetInstanceId):
 def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
     load_skiped_decode(wsd, ['DynamicItemSaveData', 'CharacterSaveParameterMap', 'GroupSaveDataMap'], False)
     # load_skiped_decode(old_wsd, ['DynamicItemSaveData', 'CharacterSaveParameterMap', 'GroupSaveDataMap'], False)
-    srcMappingCache = __MappingCache(old_wsd)
+    srcMappingCache = MappingCacheObject.get(old_wsd)
     MappingCache.LoadItemContainerMaps()
 
     err, player_gvas, player_sav_file, player_gvas_file = GetPlayerGvas(player_uid)
@@ -2587,12 +2612,14 @@ def MigratePlayer(player_uid, new_player_uid):
     print("Finish to migrate player from Save, please delete this file manually: %s" % player_sav_file)
 
 
-def FindReferenceMapObject(mapObjectId, level=0, recursive_mapObjectIds=set()):
+def FindReferenceMapObject(mapObjectId, level=0, recursive_mapObjectIds=set(), srcMapping=None):
+    if srcMapping is None:
+        srcMapping = MappingCache
     mapObjectId = toUUID(mapObjectId)
-    if mapObjectId not in MappingCache.MapObjectSaveData:
+    if mapObjectId not in srcMapping.MapObjectSaveData:
         print(f"Invalid {mapObjectId}")
         return False
-    mapObject = MappingCache.MapObjectSaveData[mapObjectId]
+    mapObject = srcMapping.MapObjectSaveData[mapObjectId]
     connector = mapObject['Model']['value']['Connector']['value']['RawData']
     reference_ids = []
     if 'value' in connector:
@@ -2607,7 +2634,7 @@ def FindReferenceMapObject(mapObjectId, level=0, recursive_mapObjectIds=set()):
                     # print("%sAny_Place: %s -> %s" % ("  " * level, mapObjectId, connection_item['connect_to_model_instance_id']))
                     reference_ids.append(connection_item['connect_to_model_instance_id'])
                     reference_ids += FindReferenceMapObject(connection_item['connect_to_model_instance_id'], level + 1,
-                                                            recursive_mapObjectIds)
+                                                            recursive_mapObjectIds, srcMapping)
         if 'other_connectors' in connector['value']:
             for other_connection_list in connector['value']['other_connectors']:
                 for connection_item in other_connection_list['connect']:
@@ -2619,7 +2646,7 @@ def FindReferenceMapObject(mapObjectId, level=0, recursive_mapObjectIds=set()):
                     # recursive_mapObjectIds.append(connection_item['connect_to_model_instance_id'])
                     reference_ids.append(connection_item['connect_to_model_instance_id'])
                     reference_ids += FindReferenceMapObject(connection_item['connect_to_model_instance_id'], level + 1,
-                                                            recursive_mapObjectIds)
+                                                            recursive_mapObjectIds, srcMapping)
 
     return reference_ids
 
@@ -2697,6 +2724,52 @@ def BatchDeleteMapObject(map_object_ids):
     MappingCache.LoadMapObjectMaps()
 
 
+def CopyMapObject(map_object_id, src_wsd, dry_run=False):
+    srcMappingObject = MappingCacheObject.get(src_wsd)
+    if toUUID(map_object_id) not in srcMappingObject.MapObjectSaveData:
+        print(f"Error: Map Object {map_object_id} not found")
+        return False
+    mapObject = copy.deepcopy(srcMappingObject.MapObjectSaveData[toUUID(map_object_id)])
+    print(f"Clone MapObject {map_object_id}")
+    if not dry_run:
+        wsd['MapObjectSaveData']['value']['values'].append(mapObject)
+    sub_ids = FindReferenceMapObject(map_object_id, srcMapping=srcMappingObject)
+    for sub_id in sub_ids:
+        if sub_id == map_object_id:
+            continue
+        CopyMapObject(sub_id, src_wsd, dry_run)
+    # MapObjectConcreteModelInstanceId = mapObject['MapObjectConcreteModelInstanceId']['value']
+    # concrete_model_instance_id = mapObject['Model']['value']['RawValue']['value']['concrete_model_instance_id']   > = Referer To mapObject['ConcreteModel']
+    for concrete in mapObject['ConcreteModel']['value']['ModuleMap']['value']:
+        if concrete['key'] == "EPalMapObjectConcreteModelModuleType::ItemContainer":
+            print(f"Clone MapObject {map_object_id} -> ItemContainer {concrete['value']['RawData']['value']['target_container_id']}")
+            if not dry_run:
+                CopyItemContainers(parse_item(srcMappingObject.ItemContainerSaveData[concrete['value']['RawData']['value']['target_container_id']],
+                               "ItemContainerSaveData"), concrete['value']['RawData']['value']['target_container_id'])
+        if concrete['key'] == "EPalMapObjectConcreteModelModuleType::Workee":
+            print(f"Clone MapObject {map_object_id} -> WorkSaveSata {concrete['value']['RawData']['value']['target_work_id']}")
+            if not dry_run:
+                _CopyWorkSaveData(concrete['value']['RawData']['value']['target_work_id'], src_wsd)
+    if 'repair_work_id' in mapObject['Model']['value']['RawData']['value'] and \
+            mapObject['Model']['value']['RawData']['value'][
+                'repair_work_id'] != "00000000-0000-0000-0000-000000000000":
+        print(
+            f"Clone MapObject {map_object_id} -> repair WorkSaveSata {mapObject['Model']['value']['RawData']['value']['repair_work_id']}")
+        if not dry_run:
+            _CopyWorkSaveData(mapObject['Model']['value']['RawData']['value']['repair_work_id'], src_wsd)
+    owner_spawner_level_object_instance_id = mapObject['Model']['value']['RawData']['value'][
+        'owner_spawner_level_object_instance_id']
+    if owner_spawner_level_object_instance_id in srcMappingObject.MapObjectSpawnerInStageSaveData:
+        mapObjSpawner = copy.deepcopy(parse_item(srcMappingObject.MapObjectSpawnerInStageSaveData[owner_spawner_level_object_instance_id],
+                                   "MapObjectSpawnerInStageSaveData.Value"))
+        print(
+            f"Clone MapObjectSpawnerInStageSaveData {owner_spawner_level_object_instance_id}  Map Object {map_object_id}")
+        if not dry_run:
+            wsd['MapObjectSpawnerInStageSaveData']['value'][0]['value']['SpawnerDataMapByLevelObjectInstanceId']['value'].append(mapObjSpawner)
+
+    return True
+
+
 def DeleteMapObject(map_object_id):
     load_skiped_decode(wsd, ['MapObjectSpawnerInStageSaveData'], False)
     if toUUID(map_object_id) not in MappingCache.MapObjectSaveData:
@@ -2734,6 +2807,50 @@ def DeleteMapObject(map_object_id):
         wsd['MapObjectSpawnerInStageSaveData']['value'][0]['value']['SpawnerDataMapByLevelObjectInstanceId'][
             'value'].remove(mapObjSpawner)
 
+    return True
+
+
+def CopyCharacter(characterId, src_wsd, dry_run=False):
+    srcMappingCache = MappingCacheObject.get(src_wsd)
+    characterId = toUUID(characterId)
+    if characterId not in srcMappingCache.CharacterSaveParameterMap:
+        print(f"Error: Character {characterId} not found")
+        return False
+    character = srcMappingCache.CharacterSaveParameterMap[characterId]
+    characterData = character['value']['RawData']['value']['object']['SaveParameter']['value']
+    if 'EquipItemContainerId' in characterData and not dry_run:
+        CopyItemContainers(character, characterData['EquipItemContainerId']['value']['ID']['value'])
+    if 'ItemContainerId' in characterData and not dry_run:
+        CopyItemContainers(character, characterData['ItemContainerId']['value']['ID']['value'])
+
+    if 'group_id' in character['value']['RawData']['value']:
+        try:
+            group = MappingCache.GroupSaveDataMap[character['value']['RawData']['value']['group_id']]
+            if not dry_run:
+                group['value']['RawData']['value']['individual_character_handle_ids'].append({
+                    'guid': toUUID("00000000-0000-0000-0000-000000000000"),
+                    "instance_id": characterId
+                })
+        except KeyError:
+            pass
+
+    if 'SlotID' in characterData:
+        try:
+            characterContainer = parse_item(srcMappingCache.CharacterContainerSaveData[
+                                                characterData['SlotID']['value']['ContainerId']['value']['ID'][
+                                                    'value']], "CharacterContainerSaveData")
+            for slotItem in characterContainer['value']['Slots']['value']['values']:
+                if slotItem['RawData']['value']['instance_id'] == characterId:
+                    characterContainer['value']['Slots']['value']['values'].append(copy.deepcopy(slotItem))
+                    print(
+                        f"Copy Character {characterId} from CharacterContainer {characterData['SlotID']['value']['ContainerId']['value']['ID']['value']}")
+                    break
+        except KeyError:
+            pass
+    try:
+        wsd['CharacterSaveParameterMap']['value'].append(character)
+    except ValueError:
+        return False
     return True
 
 
@@ -3247,29 +3364,31 @@ def LoadPlayers(data_source=None):
 
 
 def ShowPlayers(data_source=None):
-    global guildInstanceMapping
+    if data_source is None:
+        data_source = wsd
+    srcGuildMapping = MappingCacheObject.get(data_source)
     playerMapping = LoadPlayers(data_source)
     for playerUId in playerMapping:
         playerMeta = playerMapping[playerUId]
         try:
             print("PlayerUId \033[32m %s \033[0m [InstanceID %s %s \033[0m] -> Level %2d  %s" % (
                 playerUId,
-                "\033[33m" if toUUID(playerUId) in guildInstanceMapping and
-                              playerMeta['InstanceId'] == guildInstanceMapping[toUUID(playerUId)] else "\033[31m",
+                "\033[33m" if toUUID(playerUId) in srcGuildMapping.GuildInstanceMapping and
+                              playerMeta['InstanceId'] == srcGuildMapping.GuildInstanceMapping[toUUID(playerUId)] else "\033[31m",
                 playerMeta['InstanceId'],
                 playerMeta['Level'] if 'Level' in playerMeta else -1, playerMeta['NickName']))
         except UnicodeEncodeError as e:
             print("Corrupted Player Name \033[31m %s \033[0m PlayerUId \033[32m %s \033[0m [InstanceID %s %s \033[0m]" %
-                  (repr(playerMeta['NickName']), playerUId, "\033[33m" if toUUID(playerUId) in guildInstanceMapping and
+                  (repr(playerMeta['NickName']), playerUId, "\033[33m" if toUUID(playerUId) in srcGuildMapping.GuildInstanceMapping and
                                                                           playerMeta['InstanceId'] ==
-                                                                          guildInstanceMapping[
+                                                                          srcGuildMapping.GuildInstanceMapping[
                                                                               toUUID(playerUId)] else "\033[31m",
                    playerMeta['InstanceId']))
         except KeyError:
             print("PlayerUId \033[32m %s \033[0m [InstanceID %s %s \033[0m] -> Level %2d" % (
                 playerUId,
-                "\033[33m" if toUUID(playerUId) in guildInstanceMapping and
-                              playerMeta['InstanceId'] == guildInstanceMapping[toUUID(playerUId)] else "\033[31m",
+                "\033[33m" if toUUID(playerUId) in srcGuildMapping.GuildInstanceMapping and
+                              playerMeta['InstanceId'] == srcGuildMapping.GuildInstanceMapping[toUUID(playerUId)] else "\033[31m",
                 playerMeta['InstanceId'],
                 playerMeta['Level'] if 'Level' in playerMeta else -1))
 
@@ -3313,13 +3432,13 @@ def FixDuplicateUser(dry_run=False):
     for item in wsd['CharacterSaveParameterMap']['value']:
         if "00000000-0000-0000-0000-000000000000" != str(item['key']['PlayerUId']['value']):
             player_meta = item['value']['RawData']['value']['object']['SaveParameter']['value']
-            if item['key']['PlayerUId']['value'] not in guildInstanceMapping:
+            if item['key']['PlayerUId']['value'] not in MappingCache.GuildInstanceMapping:
                 print(
                     "\033[31mInvalid player on CharacterSaveParameterMap\033[0m  PlayerUId: %s  InstanceID: %s  Nick: %s" % (
                         str(item['key']['PlayerUId']['value']), str(item['key']['InstanceId']['value']),
                         str(player_meta['NickName']['value'])))
                 removeItems.append(item)
-            elif item['key']['InstanceId']['value'] != guildInstanceMapping[item['key']['PlayerUId']['value']]:
+            elif item['key']['InstanceId']['value'] != MappingCache.GuildInstanceMapping[item['key']['PlayerUId']['value']]:
                 print(
                     "\033[31mDuplicate player on CharacterSaveParameterMap\033[0m  PlayerUId: %s  InstanceID: %s  Nick: %s" % (
                         str(item['key']['PlayerUId']['value']), str(item['key']['InstanceId']['value']),
@@ -3363,9 +3482,34 @@ def BindGuildInstanceId(uid, instance_id):
                     print("Update Guild %s binding guild UID %s  %s -> %s" % (
                         item['guild_name'], uid, ind_char['instance_id'], instance_id))
                     ind_char['instance_id'] = instance_id
-                    guildInstanceMapping[ind_char['guid']] = ind_char['instance_id']
+                    MappingCache.GuildInstanceMapping[ind_char['guid']] = ind_char['instance_id']
             print()
 
+
+def CopyCharacterContainer(containerId, src_wsd, dry_run=False):
+    srcMappingCache = MappingCacheObject.get(src_wsd)
+    if containerId in srcMappingCache.CharacterContainerSaveData:
+        if not dry_run:
+            wsd['CharacterContainerSaveData']['value'].append(copy.deepcopy(srcMappingCache.CharacterContainerSaveData[containerId]))
+    else:
+        print(f"Error: Character Container {containerId} not found")
+        return []
+
+    try:
+        container = parse_item(srcMappingCache.CharacterContainerSaveData[containerId]['value']['Slots'],
+                               "CharacterContainerSaveData.Value.Slots")
+        containerSlots = container['value']['values']
+    except KeyError:
+        return
+    copyItemList = set()
+    for slotItem in containerSlots:
+        if slotItem['IndividualId']['value']['InstanceId']['value'] != "00000000-0000-0000-0000-000000000000":
+            copyItemList.add(slotItem['RawData']['value']['instance_id'])
+        if slotItem['RawData']['value']['instance_id'] != "00000000-0000-0000-0000-000000000000":
+            copyItemList.add(slotItem['RawData']['value']['instance_id'])
+    for characterId in copyItemList:
+        CopyCharacter(characterId, src_wsd, dry_run)
+    return list(copyItemList)
 
 def DeleteCharacterContainer(containerId):
     if containerId in MappingCache.CharacterContainerSaveData:
@@ -3485,6 +3629,15 @@ def _DeleteWorkSaveData(wrk_id):
         print(f"Failed to Delete WorkSave Data {wrk_id}")
 
 
+def _CopyWorkSaveData(wrk_id, old_wsd):
+    OldMappingCache = MappingCacheObject.get(old_wsd)
+    try:
+        if wrk_id in OldMappingCache.WorkSaveData:
+            wsd['WorkSaveData']['value']['values'].append(copy.deepcopy(MappingCache.WorkSaveData[wrk_id]))
+    except ValueError:
+        print(f"Failed to Clone WorkSave Data {wrk_id}")
+
+
 def _DoubleCheckForDeleteWorkSaveData(wrk_id):
     work = MappingCache.WorkSaveData[wrk_id]
     wsd_guids = set(search_guid(MappingCache.WorkSaveData[wrk_id], printout=False).keys())
@@ -3494,6 +3647,71 @@ def _DoubleCheckForDeleteWorkSaveData(wrk_id):
     # wsd_guids.remove(work['RawData']['value']['base_camp_id_belong_to'])
     return wsd_guids
 
+def CopyBaseCamp(base_id, group_id, old_wsd, dry_run=False):
+    load_skiped_decode(old_wsd, ['MapObjectSaveData', 'MapObjectSpawnerInStageSaveData'], False)
+    load_skiped_decode(wsd, ['MapObjectSaveData', 'MapObjectSpawnerInStageSaveData'], False)
+    srcMappingCache = MappingCacheObject.get(old_wsd)
+    base_id = toUUID(base_id)
+    group_id = toUUID(group_id)
+    if base_id not in srcMappingCache.BaseCampMapping:
+        print(f"Error: Base camp {base_id} not found")
+        return False
+    if base_id in MappingCache.BaseCampMapping:
+        print(f"Error: Base camp {base_id} is duplicated on target")
+        return False
+    if group_id not in MappingCache.GroupSaveDataMap:
+        print(f"Error: Target Group {group_id} is not exists")
+        return False
+    baseCamp = copy.deepcopy(srcMappingCache.BaseCampMapping[base_id]['value'])
+    src_group_id = baseCamp['RawData']['value']['group_id_belong_to'] 
+    baseCamp['RawData']['value']['group_id_belong_to'] = group_id
+    src_group_data = srcMappingCache.GroupSaveDataMap[src_group_id]['value']['RawData']['value']
+    group_data = MappingCache.GroupSaveDataMap[baseCamp['RawData']['value']['group_id_belong_to']]['value']['RawData'][
+                'value']
+    if base_id in group_data['base_ids']:
+        print(f"Error: Base id {base_id} is duplicated on target")
+        return False
+    if not dry_run:
+        group_data['base_ids'].append(base_id)
+        
+    if baseCamp['RawData']['value']['owner_map_object_instance_id'] in src_group_data['map_object_instance_ids_base_camp_points']:
+        print(f"Copy Group UUID {baseCamp['RawData']['value']['group_id_belong_to']}  Map Instance ID {baseCamp['RawData']['value']['owner_map_object_instance_id']}")
+        CopyMapObject(baseCamp['RawData']['value']['owner_map_object_instance_id'], old_wsd, dry_run)
+        if not dry_run:
+            group_data['map_object_instance_ids_base_camp_points'].append(baseCamp['RawData']['value']['owner_map_object_instance_id'])
+    for wrk_id in baseCamp['WorkCollection']['value']['RawData']['value']['work_ids']:
+        if wrk_id in srcMappingCache.WorkSaveData:
+            modelId = srcMappingCache.WorkSaveData[wrk_id]['RawData']['value']['owner_map_object_model_id']
+            CopyMapObject(modelId, old_wsd, dry_run)
+            print(f"Delete Base Camp Work Collection {wrk_id}")
+            if not dry_run:
+                _CopyWorkSaveData(wrk_id)
+        else:
+            print(f"Ignore Base Camp Work Collection {wrk_id}")
+    workDirectorContainer_id = baseCamp['WorkerDirector']['value']['RawData']['value']['container_id']
+    if workDirectorContainer_id in srcMappingCache.ItemContainerSaveData:
+        instanceIds = CopyCharacterContainer(workDirectorContainer_id, old_wsd, dry_run)
+        instance_lists = list(filter(lambda x: x['instance_id'] in instanceIds, src_group_data['individual_character_handle_ids']))
+        for instance in instance_lists:
+            print(
+                f"Clone Character Instance {instance['guid']}  {instance['instance_id']} from Group individual_character_handle_ids")
+            if not dry_run:
+                group_data['individual_character_handle_ids'].append(copy.deepcopy(instance))
+
+    copy_map_objs = []
+    for model in old_wsd['MapObjectSaveData']['value']['values']:
+        if model['Model']['value']['RawData']['value']['base_camp_id_belong_to'] == base_id:
+            copy_map_objs.append(model['MapObjectInstanceId']['value'])
+    for modelId in copy_map_objs:
+        if not dry_run:
+            CopyMapObject(modelId, old_wsd, dry_run)
+    if not dry_run:
+        wsd['BaseCampSaveData']['value'].append(srcMappingCache.BaseCampMapping[base_id])
+    MappingCache.LoadMapObjectMaps()
+    MappingCache.LoadWorkSaveData()
+    MappingCache.LoadBaseCampMapping()
+    MappingCache.LoadGroupSaveDataMap()
+    return True
 
 def DeleteBaseCamp(base_id, group_id=None):
     base_id = toUUID(base_id)
@@ -3631,11 +3849,12 @@ def DeleteGuild(group_id):
     return True
 
 
-def ShowGuild():
-    global guildInstanceMapping
-    guildInstanceMapping = {}
+def ShowGuild(data_src=None):
+    if data_src is None:
+        data_src = wsd
+    srcMapping = MappingCacheObject.get(data_src)
     # Remove Unused in GroupSaveDataMap
-    for group_data in wsd['GroupSaveDataMap']['value']:
+    for group_data in data_src['GroupSaveDataMap']['value']:
         # print("%s %s" % (group_data['key'], group_data['value']['GroupType']['value']['value']))
         if str(group_data['value']['GroupType']['value']['value']) == "EPalGroupType::Guild":
             # pp.pprint(str(group_data['value']['RawData']['value']))
@@ -3656,8 +3875,9 @@ def ShowGuild():
             # ['BaseCampSaveData']['value'][1]['value']['RawData']['value']['id']
             # ['GroupSaveDataMap']['value'][223]['value']['RawData']['value']['base_ids'][1]
             for base_idx, base_id in enumerate(item['base_ids']):
+                basecamp = srcMapping.BaseCampMapping[toUUID(base_id)]
                 print(
-                    f"    Base ID \033[32m {base_id} \033[0m    Map ID \033[32m {item['map_object_instance_ids_base_camp_points'][base_idx]} \033[0m")
+                    f"    Base ID \033[32m {base_id} \033[0m -> \033[33m {basecamp['value']['RawData']['value']['name']} \033[0m    Map ID \033[32m {item['map_object_instance_ids_base_camp_points'][base_idx]} \033[0m")
             print()
             for player in mapObjectMeta['players']:
                 try:
@@ -3670,8 +3890,6 @@ def ShowGuild():
                         repr(player['player_info']['player_name']), str(player['player_uid']),
                         TickToLocal(player['player_info']['last_online_real_time']),
                         TickToHuman(player['player_info']['last_online_real_time'])))
-            for ind_char in mapObjectMeta['individual_character_handle_ids']:
-                guildInstanceMapping[ind_char['guid']] = ind_char['instance_id']
             print()
         # elif str(group_data['value']['GroupType']['value']['value']) == "EPalGroupType::Neutral":
         #     item = group_data['value']['RawData']['value']
