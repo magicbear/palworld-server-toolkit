@@ -97,7 +97,7 @@ This tools is for cleanup the unreference item, rename the player name, migrate 
 
 - For GUI to modify `Level.sav` file - `python -i -m palworld_server_toolkit.editor -g -o Level.sav Level.sav`
 
-- For modifiy the `Level.sav` file, use the follow command
+- For modify the `Level.sav` file, use the follow command
 `python -i -m palworld_server_toolkit.editor -o Level.sav Level.sav`
 
 	- `ShowPlayers()` - List the Players
