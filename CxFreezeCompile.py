@@ -4,9 +4,11 @@ from cx_Freeze import setup, Executable
 build_options = {
     "includes": ["pyperclip"],
     "excludes": [],
-    "zip_include_packages": [],
-    "include_files": ["save_tools", "palworld_server_toolkit/PalEdit"],
-    "zip_includes": ["palworld_server_toolkit/resources/", "palworld_server_toolkit/PalEdit"],
+    "packages": ["palworld_save_tools"],
+    "zip_include_packages": ["zip_includes"],
+    "replace_paths": [("save_tools/palworld_save_tools", "palworld_save_tools"), ("palworld_server_toolkit/resources", "resources")],
+    "include_files": ["palworld_server_toolkit/PalEdit", "save_tools/palworld_save_tools", "palworld_server_toolkit/resources"],
+    "zip_includes": [],
 }
 
 base = "Win32GUI" if sys.platform == "win32" else None
