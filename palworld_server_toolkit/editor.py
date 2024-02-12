@@ -3244,7 +3244,7 @@ def CleanupCharacterContainer(container_id):
     for slot in containerSlots:
         if slot['IndividualId']['value']['InstanceId']['value'] == emptyUUID and \
             slot['IndividualId']['value']['PlayerUId']['value'] == emptyUUID and \
-            slot['PermissionTribeID']['value']['value'] in ["None", "EPalTribeID::None"] and \
+            slot['PermissionTribeID']['value']['value'] in ["None", "EPalTribeID::None", "EPalTribeID::FireKirin"] and \
             slot['RawData']['value']['instance_id'] == emptyUUID:
             continue
         if slot['RawData']['value']['instance_id'] != emptyUUID:
