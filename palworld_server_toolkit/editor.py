@@ -11,6 +11,7 @@ import argparse
 import copy
 import importlib.metadata
 import traceback
+from functools import reduce
 
 module_dir = os.path.dirname(os.path.abspath(__file__))
 # sys.path.insert(0, module_dir)
@@ -589,6 +590,10 @@ def main():
             args = parser.parse_args()
     else:
         args = parser.parse_args()
+
+    if not reduce(lambda x, b: x or getattr(args, b, False), filter(lambda x: 'del_' in x or 'fix_' in x, dir(args)), False) and not sys.flags.interactive:
+        # Open GUI for no any edit flags
+        args.gui = True
 
     if not os.path.exists(args.filename):
         print(f"{args.filename} does not exist")
