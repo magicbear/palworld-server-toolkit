@@ -17,6 +17,11 @@ Changelog
 v0.5.8
 -------
 
+Major:
+
+- Merge palworld_save_tools from upstream
+- Merge PalEdit from upstream
+
 Feature:
 
 - Copy Bamp Camp feature (beta)

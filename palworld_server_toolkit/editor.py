@@ -2103,12 +2103,14 @@ def DumpSavDecompressData(filename):
 
 def LoadFile(filename):
     global filetime, gvas_file, wsd, MappingCache
-    print(f"Loading {filename}...")
+    print(f"Loading {filename}...", end="", flush=True)
     filetime = os.stat(filename).st_mtime
     with open(filename, "rb") as f:
         # Read the file
+        start_time = time.time()
         data = f.read()
         raw_gvas, _ = decompress_sav_to_gvas(data)
+        print("Done in %.2fs." % (time.time() - start_time))
 
         print(f"Parsing {filename}...", end="", flush=True)
         start_time = time.time()
@@ -2498,7 +2500,7 @@ def MoveToGuild(player_uid, group_id):
 
             for g_player in delete_g_players:
                 group_info['players'].remove(g_player)
-                
+            
             if len(group_info['players']) == 0 and group_info['group_id'] != toUUID(group_id):
                 DeleteGuild(group_info['group_id'])
 
@@ -2512,10 +2514,10 @@ def MoveToGuild(player_uid, group_id):
             for item in remove_items:
                 group_info['individual_character_handle_ids'].remove(item)
 
-    print("\033[32mAppend character and players to guild\033[0m")
     MappingCache.PlayerIdMapping[player_uid]['value']['RawData']['value']['group_id'] = toUUID(group_id)
     group_data = parse_item(MappingCache.GroupSaveDataMap[toUUID(group_id)], "GroupSaveDataMap")
     group_info = group_data['value']['RawData']['value']
+    print(f"\033[32mAppend character and players to Guild {group_info['guild_name']}\033[0m")
     group_info['players'].append({
         'player_uid': player_uid,
         'player_info': {

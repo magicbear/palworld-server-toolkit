@@ -90,7 +90,7 @@ This tools is for cleanup the unreference item, rename the player name, migrate 
 
 > [!WARNING]
 >
-> Delete user, delete base camp, delete unreference item containers are beta feature, may be cause the server error. Please *anways* backup the file, if have any issue, please provide your `Level.sav` file to issues.
+> Delete user, delete base camp, delete unreference item containers are beta feature, may be cause the server error. Please *always* backup the file, if have any issue, please provide your `Level.sav` file to issues.
 
 
 > [!NOTE]
