@@ -2108,6 +2108,11 @@ class GUI():
                                       command=lambda: (BatchDeleteUnreferencedItemContainers(), self.load_players()))
         self.i18n['del_unreference_item'] = g_del_unref_item
         g_del_unref_item.pack(side="left")
+
+        g_cleanup_character = ttk.Button(master=g_wholefile, text="Cleanup character", style="custom.TButton",
+                                      command=lambda: (CleanupAllCharacterContainer(), self.load_players()))
+        self.i18n['cleanup_character'] = g_cleanup_character
+        g_cleanup_character.pack(side=tk.LEFT)
         g_del_damange_container_obj = ttk.Button(master=g_wholefile, text="Del Damage Object", style="custom.TButton",
                                                  command=lambda: (
                                                      FixBrokenDamageRefItemContainer(), self.load_players()))
@@ -3123,6 +3128,67 @@ def DeleteCharacter(characterId):
     return True
 
 
+def GetReferencedCharacterContainerIdsByPlayer(player_uid):
+    err, player_gvas, player_sav_file, player_gvas_file = GetPlayerGvas(player_uid)
+    if err:
+        print(
+            f"{terminalColor(33)}Warning: Player Sav file for {player_uid} Not exists: %s{terminalColor(0)}" % player_sav_file)
+        return []
+    player_container_ids = []
+    for key in ['OtomoCharacterContainerId', 'PalStorageContainerId']:
+        player_container_ids.append(player_gvas[key]['value']['ID']['value'])
+    return player_container_ids
+
+
+def FindReferenceCharacterContainerIds():
+    reference_ids = set()
+    for basecamp_id in MappingCache.BaseCampMapping:
+        basecamp = MappingCache.BaseCampMapping[basecamp_id]['value']
+        if 'WorkerDirector' in basecamp:
+            reference_ids.add(basecamp['WorkerDirector']['value']['RawData']['value']['container_id'])
+    
+    for character in wsd['CharacterSaveParameterMap']['value']:
+        characterData = character['value']['RawData']['value']['object']['SaveParameter']['value']
+        if 'SlotID' in characterData:
+            reference_ids.add(characterData['SlotID']['value']['ContainerId']['value']['ID']['value'])
+    
+    for playerUId in MappingCache.PlayerIdMapping:
+        reference_ids.update(GetReferencedCharacterContainerIdsByPlayer(playerUId))
+    
+    return reference_ids
+
+def FindAllUnreferencedCharacterContainerIds():
+    referencedContainerIds = set(FindReferenceCharacterContainerIds())
+    allContainerIds = set(MappingCache.CharacterContainerSaveData.keys())
+    return list(allContainerIds - referencedContainerIds)
+
+def BatchDeleteUnreferencedCharacterContainers():
+    unreferencedContainerIds = FindAllUnreferencedCharacterContainerIds()
+    print(f"Delete Non-Referenced Character Containers: {len(unreferencedContainerIds)}")
+    BatchDeleteCharacterContainer(unreferencedContainerIds)
+
+
+def BatchDeleteCharacterContainer(characterContainerIds):
+    deleteCharacterContainerIds = []
+    for characterContainerId in characterContainerIds:
+        characterContainerId = toUUID(characterContainerId)
+        if characterContainerId not in MappingCache.CharacterContainerSaveData:
+            print(f"Error: Item Container {characterContainerId} not found")
+            continue
+
+        deleteCharacterContainerIds.append(characterContainerId)
+        if len(deleteCharacterContainerIds) % 10000 == 0:
+            print(f"Deleting Item Containers: {len(deleteCharacterContainerIds)} / {len(characterContainerIds)}")
+        container = parse_item(MappingCache.CharacterContainerSaveData[characterContainerId], "CharacterContainerSaveData")
+        del MappingCache.CharacterContainerSaveData[characterContainerId]
+
+    wsd['CharacterContainerSaveData']['value'] = []
+    for container_id in MappingCache.CharacterContainerSaveData:
+        wsd['CharacterContainerSaveData']['value'].append(MappingCache.CharacterContainerSaveData[container_id])
+    print(f"Delete Character Containers: {len(deleteCharacterContainerIds)} / {len(characterContainerIds)}")
+    MappingCache.LoadCharacterContainerMaps()
+
+
 def FindReferenceItemContainerIds():
     load_skiped_decode(wsd, ['MapObjectSaveData'], False)
     reference_ids = set()
@@ -3149,6 +3215,9 @@ def FindReferenceItemContainerIds():
                 belongInfo['value']['GroupID']['value'] in MappingCache.GroupSaveDataMap:
             reference_ids.add(uuid)
 
+    for playerId in MappingCache.PlayerIdMapping:
+        reference_ids.update(GetReferencedItemContainerIdsByPlayer(playerId))
+        
     return list(reference_ids)
 
 
@@ -3162,6 +3231,39 @@ def CharacterDescription(character):
         characterData['CharacterID']['value'] if 'CharacterID' in characterData else "Invalid",
         characterData['OwnerPlayerUId']['value'])
 
+
+def CleanupCharacterContainer(container_id):
+    container_id = toUUID(container_id)
+    if container_id not in MappingCache.CharacterContainerSaveData:
+        raise IndexError(f"Character Container {container_id} not exists")
+    container = parse_item(MappingCache.CharacterContainerSaveData[container_id], "CharacterContainerSaveData")
+    new_containerSlots = []
+    characterSlotIndexMapping = {}
+    emptyUUID = toUUID("00000000-0000-0000-0000-000000000000")
+    containerSlots = container['value']['Slots']['value']['values']
+    for slot in containerSlots:
+        if slot['IndividualId']['value']['InstanceId']['value'] == emptyUUID and \
+            slot['IndividualId']['value']['PlayerUId']['value'] == emptyUUID and \
+            slot['PermissionTribeID']['value']['value'] in ["None", "EPalTribeID::None"] and \
+            slot['RawData']['value']['instance_id'] == emptyUUID:
+            continue
+        if slot['RawData']['value']['instance_id'] != emptyUUID:
+            if slot['RawData']['value']['instance_id'] not in MappingCache.CharacterSaveParameterMap:
+                print(f"{terminalColor(31)}Error: character container {terminalColor(32)}{container_id}{terminalColor(31)} -> invalid character {terminalColor(32)}{slot['RawData']['value']['instance_id']}{terminalColor(0)}")
+                continue
+            characterSlotIndexMapping[slot['RawData']['value']['instance_id']] = len(new_containerSlots)
+        new_containerSlots.append(slot)
+    if len(container['value']['Slots']['value']['values']) != len(new_containerSlots):
+        print(f"Clenaup Character Container {terminalColor(32)}{container_id}{terminalColor(0)}: {len(container['value']['Slots']['value']['values'])} -> {len(new_containerSlots)}")
+    for instanceId in characterSlotIndexMapping:
+        characterData = MappingCache.CharacterSaveParameterMap[instanceId]['value']['RawData']['value']['object']['SaveParameter']['value']
+        characterData['SlotID'] = EmptySaveObject.PalCharacterSlotId(container_id, characterSlotIndexMapping[instanceId])
+    container['value']['Slots']['value']['values'] = new_containerSlots
+
+def CleanupAllCharacterContainer():
+    load_skiped_decode(wsd, ['CharacterContainerSaveData'])
+    for container_id in MappingCache.CharacterContainerSaveData:
+        CleanupCharacterContainer(container_id)
 
 def FindDamageRefItemContainer():
     InvalidObjects = {
@@ -3252,8 +3354,6 @@ def GetReferencedItemContainerIdsByPlayer(player_uid):
 def FindAllUnreferencedItemContainerIds():
     referencedContainerIds = set(FindReferenceItemContainerIds())
     allContainerIds = set(MappingCache.ItemContainerSaveData.keys())
-    for playerId in playerMapping:
-        referencedContainerIds.update(GetReferencedItemContainerIdsByPlayer(playerId))
 
     return list(allContainerIds - referencedContainerIds)
 

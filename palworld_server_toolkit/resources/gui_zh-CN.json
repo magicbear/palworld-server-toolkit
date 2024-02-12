@@ -23,6 +23,7 @@
   "migrate_player": "迁移玩家",
   "copy_player": "复制玩家",
   "op_for_all": "对文件进行操作",
-  "del_unreference_item": "删除未引用的物品库 \uD83D\uDD27",
+  "del_unreference_item": "清理无用物品库 \uD83D\uDD27",
+  "cleanup_character": "清理无用角色库 \uD83D\uDD27",
   "del_damage_obj": "删除损坏对象 \uD83C\uDD98"
 }

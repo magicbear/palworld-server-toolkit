@@ -23,6 +23,7 @@
   "migrate_player": "⬆️ Migrate Player ⬇️",
   "copy_player": "⬆️ Copy Player ⬇️",
   "op_for_all": "Operate for File",
-  "del_unreference_item": "Delete Unreference Item Containers \uD83D\uDD27",
+  "del_unreference_item": "Cleanup Item Containers \uD83D\uDD27",
+  "cleanup_character": "Cleanup Character Containers \uD83D\uDD27",
   "del_damage_obj": "Del Damage Instance \uD83C\uDD98"
 }
