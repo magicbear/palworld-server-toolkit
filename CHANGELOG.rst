@@ -20,6 +20,7 @@ v0.5.9
 Feature:
 
 - Open GUI for drag file to the exe
+- Add icons for release
 
 v0.5.8
 -------

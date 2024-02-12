@@ -13,7 +13,10 @@ import importlib.metadata
 import traceback
 from functools import reduce
 
-module_dir = os.path.dirname(os.path.abspath(__file__))
+module_dir = os.path.dirname(os.path.realpath(__file__))
+if not os.path.exists("%s/resources/gui.json" % module_dir) and getattr(sys, 'frozen', False):
+    module_dir = os.path.dirname(sys.executable)
+
 # sys.path.insert(0, module_dir)
 sys.path.insert(0, os.path.join(module_dir, "../save_tools"))
 
@@ -36,6 +39,7 @@ try:
     from tkinter import messagebox
     from tkinter import filedialog
     from tkinter import simpledialog
+    from PIL import ImageTk, Image
 except ImportError:
     print("ERROR: Without Tkinter Environment, GUI not work")
     pass
@@ -1915,11 +1919,16 @@ class GUI():
     def build_gui(self):
         #
         self.gui = tk.Tk()
+        self.gui.iconphoto(True, ImageTk.PhotoImage(
+            Image.open(f'{module_dir}/resources/palworld-save-editor.png').resize((240, 240))))
+        
         self.gui.parent = self
         try:
             __version__ = importlib.metadata.version('palworld-server-toolkit')
         except importlib.metadata.PackageNotFoundError:
             __version__ = "0.0.1"
+            with open(f"{module_dir}/resources/version.txt", "r"):
+                __version__ = f.read().strip()
         self.gui.title(f'PalWorld Save Editor v{__version__} - Author by MagicBear')
         # self.gui.geometry('640x200')
         #
