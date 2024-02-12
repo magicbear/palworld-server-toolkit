@@ -2,12 +2,11 @@ import sys, os
 from cx_Freeze import setup, Executable
 
 build_options = {
-    "includes": ["pyperclip"],
+    "includes": ["pyperclip", "palworld_save_tools"],
     "excludes": [],
-    "packages": ["palworld_save_tools"],
-    "zip_include_packages": ["zip_includes"],
-    "replace_paths": [("save_tools/palworld_save_tools", "palworld_save_tools"), ("palworld_server_toolkit/resources", "resources")],
-    "include_files": ["palworld_server_toolkit/PalEdit", "save_tools/palworld_save_tools", "palworld_server_toolkit/resources"],
+    "zip_include_packages": ["zip_includes", "palworld_save_tools"],
+    "replace_paths": [("palworld_server_toolkit/resources", "resources")],
+    "include_files": ["palworld_server_toolkit/PalEdit", "palworld_server_toolkit/resources"],
     "zip_includes": [],
 }
 

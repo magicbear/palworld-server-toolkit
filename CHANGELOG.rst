@@ -14,6 +14,13 @@ Changelog
     Note that they these tags will not actually close the issue/PR until they
     are merged into the "default" branch.
 
+v0.6.0
+-------
+
+Feature:
+
+- Copy Instance feature
+
 v0.5.9
 -------
 
@@ -21,6 +28,10 @@ Feature:
 
 - Open GUI for drag file to the exe
 - Add icons for release
+
+Fix:
+
+- Rename player cannot edit the local save file
 
 v0.5.8
 -------

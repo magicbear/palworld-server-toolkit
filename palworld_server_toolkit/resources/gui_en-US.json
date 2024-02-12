@@ -10,6 +10,7 @@
   "delete_base": "❌️ Delete Base Camp ⛺️",
   "target_instance": "Target Instance",
   "edit_instance": "Edit Instance",
+  "copy_instance": "Copy Instance",
   "save": "Save & Exit",
   "op_for_target": "Operate for Target Player",
   "move_to_guild": "Move To Guild",
