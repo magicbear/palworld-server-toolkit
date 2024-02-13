@@ -24,6 +24,7 @@ Feature:
 Major:
 
 - Auto backup feature, change default save file to the open file
+- Auto delete old players file
 
 Fix:
 
