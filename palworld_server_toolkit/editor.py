@@ -24,7 +24,7 @@ from palworld_save_tools.gvas import GvasFile, GvasHeader
 from palworld_save_tools.palsav import compress_gvas_to_sav, decompress_sav_to_gvas
 from palworld_save_tools.paltypes import PALWORLD_CUSTOM_PROPERTIES, PALWORLD_TYPE_HINTS
 from palworld_save_tools.archive import *
-from palobject import *
+from palworld_server_toolkit.palobject import *
 
 try:
     from palworld_save_tools.rawdata import map_concrete_model_module
@@ -140,6 +140,7 @@ player = None
 filetime = -1
 gui = None
 backup_path: Optional[str] = None
+delete_files = []
 
 
 class MappingCacheObject:
@@ -2183,13 +2184,13 @@ class GUI():
             self.pal_i18n = json.load(f)
 
         for item in self.i18n:
-            if item in lang_data:
+            if item in self.lang_data:
                 if isinstance(self.i18n[item], ttk.Combobox):
                     index = self.i18n[item].current()
-                    self.i18n[item]['values'] = lang_data[item]
+                    self.i18n[item]['values'] = self.lang_data[item]
                     self.i18n[item].current(index)
                 else:
-                    self.i18n[item].config(text=lang_data[item])
+                    self.i18n[item].config(text=self.lang_data[item])
 
         if self.target_instance['value'] != '':
             self.load_players()
@@ -2578,6 +2579,11 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
     MappingCache.LoadCharacterContainerMaps()
     MappingCache.LoadGroupSaveDataMap()
     if not dry_run:
+        if id(old_wsd) != id(wsd) and player_uid not in MappingCache.PlayerIdMapping:
+            backup_file(player_sav_file)
+            delete_files.add(player_sav_file)
+        if new_player_sav_file in delete_files:
+            delete_files.remove(new_player_sav_file)
         backup_file(new_player_sav_file)
         with open(new_player_sav_file, "wb") as f:
             print("Saving new player sav %s" % (new_player_sav_file))
@@ -2668,6 +2674,16 @@ def CleanupWorkerSick():
             print("Delete WorkerSick on %s" % CharacterDescription(MappingCache.CharacterSaveParameterMap[instanceId]))
             del characterData['WorkerSick']
 
+def FindInactivePlayer(days):
+    player_list = []
+    for group_id in MappingCache.GuildSaveDataMap:
+        guild = MappingCache.GuildSaveDataMap[group_id]
+        group_data = guild['value']['RawData']['value']
+        for g_player in group_data['players']:
+            if (wsd['GameTimeSaveData']['value']['RealDateTimeTicks']['value'] - g_player['player_info']['last_online_real_time']) / 1e7 > days * 86400:
+                player_list.append(g_player['player_uid'])
+    
+    return player_list
 
 def MigratePlayer(player_uid, new_player_uid):
     load_skiped_decode(wsd, ['MapObjectSaveData', 'GroupSaveDataMap'], False)
@@ -2744,6 +2760,10 @@ def MigratePlayer(player_uid, new_player_uid):
             print(
                 f"{terminalColor(32)}Migrate Building{terminalColor(0)}  {terminalColor(93)}%s{terminalColor(0)}" % (
                     str(map_data['MapObjectInstanceId']['value'])))
+    if new_player_sav_file in delete_files:
+        delete_files.remove(new_player_sav_file)
+    backup_file(player_sav_file)
+    delete_files.append(player_sav_file)
     print("Finish to migrate player from Save, please delete this file manually: %s" % player_sav_file)
 
 
@@ -3075,6 +3095,7 @@ def DeleteCharacter(characterId):
         wsd['CharacterSaveParameterMap']['value'].remove(character)
     except ValueError:
         return False
+    MappingCache.LoadItemContainerMaps()
     return True
 
 
@@ -3402,7 +3423,10 @@ def DeleteItemContainer(itemContainerId):
                 f"{terminalColor(31)}  Error missed DynamicItemContainer UUID [{terminalColor(33)} {str(dynamicItemId)}{terminalColor(0)}]  Item {terminalColor(32)} {slotItem['ItemId']['value']['StaticId']['value']} {terminalColor(0)}")
             continue
         print(f"Delete DynamicItemId {dynamicItemId}")
-        wsd['DynamicItemSaveData']['value']['values'].remove(MappingCache.DynamicItemSaveData[dynamicItemId])
+        try:
+            wsd['DynamicItemSaveData']['value']['values'].remove(MappingCache.DynamicItemSaveData[dynamicItemId])
+        except ValueError:
+            pass
 
     print(f"Delete Item Container {itemContainerId}")
     wsd['ItemContainerSaveData']['value'].remove(container)
@@ -3499,6 +3523,8 @@ def DeletePlayer(player_uid, InstanceId=None, dry_run=False):
     if not dry_run:
         BatchDeleteMapObject(delete_map_ids)
     if InstanceId is None:
+        backup_file(player_sav_file)
+        delete_files.append(player_sav_file)
         print("Finish to remove player from Save, please delete this file manually: %s" % player_sav_file)
 
 
@@ -4171,45 +4197,44 @@ def ShowGuild(data_src=None):
         data_src = wsd
     srcMapping = MappingCacheObject.get(data_src)
     # Remove Unused in GroupSaveDataMap
-    for group_data in data_src['GroupSaveDataMap']['value']:
-        # print("%s %s" % (group_data['key'], group_data['value']['GroupType']['value']['value']))
-        if str(group_data['value']['GroupType']['value']['value']) == "EPalGroupType::Guild":
-            # pp.pprint(str(group_data['value']['RawData']['value']))
-            item = group_data['value']['RawData']['value']
-            mapObjectMeta = {}
-            for m_k in item:
-                mapObjectMeta[m_k] = item[m_k]
-            # pp.pprint(mapObjectMeta)
+    for group_id in srcMapping.GuildSaveDataMap:
+        group_data = srcMapping.GuildSaveDataMap[group_id]
+        # pp.pprint(str(group_data['value']['RawData']['value']))
+        item = group_data['value']['RawData']['value']
+        mapObjectMeta = {}
+        for m_k in item:
+            mapObjectMeta[m_k] = item[m_k]
+        # pp.pprint(mapObjectMeta)
+        print(
+            f"Guild {terminalColor(93)}%s{terminalColor(0)}   Admin {terminalColor(96)}%s{terminalColor(0)}  Group ID %s  Base Camp Level: %d Character Count: %d" % (
+                mapObjectMeta['guild_name'], str(mapObjectMeta['admin_player_uid']), str(mapObjectMeta['group_id']),
+                item['base_camp_level'],
+                len(mapObjectMeta['individual_character_handle_ids'])))
+        # Referer to ['WorkSaveData']['value']['values'][55]['RawData']['value']['base_camp_id_belong_to']
+        # ['BaseCampSaveData']['value'][1]['key']
+        # ['BaseCampSaveData']['value'][1]['value']['WorkerDirector']['value']['RawData']['value']['id']
+        # ['BaseCampSaveData']['value'][1]['value']['WorkCollection']['value']['RawData']['value']['id']
+        # ['BaseCampSaveData']['value'][1]['value']['RawData']['value']['id']
+        # ['GroupSaveDataMap']['value'][223]['value']['RawData']['value']['base_ids'][1]
+        for base_idx, base_id in enumerate(item['base_ids']):
+            basecamp = srcMapping.BaseCampMapping[toUUID(base_id)]
             print(
-                f"Guild {terminalColor(93)}%s{terminalColor(0)}   Admin {terminalColor(96)}%s{terminalColor(0)}  Group ID %s  Base Camp Level: %d Character Count: %d" % (
-                    mapObjectMeta['guild_name'], str(mapObjectMeta['admin_player_uid']), str(mapObjectMeta['group_id']),
-                    item['base_camp_level'],
-                    len(mapObjectMeta['individual_character_handle_ids'])))
-            # Referer to ['WorkSaveData']['value']['values'][55]['RawData']['value']['base_camp_id_belong_to']
-            # ['BaseCampSaveData']['value'][1]['key']
-            # ['BaseCampSaveData']['value'][1]['value']['WorkerDirector']['value']['RawData']['value']['id']
-            # ['BaseCampSaveData']['value'][1]['value']['WorkCollection']['value']['RawData']['value']['id']
-            # ['BaseCampSaveData']['value'][1]['value']['RawData']['value']['id']
-            # ['GroupSaveDataMap']['value'][223]['value']['RawData']['value']['base_ids'][1]
-            for base_idx, base_id in enumerate(item['base_ids']):
-                basecamp = srcMapping.BaseCampMapping[toUUID(base_id)]
+                f"    Base ID {terminalColor(32)} {base_id} {terminalColor(0)} -> {terminalColor(33)} {basecamp['value']['RawData']['value']['name']} {terminalColor(0)}    Map ID {terminalColor(32)} {item['map_object_instance_ids_base_camp_points'][base_idx]} {terminalColor(0)}")
+        print()
+        for player in mapObjectMeta['players']:
+            try:
                 print(
-                    f"    Base ID {terminalColor(32)} {base_id} {terminalColor(0)} -> {terminalColor(33)} {basecamp['value']['RawData']['value']['name']} {terminalColor(0)}    Map ID {terminalColor(32)} {item['map_object_instance_ids_base_camp_points'][base_idx]} {terminalColor(0)}")
-            print()
-            for player in mapObjectMeta['players']:
-                try:
-                    print(
-                        f"    Player {terminalColor(93)} %-30s {terminalColor(0)}\t[{terminalColor(92)}%s{terminalColor(0)}] Last Online: %s - %s" % (
-                            player['player_info']['player_name'], str(player['player_uid']),
-                            TickToLocal(player['player_info']['last_online_real_time']),
-                            TickToHuman(player['player_info']['last_online_real_time'])))
-                except UnicodeEncodeError as e:
-                    print(
-                        f"    Player {terminalColor(93)} %-30s {terminalColor(0)}\t[{terminalColor(92)}%s{terminalColor(0)}] Last Online: %s - %s" % (
-                            repr(player['player_info']['player_name']), str(player['player_uid']),
-                            TickToLocal(player['player_info']['last_online_real_time']),
-                            TickToHuman(player['player_info']['last_online_real_time'])))
-            print()
+                    f"    Player {terminalColor(93)} %-30s {terminalColor(0)}\t[{terminalColor(92)}%s{terminalColor(0)}] Last Online: %s - %s" % (
+                        player['player_info']['player_name'], str(player['player_uid']),
+                        TickToLocal(player['player_info']['last_online_real_time']),
+                        TickToHuman(player['player_info']['last_online_real_time'])))
+            except UnicodeEncodeError as e:
+                print(
+                    f"    Player {terminalColor(93)} %-30s {terminalColor(0)}\t[{terminalColor(92)}%s{terminalColor(0)}] Last Online: %s - %s" % (
+                        repr(player['player_info']['player_name']), str(player['player_uid']),
+                        TickToLocal(player['player_info']['last_online_real_time']),
+                        TickToHuman(player['player_info']['last_online_real_time'])))
+        print()
         # elif str(group_data['value']['GroupType']['value']['value']) == "EPalGroupType::Neutral":
         #     item = group_data['value']['RawData']['value']
         #     print("Neutral Group ID %s  Character Count: %d" % (str(item['group_id']), len(item['individual_character_handle_ids'])))
@@ -4365,6 +4390,8 @@ def Save(exit_now=True):
         f.write(sav_file)
     print("Done")
     print("File saved to %s" % output_path)
+    for del_file in delete_files:
+        os.unlink(del_file)
     if exit_now:
         sys.exit(0)
 

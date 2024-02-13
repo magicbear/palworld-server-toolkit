@@ -14,8 +14,16 @@ Changelog
     Note that they these tags will not actually close the issue/PR until they
     are merged into the "default" branch.
 
-v0.6.3
+v0.6.4
 -------
+
+Feature:
+
+- Add FindInactivePlayer function for cli
+
+Major:
+
+- Auto backup feature, change default save file to the open file
 
 Fix:
 
