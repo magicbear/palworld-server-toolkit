@@ -1622,7 +1622,7 @@ class GUI():
         if src_uuid is None:
             return
         if not os.path.exists(os.path.abspath(args.filename) + "/Players/"):
-            messagebox.showerror("Cleanup", self.lang_data['player_folder_not_exists'])
+            messagebox.showerror("Cleanup", self.lang_data['msg_player_folder_not_exists'])
             return
         _playerMapping = LoadPlayers(wsd if self.data_source.current() == 0 else backup_wsd)
         for player_uid in _playerMapping:
@@ -1853,7 +1853,7 @@ class GUI():
             messagebox.showerror("Copy Instance Error", "Instance Not Found")
             return
         if not os.path.exists(os.path.abspath(args.filename) + "/Players/"):
-            messagebox.showerror("Cleanup", self.lang_data['player_folder_not_exists'])
+            messagebox.showerror("Cleanup", self.lang_data['msg_player_folder_not_exists'])
             return
         instance = MappingCache.CharacterSaveParameterMap[toUUID(target_uuid)]['value']['RawData']['value']['object'][
             'SaveParameter']['value']
@@ -1878,7 +1878,7 @@ class GUI():
         if target_uuid is None:
             return
         if not os.path.exists(os.path.abspath(args.filename) + "/Players/"):
-            messagebox.showerror("Cleanup", self.lang_data['player_folder_not_exists'])
+            messagebox.showerror("Cleanup", self.lang_data['msg_player_folder_not_exists'])
             return
         PlayerItemEdit(target_uuid, self.language)
 
@@ -1887,7 +1887,7 @@ class GUI():
         if target_uuid is None:
             return
         if not os.path.exists(os.path.abspath(args.filename) + "/Players/"):
-            messagebox.showerror("Cleanup", self.lang_data['player_folder_not_exists'])
+            messagebox.showerror("Cleanup", self.lang_data['msg_player_folder_not_exists'])
             return
         PlayerSaveEdit(target_uuid)
 
@@ -1952,7 +1952,7 @@ class GUI():
 
     def cleanup_character(self):
         if not os.path.exists(os.path.abspath(args.filename) + "/Players/"):
-            messagebox.showerror("Cleanup", self.lang_data['player_folder_not_exists'])
+            messagebox.showerror("Cleanup", self.lang_data['msg_player_folder_not_exists'])
             return
         if 'yes' == messagebox.showwarning("Cleanup", self.lang_data['msg_confirm_beta'],
                                            type=messagebox.YESNO):
