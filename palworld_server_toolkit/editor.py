@@ -2238,7 +2238,7 @@ def GetPlayerGvas(player_uid):
         "-",
         "") + ".sav"
     if not os.path.exists(player_sav_file):
-        return player_sav_file, None, None, None
+        return player_sav_file, None, player_sav_file, None
 
     with open(player_sav_file, "rb") as f:
         raw_gvas, _ = decompress_sav_to_gvas(f.read())

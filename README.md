@@ -119,6 +119,7 @@ QQ群 139107098
 	- `CopyPlayer(old_uid,new_uid, backup_wsd)` - 复制玩家数据 `backup_wsd` 为OpenBackup备份文件 `wsd`为当前主文件
 	- `BatchDeleteUnreferencedItemContainers()` - 删除未引用的物品库
 	- `FixBrokenDamageRefItemContainer()` - 删除损坏对象
+	- `FindInactivePlayer(day)` - 找出<day>天未上线的玩家
 	- `Save()` - 保存修改并退出
 
 ### 操作示例
@@ -190,6 +191,15 @@ QQ群 139107098
 	2. 使用以下命令 
 		```
 		MigratePlayer("xxxxxxxx-0000-0000-0000-000000000000","yyyyyyyy-0000-0000-0000-000000000000")
+		Save()
+		```
+
+- 清理7天未上线玩家
+
+	1. 使用编辑模式运行 `python -i -m palworld_server_toolkit.editor Level.sav`
+	2. 使用以下命令 
+		```
+		for player_uid in FindInactivePlayer(7): DeletePlayer(player_uid)
 		Save()
 		```
 

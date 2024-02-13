@@ -123,6 +123,7 @@ This tools is for cleanup the unreference item, rename the player name, migrate 
 	- `CopyPlayer(old_uid,new_uid, backup_wsd)` - Copy the player from old PlayerUId to new PlayerUId `backup_wsd` is the OpenBackup file, `wsd` is current file
 	- `BatchDeleteUnreferencedItemContainers()` - Delete Unreference Item Containers
 	- `FixBrokenDamageRefItemContainer()` - Delete Damage Instance
+	- `FindInactivePlayer(day)` - Find player that <days> not active
 	- `Save()` - Save the file and exit
 
 
@@ -201,6 +202,16 @@ This tools is for cleanup the unreference item, rename the player name, migrate 
 		MigratePlayer("xxxxxxxx-0000-0000-0000-000000000000","yyyyyyyy-0000-0000-0000-000000000000")
 		Save()
 		```
+
+- Clean the player that 7 days not online
+
+	1. Use interactive mode `python -i -m palworld_server_toolkit.editor Level.sav`
+	1. Execute following command 
+		```
+		for player_uid in FindInactivePlayer(7): DeletePlayer(player_uid)
+		Save()
+		```
+
 
 
 ---
