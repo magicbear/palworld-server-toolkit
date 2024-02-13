@@ -26,5 +26,6 @@
   "del_unreference_item": "清理无用物品库 \uD83D\uDD27",
   "cleanup_character": "清理无用角色库 \uD83D\uDD27",
   "del_damage_obj": "删除损坏对象 \uD83C\uDD98",
-  "msg_confirm_beta": "这是一个测试功能，请确认已备份文件\n完成后请打开游戏确认是否能正常游玩\n确认继续?"
+  "msg_confirm_beta": "这是一个测试功能，请确认已备份文件\n完成后请打开游戏确认是否能正常游玩\n确认继续?",
+  "msg_player_folder_not_exists": "Level.sav 所在目录中 Players 文件夹不存在"
 }

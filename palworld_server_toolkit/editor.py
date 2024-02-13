@@ -3,6 +3,7 @@
 # License: MIT License
 import json
 import os, datetime, time
+import pathlib
 import sys
 import threading
 import pprint
@@ -57,6 +58,7 @@ try:
 except ImportError:
     class Self:
         EmptyObject = None
+
 
 class GvasPrettyPrint(pprint.PrettyPrinter):
     _dispatch = pprint.PrettyPrinter._dispatch.copy()
@@ -137,6 +139,7 @@ args = None
 player = None
 filetime = -1
 gui = None
+backup_path: Optional[str] = None
 
 
 class MappingCacheObject:
@@ -630,7 +633,7 @@ def main():
         Statistics()
 
     if args.output is None:
-        output_path = args.filename.replace(".sav", "_fixed.sav")
+        output_path = args.filename
     else:
         output_path = args.output
 
@@ -1424,6 +1427,7 @@ try:
 
         def savedata(self):
             self.save(self.player, self.gui_attribute)
+            backup_file(self.player_sav_file)
             with open(self.player_sav_file, "wb") as f:
                 if "Pal.PalWorldSaveGame" in self.player_gvas_file.header.save_game_class_name or \
                         "Pal.PalLocalWorldSaveGame" in self.player_gvas_file.header.save_game_class_name:
@@ -1513,6 +1517,7 @@ except NameError:
 
 class GUI():
     def __init__(self):
+        self.lang_data = None
         self.language = None
         self.pal_i18n = None
         self.g_move_guild_owner = None
@@ -1614,6 +1619,9 @@ class GUI():
     def copy_player(self):
         src_uuid, target_uuid = self.gui_parse_uuid()
         if src_uuid is None:
+            return
+        if not os.path.exists(os.path.abspath(args.filename) + "/Players/"):
+            messagebox.showerror("Cleanup", self.lang_data['player_folder_not_exists'])
             return
         _playerMapping = LoadPlayers(wsd if self.data_source.current() == 0 else backup_wsd)
         for player_uid in _playerMapping:
@@ -1843,6 +1851,9 @@ class GUI():
         if toUUID(target_uuid) not in MappingCache.CharacterSaveParameterMap:
             messagebox.showerror("Copy Instance Error", "Instance Not Found")
             return
+        if not os.path.exists(os.path.abspath(args.filename) + "/Players/"):
+            messagebox.showerror("Cleanup", self.lang_data['player_folder_not_exists'])
+            return
         instance = MappingCache.CharacterSaveParameterMap[toUUID(target_uuid)]['value']['RawData']['value']['object'][
             'SaveParameter']['value']
         if 'OwnerPlayerUId' not in instance:
@@ -1865,11 +1876,17 @@ class GUI():
         target_uuid = self.parse_target_uuid()
         if target_uuid is None:
             return
+        if not os.path.exists(os.path.abspath(args.filename) + "/Players/"):
+            messagebox.showerror("Cleanup", self.lang_data['player_folder_not_exists'])
+            return
         PlayerItemEdit(target_uuid, self.language)
 
     def edit_player_save(self):
         target_uuid = self.parse_target_uuid()
         if target_uuid is None:
+            return
+        if not os.path.exists(os.path.abspath(args.filename) + "/Players/"):
+            messagebox.showerror("Cleanup", self.lang_data['player_folder_not_exists'])
             return
         PlayerSaveEdit(target_uuid)
 
@@ -1925,16 +1942,18 @@ class GUI():
                                          groupMapping[target_guild_uuid]['value']['RawData']['value']['base_ids']]
 
     def cleanup_item(self):
-        with open("%s/resources/gui_%s.json" % (module_dir, self.language), encoding='utf-8') as f:
-            lang_data = json.load(f)
-        if 'yes' == messagebox.showwarning("Cleanup", lang_data['msg_confirm_beta'],
+        if not os.path.exists(os.path.abspath(args.filename) + "/Players/"):
+            messagebox.showerror("Cleanup", self.lang_data['msg_player_folder_not_exists'])
+            return
+        if 'yes' == messagebox.showwarning("Cleanup", self.lang_data['msg_confirm_beta'],
                                            type=messagebox.YESNO):
             BatchDeleteUnreferencedItemContainers()
 
     def cleanup_character(self):
-        with open("%s/resources/gui_%s.json" % (module_dir, self.language), encoding='utf-8') as f:
-            lang_data = json.load(f)
-        if 'yes' == messagebox.showwarning("Cleanup", lang_data['msg_confirm_beta'],
+        if not os.path.exists(os.path.abspath(args.filename) + "/Players/"):
+            messagebox.showerror("Cleanup", self.lang_data['player_folder_not_exists'])
+            return
+        if 'yes' == messagebox.showwarning("Cleanup", self.lang_data['msg_confirm_beta'],
                                            type=messagebox.YESNO):
             BatchDeleteUnreferencedCharacterContainers()
 
@@ -2159,7 +2178,7 @@ class GUI():
     def set_i18n(self, lang):
         self.language = lang
         with open("%s/resources/gui_%s.json" % (module_dir, lang), encoding='utf-8') as f:
-            lang_data = json.load(f)
+            self.lang_data = json.load(f)
         with open("%s/resources/pal_%s.json" % (module_dir, lang), encoding='utf-8') as f:
             self.pal_i18n = json.load(f)
 
@@ -2186,9 +2205,11 @@ def DumpSavDecompressData(filename):
 
 
 def LoadFile(filename):
-    global filetime, gvas_file, wsd, MappingCache
+    global filetime, gvas_file, wsd, MappingCache, backup_path
     print(f"Loading {filename}...", end="", flush=True)
     filetime = os.stat(filename).st_mtime
+    backup_path = os.path.join(os.path.dirname(os.path.abspath(filename)),
+                               "backup/%s" % datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
     with open(filename, "rb") as f:
         # Read the file
         start_time = time.time()
@@ -2295,6 +2316,7 @@ def OpenBackup(filename):
     backup_wsd = backup_gvas_file.properties['worldSaveData']['value']
     ShowPlayers(backup_wsd)
     ShowGuild(backup_wsd)
+
 
 def SetGuildOwner(group_id, new_player_uid):
     new_player_uid = toUUID(new_player_uid)
@@ -2556,6 +2578,7 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
     MappingCache.LoadCharacterContainerMaps()
     MappingCache.LoadGroupSaveDataMap()
     if not dry_run:
+        backup_file(new_player_sav_file)
         with open(new_player_sav_file, "wb") as f:
             print("Saving new player sav %s" % (new_player_sav_file))
             if "Pal.PalWorldSaveGame" in player_gvas_file.header.save_game_class_name or "Pal.PalLocalWorldSaveGame" in player_gvas_file.header.save_game_class_name:
@@ -2661,6 +2684,7 @@ def MigratePlayer(player_uid, new_player_uid):
     player_gvas['PlayerUId']['value'] = toUUID(uuid.UUID(new_player_uid))
     player_gvas['IndividualId']['value']['PlayerUId']['value'] = player_gvas['PlayerUId']['value']
     player_gvas['IndividualId']['value']['InstanceId']['value'] = toUUID(uuid.uuid4())
+    backup_file(new_player_sav_file)
     with open(new_player_sav_file, "wb") as f:
         print("Saving new player sav %s" % new_player_sav_file)
         if "Pal.PalWorldSaveGame" in player_gvas_file.header.save_game_class_name or "Pal.PalLocalWorldSaveGame" in player_gvas_file.header.save_game_class_name:
@@ -2980,8 +3004,8 @@ def CopyCharacter(characterId, src_wsd, target_container=None, dry_run=False):
             pass
 
     slotSaveData = PalObject.PalCharacterSlotSaveData_Array('00000000-0000-0000-0000-000000000000',
-                                                                  '00000000-0000-0000-0000-000000000000',
-                                                                  character['key']['InstanceId']['value'])
+                                                            '00000000-0000-0000-0000-000000000000',
+                                                            character['key']['InstanceId']['value'])
     if target_container is not None:
         characterContainerId = target_container
     elif 'SlotID' in characterData:
@@ -3192,7 +3216,7 @@ def CleanupCharacterContainer(container_id):
             MappingCache.CharacterSaveParameterMap[instanceId]['value']['RawData']['value']['object']['SaveParameter'][
                 'value']
         characterData['SlotID'] = PalObject.PalCharacterSlotId(container_id,
-                                                                     characterSlotIndexMapping[instanceId])
+                                                               characterSlotIndexMapping[instanceId])
     container['value']['Slots']['value']['values'] = new_containerSlots
 
 
@@ -4310,6 +4334,22 @@ def PrettyPrint(data, level=0):
                 print("%s</%s>" % ("  " * level, key))
 
 
+def backup_file(file):
+    if not os.path.exists(file):
+        return
+    if not os.path.exists(os.path.dirname(backup_path)):
+        os.mkdir(os.path.dirname(backup_path))
+    if not os.path.exists(backup_path):
+        os.mkdir(backup_path)
+    print(
+        f"Backup file {terminalColor(32)}{file}{terminalColor(0)} to {terminalColor(32)}{backup_path}{terminalColor(0)}...",
+        flush=True, end="")
+    with open(file, "rb") as f:
+        with open(f"{backup_path}/{os.path.basename(file)}", "wb") as wf:
+            wf.write(f.read())
+    print("Done")
+
+
 def Save(exit_now=True):
     print("processing GVAS to Sav file...", end="", flush=True)
     if "Pal.PalWorldSaveGame" in gvas_file.header.save_game_class_name or "Pal.PalLocalWorldSaveGame" in gvas_file.header.save_game_class_name:
@@ -4320,6 +4360,7 @@ def Save(exit_now=True):
     print("Done")
 
     print("Saving Sav file...", end="", flush=True)
+    backup_file(output_path)
     with open(output_path, "wb") as f:
         f.write(sav_file)
     print("Done")
