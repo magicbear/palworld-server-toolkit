@@ -72,7 +72,7 @@ Visit [Release Pages](https://github.com/magicbear/palworld-server-toolkit/relea
 
 ## Question?
 
-[Discord](https://discord.com/channels/1200798336916144188/1203683616488685698)
+[Discord](https://discord.gg/EQcMD5VQ2q)
 
 
 ---

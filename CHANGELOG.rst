@@ -14,6 +14,13 @@ Changelog
     Note that they these tags will not actually close the issue/PR until they
     are merged into the "default" branch.
 
+v0.6.3
+-------
+
+Fix:
+
+- CopyPlayer on exists player will be share the object before save and open again
+
 v0.6.2
 -------
 

@@ -23,6 +23,7 @@ from palworld_save_tools.gvas import GvasFile, GvasHeader
 from palworld_save_tools.palsav import compress_gvas_to_sav, decompress_sav_to_gvas
 from palworld_save_tools.paltypes import PALWORLD_CUSTOM_PROPERTIES, PALWORLD_TYPE_HINTS
 from palworld_save_tools.archive import *
+from palobject import *
 
 try:
     from palworld_save_tools.rawdata import map_concrete_model_module
@@ -51,6 +52,11 @@ except ImportError as e:
     traceback.print_exception(e)
     pass
 
+try:
+    from typing import Self
+except ImportError:
+    class Self:
+        EmptyObject = None
 
 class GvasPrettyPrint(pprint.PrettyPrinter):
     _dispatch = pprint.PrettyPrinter._dispatch.copy()
@@ -144,7 +150,7 @@ class MappingCacheObject:
     }
 
     @staticmethod
-    def get(worldSaveData):
+    def get(worldSaveData) -> Self:
         if id(worldSaveData) not in MappingCacheObject._MappingCacheInstances:
             MappingCacheObject._MappingCacheInstances[id(worldSaveData)] = MappingCacheObject(worldSaveData)
         return MappingCacheObject._MappingCacheInstances[id(worldSaveData)]
@@ -1837,7 +1843,8 @@ class GUI():
         if toUUID(target_uuid) not in MappingCache.CharacterSaveParameterMap:
             messagebox.showerror("Copy Instance Error", "Instance Not Found")
             return
-        instance = MappingCache.CharacterSaveParameterMap[toUUID(target_uuid)]['value']['RawData']['value']['object']['SaveParameter']['value']
+        instance = MappingCache.CharacterSaveParameterMap[toUUID(target_uuid)]['value']['RawData']['value']['object'][
+            'SaveParameter']['value']
         if 'OwnerPlayerUId' not in instance:
             messagebox.showerror("Copy Instance Error", "Only Pals can be use for Copy Instance")
             return
@@ -2124,7 +2131,7 @@ class GUI():
         g_del_unref_item.pack(side="left")
 
         g_cleanup_character = ttk.Button(master=g_wholefile, text="Cleanup character", style="custom.TButton",
-                                      command=self.cleanup_character)
+                                         command=self.cleanup_character)
         self.i18n['cleanup_character'] = g_cleanup_character
         g_cleanup_character.pack(side=tk.LEFT)
         g_del_damange_container_obj = ttk.Button(master=g_wholefile, text="Del Damage Object", style="custom.TButton",
@@ -2289,13 +2296,6 @@ def OpenBackup(filename):
     ShowPlayers(backup_wsd)
     ShowGuild(backup_wsd)
 
-
-def toUUID(uuid_str):
-    if isinstance(uuid_str, UUID):
-        return uuid_str
-    return UUID.from_str(str(uuid_str))
-
-
 def SetGuildOwner(group_id, new_player_uid):
     new_player_uid = toUUID(new_player_uid)
     if new_player_uid not in MappingCache.PlayerIdMapping:
@@ -2417,32 +2417,26 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
             if not dry_run:
                 wsd['ItemContainerSaveData']['value'].append(new_item)
 
-    srcPlayerMapping = {character['key']['PlayerUId']['value']: character for character in
-                        filter(
-                            lambda x: 'IsPlayer' in x['value']['RawData']['value']['object']['SaveParameter']['value'],
-                            old_wsd['CharacterSaveParameterMap']['value'])}
-
-    if player_uid not in srcPlayerMapping:
+    if player_uid not in srcMappingCache.PlayerIdMapping:
         print(
             f"{terminalColor(31)}Error, player {terminalColor(32)} {str(player_uid)} %s {terminalColor(31)} not exists {terminalColor(0)}")
     if new_player_uid in MappingCache.PlayerIdMapping:
         print(
             f"{terminalColor(36)}Player {terminalColor(32)} {str(new_player_uid)} {terminalColor(31)} exists, update new player information {terminalColor(0)}")
         userInstance = MappingCache.PlayerIdMapping[new_player_uid]
+        if not dry_run:
+            userInstance['key']['PlayerUId']['value'] = new_player_uid
+            userInstance['key']['InstanceId']['value'] = player_gvas['IndividualId']['value']['InstanceId']['value']
+            userInstance['value'] = copy.deepcopy(srcMappingCache.PlayerIdMapping[player_uid])['value']
     else:
         print(
             f"{terminalColor(36)}Copy Player {terminalColor(32)} {str(new_player_uid)} %s {terminalColor(31)} {terminalColor(0)}")
-        userInstance = copy.deepcopy(srcPlayerMapping[player_uid])
+        userInstance = copy.deepcopy(srcMappingCache.PlayerIdMapping[player_uid])
         if not dry_run:
             wsd['CharacterSaveParameterMap']['value'].append(userInstance)
 
     instances.append(
         {'guid': new_player_uid, 'instance_id': player_gvas['IndividualId']['value']['InstanceId']['value']})
-
-    if not dry_run:
-        userInstance['key']['PlayerUId']['value'] = new_player_uid
-        userInstance['key']['InstanceId']['value'] = player_gvas['IndividualId']['value']['InstanceId']['value']
-        userInstance['value'] = srcPlayerMapping[player_uid]['value']
 
     _playerMapping = LoadPlayers(wsd)
     for item in old_wsd['CharacterSaveParameterMap']['value']:
@@ -2453,7 +2447,7 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
             newCharacterData = new_item['value']['RawData']['value']['object']['SaveParameter']['value']
             newCharacterData['OwnerPlayerUId']['value'] = player_gvas['PlayerUId']['value']
             newCharacterData['SlotID']['value']['ContainerId']['value']['ID']['value'] = \
-            player_gvas['PalStorageContainerId']['value']['ID']['value']
+                player_gvas['PalStorageContainerId']['value']['ID']['value']
             if isFound:
                 if 'EquipItemContainerId' in player:
                     newCharacterData['EquipItemContainerId']['value']['ID']['value'] = toUUID(uuid.uuid4())
@@ -2645,8 +2639,8 @@ def MoveToGuild(player_uid, group_id):
 def CleanupWorkerSick():
     for instanceId in MappingCache.CharacterSaveParameterMap:
         characterData = \
-        MappingCache.CharacterSaveParameterMap[instanceId]['value']['RawData']['value']['object']['SaveParameter'][
-            'value']
+            MappingCache.CharacterSaveParameterMap[instanceId]['value']['RawData']['value']['object']['SaveParameter'][
+                'value']
         if 'WorkerSick' in characterData:
             print("Delete WorkerSick on %s" % CharacterDescription(MappingCache.CharacterSaveParameterMap[instanceId]))
             del characterData['WorkerSick']
@@ -2933,88 +2927,6 @@ def DeleteMapObject(map_object_id):
     return True
 
 
-class EmptySaveObject:
-    @staticmethod
-    def IntProperty(val):
-        return {'id': None, 'type': 'IntProperty', 'value': val}
-
-    @staticmethod
-    def StrProperty(val):
-        return {'id': None, 'type': 'StrProperty', 'value': val}
-
-    @staticmethod
-    def EnumProperty(type, val):
-        return {'id': None, 'type': 'EnumProperty', 'value': {
-            'type': type,
-            'value': val
-        }}
-
-    @staticmethod
-    def ArrayProperty(array_type, val):
-        return {'id': None, 'type': 'ArrayProperty', "array_type": array_type, 'value': val}
-
-    @staticmethod
-    def Guid(guid):
-        return {'id': None,
-                'struct_id': toUUID('00000000-0000-0000-0000-000000000000'),
-                'struct_type': 'Guid',
-                'type': 'StructProperty',
-                'value': toUUID(guid)
-                }
-
-    @staticmethod
-    def PalContainerId(container_id):
-        return {"id": None,
-                "type": "StructProperty",
-                "struct_id": toUUID('00000000-0000-0000-0000-000000000000'),
-                "struct_type": "PalContainerId",
-                "value": {
-                    'ID': EmptySaveObject.Guid(container_id)
-                }
-                }
-
-    @staticmethod
-    def PalInstanceID(InstanceId, PlayerUId):
-        return {"id": None,
-                "type": "StructProperty",
-                "struct_id": toUUID('00000000-0000-0000-0000-000000000000'),
-                "struct_type": "PalInstanceID",
-                "value": {
-                    "DebugName": EmptySaveObject.StrProperty(""),
-                    "InstanceId": EmptySaveObject.Guid(InstanceId),
-                    "PlayerUId": EmptySaveObject.Guid(PlayerUId),
-                }
-                }
-
-    @staticmethod
-    def PalCharacterSlotId(container_id, slotIndex):
-        return {
-            "id": None,
-            "type": "StructProperty",
-            "struct_id": toUUID('00000000-0000-0000-0000-000000000000'),
-            "struct_type": "PalCharacterSlotId",
-            "value": {
-                "ContainerId": EmptySaveObject.PalContainerId(container_id),
-                "SlotIndex": EmptySaveObject.IntProperty(slotIndex)
-            }
-        }
-
-    @staticmethod
-    def PalCharacterSlotSaveData_Array(InstanceId, PlayerUId, characterInstanceId):
-        rawData = EmptySaveObject.ArrayProperty("ByteProperty", {
-            'instance_id': toUUID(characterInstanceId),
-            'permission_tribe_id': 0,
-            'player_uid': toUUID(PlayerUId)
-        })
-        rawData['custom_type'] = ".worldSaveData.CharacterContainerSaveData.Value.Slots.Slots.RawData"
-
-        return {
-            'IndividualId': EmptySaveObject.PalInstanceID(InstanceId, PlayerUId),
-            'PermissionTribeID': EmptySaveObject.EnumProperty('EPalTribeID', 'EPalTribeID::GrassMammoth'),
-            'RawData': rawData
-        }
-
-
 def CopyCharacter(characterId, src_wsd, target_container=None, dry_run=False):
     srcMappingCache = MappingCacheObject.get(src_wsd)
     characterId = toUUID(characterId)
@@ -3067,7 +2979,7 @@ def CopyCharacter(characterId, src_wsd, target_container=None, dry_run=False):
         except KeyError:
             pass
 
-    slotSaveData = EmptySaveObject.PalCharacterSlotSaveData_Array('00000000-0000-0000-0000-000000000000',
+    slotSaveData = PalObject.PalCharacterSlotSaveData_Array('00000000-0000-0000-0000-000000000000',
                                                                   '00000000-0000-0000-0000-000000000000',
                                                                   character['key']['InstanceId']['value'])
     if target_container is not None:
@@ -3088,7 +3000,7 @@ def CopyCharacter(characterId, src_wsd, target_container=None, dry_run=False):
             slotIndex = len(characterContainer['value']['Slots']['value']['values']) - 1
         else:
             slotIndex = isFound
-        characterData['SlotID'] = EmptySaveObject.PalCharacterSlotId(characterContainerId, slotIndex)
+        characterData['SlotID'] = PalObject.PalCharacterSlotId(characterContainerId, slotIndex)
         print(f"Set character {characterId} -> Container {characterContainerId} SlotIndex {slotIndex}")
     try:
         wsd['CharacterSaveParameterMap']['value'].append(character)
@@ -3160,21 +3072,23 @@ def FindReferenceCharacterContainerIds():
         basecamp = MappingCache.BaseCampMapping[basecamp_id]['value']
         if 'WorkerDirector' in basecamp:
             reference_ids.add(basecamp['WorkerDirector']['value']['RawData']['value']['container_id'])
-    
+
     for character in wsd['CharacterSaveParameterMap']['value']:
         characterData = character['value']['RawData']['value']['object']['SaveParameter']['value']
         if 'SlotID' in characterData:
             reference_ids.add(characterData['SlotID']['value']['ContainerId']['value']['ID']['value'])
-    
+
     for playerUId in MappingCache.PlayerIdMapping:
         reference_ids.update(GetReferencedCharacterContainerIdsByPlayer(playerUId))
-    
+
     return reference_ids
+
 
 def FindAllUnreferencedCharacterContainerIds():
     referencedContainerIds = set(FindReferenceCharacterContainerIds())
     allContainerIds = set(MappingCache.CharacterContainerSaveData.keys())
     return list(allContainerIds - referencedContainerIds)
+
 
 def BatchDeleteUnreferencedCharacterContainers():
     unreferencedContainerIds = FindAllUnreferencedCharacterContainerIds()
@@ -3193,7 +3107,8 @@ def BatchDeleteCharacterContainer(characterContainerIds):
         deleteCharacterContainerIds.append(characterContainerId)
         if len(deleteCharacterContainerIds) % 10000 == 0:
             print(f"Deleting Item Containers: {len(deleteCharacterContainerIds)} / {len(characterContainerIds)}")
-        container = parse_item(MappingCache.CharacterContainerSaveData[characterContainerId], "CharacterContainerSaveData")
+        container = parse_item(MappingCache.CharacterContainerSaveData[characterContainerId],
+                               "CharacterContainerSaveData")
         del MappingCache.CharacterContainerSaveData[characterContainerId]
 
     wsd['CharacterContainerSaveData']['value'] = []
@@ -3231,7 +3146,7 @@ def FindReferenceItemContainerIds():
 
     for playerId in MappingCache.PlayerIdMapping:
         reference_ids.update(GetReferencedItemContainerIdsByPlayer(playerId))
-        
+
     return list(reference_ids)
 
 
@@ -3242,8 +3157,8 @@ def CharacterDescription(character):
             characterData['NickName']['value'] if 'NickName' in characterData else "Invalid")
     else:
         return f"Pal %s Own {terminalColor(32)}%s{terminalColor(0)}" % (
-        characterData['CharacterID']['value'] if 'CharacterID' in characterData else "Invalid",
-        characterData['OwnerPlayerUId']['value'])
+            characterData['CharacterID']['value'] if 'CharacterID' in characterData else "Invalid",
+            characterData['OwnerPlayerUId']['value'])
 
 
 def CleanupCharacterContainer(container_id):
@@ -3257,27 +3172,35 @@ def CleanupCharacterContainer(container_id):
     containerSlots = container['value']['Slots']['value']['values']
     for slot in containerSlots:
         if slot['IndividualId']['value']['InstanceId']['value'] == emptyUUID and \
-            slot['IndividualId']['value']['PlayerUId']['value'] == emptyUUID and \
-            slot['PermissionTribeID']['value']['value'] in ["None", "EPalTribeID::None", "EPalTribeID::FireKirin"] and \
-            slot['RawData']['value']['instance_id'] == emptyUUID:
+                slot['IndividualId']['value']['PlayerUId']['value'] == emptyUUID and \
+                slot['PermissionTribeID']['value']['value'] in ["None", "EPalTribeID::None",
+                                                                "EPalTribeID::FireKirin"] and \
+                slot['RawData']['value']['instance_id'] == emptyUUID:
             continue
         if slot['RawData']['value']['instance_id'] != emptyUUID:
             if slot['RawData']['value']['instance_id'] not in MappingCache.CharacterSaveParameterMap:
-                print(f"{terminalColor(31)}Error: character container {terminalColor(32)}{container_id}{terminalColor(31)} -> invalid character {terminalColor(32)}{slot['RawData']['value']['instance_id']}{terminalColor(0)}")
+                print(
+                    f"{terminalColor(31)}Error: character container {terminalColor(32)}{container_id}{terminalColor(31)} -> invalid character {terminalColor(32)}{slot['RawData']['value']['instance_id']}{terminalColor(0)}")
                 continue
             characterSlotIndexMapping[slot['RawData']['value']['instance_id']] = len(new_containerSlots)
         new_containerSlots.append(slot)
     if len(container['value']['Slots']['value']['values']) != len(new_containerSlots):
-        print(f"Clenaup Character Container {terminalColor(32)}{container_id}{terminalColor(0)}: {len(container['value']['Slots']['value']['values'])} -> {len(new_containerSlots)}")
+        print(
+            f"Clenaup Character Container {terminalColor(32)}{container_id}{terminalColor(0)}: {len(container['value']['Slots']['value']['values'])} -> {len(new_containerSlots)}")
     for instanceId in characterSlotIndexMapping:
-        characterData = MappingCache.CharacterSaveParameterMap[instanceId]['value']['RawData']['value']['object']['SaveParameter']['value']
-        characterData['SlotID'] = EmptySaveObject.PalCharacterSlotId(container_id, characterSlotIndexMapping[instanceId])
+        characterData = \
+            MappingCache.CharacterSaveParameterMap[instanceId]['value']['RawData']['value']['object']['SaveParameter'][
+                'value']
+        characterData['SlotID'] = PalObject.PalCharacterSlotId(container_id,
+                                                                     characterSlotIndexMapping[instanceId])
     container['value']['Slots']['value']['values'] = new_containerSlots
+
 
 def CleanupAllCharacterContainer():
     load_skiped_decode(wsd, ['CharacterContainerSaveData'])
     for container_id in MappingCache.CharacterContainerSaveData:
         CleanupCharacterContainer(container_id)
+
 
 def FindDamageRefItemContainer():
     InvalidObjects = {
