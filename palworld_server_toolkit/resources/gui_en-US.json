@@ -25,5 +25,6 @@
   "op_for_all": "Operate for File",
   "del_unreference_item": "Cleanup Item Containers \uD83D\uDD27",
   "cleanup_character": "Cleanup Character Containers \uD83D\uDD27",
-  "del_damage_obj": "Del Damage Instance \uD83C\uDD98"
+  "del_damage_obj": "Del Damage Instance \uD83C\uDD98",
+  "msg_confirm_beta": "This is a test feature, be sure you are already backup the file!\nPlease open game to confirm all things is working\nConfirm to continue?"
 }

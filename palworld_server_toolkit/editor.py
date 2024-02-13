@@ -1917,6 +1917,20 @@ class GUI():
             self.target_base['value'] = [str(x) for x in
                                          groupMapping[target_guild_uuid]['value']['RawData']['value']['base_ids']]
 
+    def cleanup_item(self):
+        with open("%s/resources/gui_%s.json" % (module_dir, self.language), encoding='utf-8') as f:
+            lang_data = json.load(f)
+        if 'yes' == messagebox.showwarning("Cleanup", lang_data['msg_confirm_beta'],
+                                           type=messagebox.YESNO):
+            BatchDeleteUnreferencedItemContainers()
+
+    def cleanup_character(self):
+        with open("%s/resources/gui_%s.json" % (module_dir, self.language), encoding='utf-8') as f:
+            lang_data = json.load(f)
+        if 'yes' == messagebox.showwarning("Cleanup", lang_data['msg_confirm_beta'],
+                                           type=messagebox.YESNO):
+            BatchDeleteUnreferencedCharacterContainers()
+
     def getPalTranslatedName(self, saveParameter):
         internal_name = saveParameter['CharacterID']['value']
         name = ''
@@ -2105,12 +2119,12 @@ class GUI():
         self.i18n['op_for_all'] = tk.Label(master=g_wholefile, text="Operate for All", font=self.font)
         self.i18n['op_for_all'].pack(fill="x", side="top")
         g_del_unref_item = ttk.Button(master=g_wholefile, text="Delete Unref Item", style="custom.TButton",
-                                      command=lambda: (BatchDeleteUnreferencedItemContainers(), self.load_players()))
+                                      command=self.cleanup_item)
         self.i18n['del_unreference_item'] = g_del_unref_item
         g_del_unref_item.pack(side="left")
 
         g_cleanup_character = ttk.Button(master=g_wholefile, text="Cleanup character", style="custom.TButton",
-                                      command=lambda: (CleanupAllCharacterContainer(), self.load_players()))
+                                      command=self.cleanup_character)
         self.i18n['cleanup_character'] = g_cleanup_character
         g_cleanup_character.pack(side=tk.LEFT)
         g_del_damange_container_obj = ttk.Button(master=g_wholefile, text="Del Damage Object", style="custom.TButton",
