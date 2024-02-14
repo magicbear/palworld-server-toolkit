@@ -161,59 +161,69 @@ class PalObject:
 
     @staticmethod
     def PalItemId():
-        return {'id': None,
-                'struct_id': toUUID('00000000-0000-0000-0000-000000000000'),
-                'struct_type': 'PalItemId',
-                'type': 'StructProperty',
-                'value': {'DynamicId': {'id': None,
-                                        'struct_id': toUUID(
-                                            '00000000-0000-0000-0000-000000000000'),
-                                        'struct_type': 'PalDynamicItemId',
-                                        'type': 'StructProperty',
-                                        'value': {'CreatedWorldId': {'id': None,
-                                                                     'struct_id': toUUID(
-                                                                         '00000000-0000-0000-0000-000000000000'),
-                                                                     'struct_type': 'Guid',
-                                                                     'type': 'StructProperty',
-                                                                     'value': toUUID(
-                                                                         '00000000-0000-0000-0000-000000000000')},
-                                                  'LocalIdInCreatedWorld': {'id': None,
-                                                                            'struct_id': toUUID(
-                                                                                '00000000-0000-0000-0000-000000000000'),
-                                                                            'struct_type': 'Guid',
-                                                                            'type': 'StructProperty',
-                                                                            'value': toUUID(
-                                                                                '00000000-0000-0000-0000-000000000000')}}},
-                          'StaticId': {'id': None,
-                                       'type': 'NameProperty',
-                                       'value': 'Stone'}}}
-
-    @staticmethod
-    def PalItemSlotSaveData_Array():
         return {
-            {'ItemId': PalObject.PalItemId(),
-             'RawData': PalObject.ArrayProperty("ByteProperty", {'corruption_progress_value': 0.0,
-                                                                 'permission': {'item_static_ids': [],
-                                                                                'type_a': [],
-                                                                                'type_b': []}},
-                                                ".worldSaveData.ItemContainerSaveData.Value.Slots.Slots.RawData"),
-             'SlotIndex': PalObject.IntProperty(0),
-             'StackCount': PalObject.IntProperty(0)
-             }
+            'id': None,
+            'struct_id': toUUID('00000000-0000-0000-0000-000000000000'),
+            'struct_type': 'PalItemId',
+            'type': 'StructProperty',
+            'value': {
+                'DynamicId': {
+                    'id': None,
+                    'struct_id': toUUID('00000000-0000-0000-0000-000000000000'),
+                    'struct_type': 'PalDynamicItemId',
+                    'type': 'StructProperty',
+                    'value': {
+                        'CreatedWorldId': {
+                            'id': None,
+                            'struct_id': toUUID('00000000-0000-0000-0000-000000000000'),
+                            'struct_type': 'Guid',
+                            'type': 'StructProperty',
+                            'value': toUUID('00000000-0000-0000-0000-000000000000')
+                        },
+                        'LocalIdInCreatedWorld': {
+                            'id': None,
+                            'struct_id': toUUID('00000000-0000-0000-0000-000000000000'),
+                            'struct_type': 'Guid',
+                            'type': 'StructProperty',
+                            'value': toUUID('00000000-0000-0000-0000-000000000000')
+                        }
+                    }
+                },
+                'StaticId': {
+                    'id': None,
+                    'type': 'NameProperty',
+                    'value': 'None'
+                }
+            }
         }
 
     @staticmethod
-    def PalItemSlotSaveData_Slots():
-        return {
+    def PalItemSlotSaveData_Array(SlotIndex):
+        return {'ItemId': PalObject.PalItemId(),
+                'RawData': PalObject.ArrayProperty("ByteProperty", {'corruption_progress_value': 0.0,
+                                                                    'permission': {'item_static_ids': [],
+                                                                                   'type_a': [],
+                                                                                   'type_b': []}},
+                                                   ".worldSaveData.ItemContainerSaveData.Value.Slots.Slots.RawData"),
+                'SlotIndex': PalObject.IntProperty(SlotIndex),
+                'StackCount': PalObject.IntProperty(0)
+                }
+
+    @staticmethod
+    def PalItemSlotSaveData_Slots(EmptySlots):
+        c = {
             'id': toUUID('00000000-0000-0000-0000-000000000000'),
             'prop_name': 'Slots',
             'prop_type': 'StructProperty',
             'type_name': 'PalItemSlotSaveData',
             'values': []
         }
+        for n in range(EmptySlots):
+            c['values'].append(PalObject.PalItemSlotSaveData_Array(n))
+        return c
 
     @staticmethod
-    def ItemContainerSaveData_Array(InstanceId):
+    def ItemContainerSaveData_Array(InstanceId, EmptySlots):
         return {
             'key': {
                 'ID': PalObject.Guid(InstanceId)
@@ -225,7 +235,7 @@ class PalObject:
                                    'type_a': [],
                                    'type_b': []}
                 }, ".worldSaveData.ItemContainerSaveData.Value.RawData"),
-                "Slots": PalObject.ArrayProperty("StructProperty", PalObject.PalItemSlotSaveData_Slots())
+                "Slots": PalObject.ArrayProperty("StructProperty", PalObject.PalItemSlotSaveData_Slots(EmptySlots))
             }
         }
 
@@ -381,6 +391,7 @@ class MPMapProperty(list):
         self.current.value -= 1
         return super().__delitem__(item)
 
+
 class MPArrayProperty(list):
     def __init__(self, *args, **kwargs):
         super().__init__()
@@ -448,6 +459,7 @@ class MPArrayProperty(list):
         self.load_all_items()
         self.current.value -= 1
         return super().__delitem__(item)
+
 
 def skip_decode(
         reader: FArchiveReader, type_name: str, size: int, path: str
@@ -781,7 +793,8 @@ class FProgressArchiveReader(FArchiveReader):
         keep_custom_type = False
         localProperties = copy.deepcopy(PALWORLD_CUSTOM_PROPERTIES)
         if ".worldSaveData.%s" % skip_path in PALWORLD_CUSTOM_PROPERTIES:
-            localProperties[".worldSaveData.%s" % skip_path] = PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.%s" % skip_path]
+            localProperties[".worldSaveData.%s" % skip_path] = PALWORLD_CUSTOM_PROPERTIES[
+                ".worldSaveData.%s" % skip_path]
             keep_custom_type = True
         elif ".worldSaveData.%s" % skip_path in localProperties:
             del localProperties[".worldSaveData.%s" % skip_path]

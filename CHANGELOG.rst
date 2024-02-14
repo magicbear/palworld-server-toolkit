@@ -17,9 +17,16 @@ Changelog
 v0.6.7
 -------
 
+Feature:
+
+- Repair User Feature
+- Delete Damage Object will delete damage container player
+
 Fix:
 
 - Bug for Delete Player
+- Bug for Migrate Player: not delete the old player
+- Bug for Copy Player: not change the UUID for not exists player
 
 v0.6.6
 -------
