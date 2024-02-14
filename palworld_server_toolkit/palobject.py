@@ -3,7 +3,7 @@ import re
 from palworld_save_tools.archive import *
 import json
 import copy
-from multiprocessing import shared_memory, Array, Value
+from multiprocessing import shared_memory
 import pickle
 import msgpack
 import ctypes
