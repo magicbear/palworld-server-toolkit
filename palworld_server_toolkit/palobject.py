@@ -1,17 +1,21 @@
 import re
 
 from palworld_save_tools.archive import *
+from palworld_save_tools.paltypes import *
 import json
 import copy
+import multiprocessing
 from multiprocessing import shared_memory
 import pickle
 import msgpack
 import ctypes
 
+
 def toUUID(uuid_str):
     if isinstance(uuid_str, UUID):
         return uuid_str
     return UUID.from_str(str(uuid_str))
+
 
 class PalObject:
     @staticmethod
@@ -187,10 +191,10 @@ class PalObject:
         return {
             {'ItemId': PalObject.PalItemId(),
              'RawData': PalObject.ArrayProperty("ByteProperty", {'corruption_progress_value': 0.0,
-                                                                       'permission': {'item_static_ids': [],
-                                                                                      'type_a': [],
-                                                                                      'type_b': []}},
-                                                      ".worldSaveData.ItemContainerSaveData.Value.Slots.Slots.RawData"),
+                                                                 'permission': {'item_static_ids': [],
+                                                                                'type_a': [],
+                                                                                'type_b': []}},
+                                                ".worldSaveData.ItemContainerSaveData.Value.Slots.Slots.RawData"),
              'SlotIndex': PalObject.IntProperty(0),
              'StackCount': PalObject.IntProperty(0)
              }
@@ -223,6 +227,7 @@ class PalObject:
             }
         }
 
+
 class MPMapValue(dict):
     def __init__(self, obj):
         self.obj = obj
@@ -246,15 +251,18 @@ class MPMapValue(dict):
         self.load()
         return super().__iter__()
 
+
 def decode_uuid(obj):
     if '__uuid__' in obj:
         obj = UUID(obj['__uuid__'])
     return obj
 
+
 def encode_uuid(obj):
     if isinstance(obj, UUID):
         return {'__uuid__': obj.raw_bytes}
     return obj
+
 
 class MPMapObject(dict):
     def __init__(self, key, obj):
@@ -318,13 +326,15 @@ class MPMapProperty(list):
         self.last = ctypes.c_ulong.from_address(self.memaddr + intsize)
         self.count = ctypes.c_ulong.from_address(self.memaddr + intsize * 2)
         if kwargs.get("name", None) is None:
-            ctypes.memset(self.memaddr, 0, intsize*(count*3+4))
+            ctypes.memset(self.memaddr, 0, intsize * (count * 3 + 4))
             self.count.value = count
             self.last.value = intsize * 4 + intsize * count * 3
         self.parsed_count = ctypes.c_ulong.from_address(self.memaddr + intsize * 3)
         self.index = (ctypes.c_ulong * self.count.value).from_address(self.memaddr + intsize * 4)
-        self.key_size = (ctypes.c_ulong * self.count.value).from_address(self.memaddr + intsize * 4 + intsize * self.count.value)
-        self.value_size = (ctypes.c_ulong * self.count.value).from_address(self.memaddr + intsize * 4 + intsize * self.count.value * 2)
+        self.key_size = (ctypes.c_ulong * self.count.value).from_address(
+            self.memaddr + intsize * 4 + intsize * self.count.value)
+        self.value_size = (ctypes.c_ulong * self.count.value).from_address(
+            self.memaddr + intsize * 4 + intsize * self.count.value * 2)
         super().__init__([None] * self.count.value)
 
     def append(self, obj):
@@ -350,7 +360,7 @@ class MPMapProperty(list):
             k_s = self.index[item]
             v_s = self.index[item] + self.key_size[item]
             self[item] = MPMapObject(self.shm.buf[k_s:v_s],
-                                            self.shm.buf[v_s:v_s + self.value_size[item]])
+                                     self.shm.buf[v_s:v_s + self.value_size[item]])
             self.parsed_count.value += 1
             if self.parsed_count.value == self.count.value:
                 self.shm.buf.release()
@@ -373,12 +383,13 @@ class MPArrayProperty(list):
         self.last = ctypes.c_ulong.from_address(self.memaddr + intsize)
         self.count = ctypes.c_ulong.from_address(self.memaddr + intsize * 2)
         if kwargs.get("name", None) is None:
-            ctypes.memset(self.memaddr, 0, intsize*(count*3+4))
+            ctypes.memset(self.memaddr, 0, intsize * (count * 3 + 4))
             self.count.value = count
             self.last.value = intsize * 4 + intsize * count * 2
         self.parsed_count = ctypes.c_ulong.from_address(self.memaddr + intsize * 3)
         self.index = (ctypes.c_ulong * self.count.value).from_address(self.memaddr + intsize * 4)
-        self.value_size = (ctypes.c_ulong * self.count.value).from_address(self.memaddr + intsize * 4 + intsize * self.count.value)
+        self.value_size = (ctypes.c_ulong * self.count.value).from_address(
+            self.memaddr + intsize * 4 + intsize * self.count.value)
         super().__init__([None] * self.count.value)
 
     def append(self, obj):
@@ -407,6 +418,294 @@ class MPArrayProperty(list):
         return super().__getitem__(item)
 
 
+def skip_decode(
+        reader: FArchiveReader, type_name: str, size: int, path: str
+) -> dict[str, Any]:
+    if type_name == "ArrayProperty":
+        array_type = reader.fstring()
+        value = {
+            "skip_type": type_name,
+            "array_type": array_type,
+            "id": reader.optional_guid(),
+            "value": reader.read(size)
+        }
+    elif type_name == "MapProperty":
+        key_type = reader.fstring()
+        value_type = reader.fstring()
+        _id = reader.optional_guid()
+        value = {
+            "skip_type": type_name,
+            "key_type": key_type,
+            "value_type": value_type,
+            "id": _id,
+            "value": reader.read(size),
+        }
+    elif type_name == "StructProperty":
+        value = {
+            "skip_type": type_name,
+            "struct_type": reader.fstring(),
+            "struct_id": reader.guid(),
+            "id": reader.optional_guid(),
+            "value": reader.read(size),
+        }
+    else:
+        raise Exception(
+            f"Expected ArrayProperty or MapProperty or StructProperty, got {type_name} in {path}"
+        )
+    return value
+
+
+def skip_encode(
+        writer: FArchiveWriter, property_type: str, properties: dict[str, Any]
+) -> int:
+    if "skip_type" not in properties:
+        if properties['custom_type'] in PALWORLD_CUSTOM_PROPERTIES is not None:
+            # print("process parent encoder -> ", properties['custom_type'])
+            return PALWORLD_CUSTOM_PROPERTIES[properties["custom_type"]][1](
+                writer, property_type, properties
+            )
+        else:
+            # Never be run to here
+            return writer.property_inner(writer, property_type, properties)
+    if property_type == "ArrayProperty":
+        del properties["custom_type"]
+        del properties["skip_type"]
+        writer.fstring(properties["array_type"])
+        writer.optional_guid(properties.get("id", None))
+        writer.write(properties["value"])
+        return len(properties["value"])
+    elif property_type == "MapProperty":
+        del properties["custom_type"]
+        del properties["skip_type"]
+        writer.fstring(properties["key_type"])
+        writer.fstring(properties["value_type"])
+        writer.optional_guid(properties.get("id", None))
+        writer.write(properties["value"])
+        return len(properties["value"])
+    elif property_type == "StructProperty":
+        del properties["custom_type"]
+        del properties["skip_type"]
+        writer.fstring(properties["struct_type"])
+        writer.guid(properties["struct_id"])
+        writer.optional_guid(properties.get("id", None))
+        writer.write(properties["value"])
+        return len(properties["value"])
+    else:
+        raise Exception(
+            f"Expected ArrayProperty or MapProperty or StructProperty, got {property_type}"
+        )
+
+
+class MPMapPropertyProcess(multiprocessing.Process):
+    def __init__(self, reader, properties, count, path, data):
+        super().__init__()
+        self.reader = reader
+        self.properties = properties
+        self.count = count
+        self.data = data
+        self.path = path
+
+    def run(self) -> None:
+        prop_val = MPMapProperty(name=self.properties['value'])
+        key_type = self.properties['key_type']
+        key_struct_type = self.properties['key_struct_type']
+        value_type = self.properties['value_type']
+        value_struct_type = self.properties['value_struct_type']
+        key_path = self.path + ".Key"
+        value_path = self.path + ".Value"
+        with FArchiveReader(
+                self.data,
+                type_hints=self.reader.type_hints,
+                custom_properties=self.reader.custom_properties,
+                allow_nan=self.reader.allow_nan,
+        ) as reader:
+            for _ in range(self.count):
+                key = reader.prop_value(key_type, key_struct_type, key_path)
+                value = reader.prop_value(value_type, value_struct_type, value_path)
+                prop_val.append({
+                    "key": key,
+                    "value": value
+                })
+        os._exit(0)
+
+
+class MPArrayPropertyProcess(multiprocessing.Process):
+    def __init__(self, reader, properties, count, size, path, data):
+        super().__init__()
+        self.reader = reader
+        self.properties = properties
+        self.count = count
+        self.size = size
+        self.data = data
+        self.path = path
+
+    def run(self) -> None:
+        prop_values = MPArrayProperty(name=self.properties['value']['values'])
+        with FArchiveReader(
+                self.data,
+                type_hints=self.reader.type_hints,
+                custom_properties=self.reader.custom_properties,
+                allow_nan=self.reader.allow_nan,
+        ) as reader:
+            array_type = self.properties['array_type']
+            if array_type == "StructProperty":
+                type_name = self.properties['value']['type_name']
+                prop_path = f"{self.path}.{self.properties['value']['prop_name']}"
+                for _ in range(self.count):
+                    prop_values.append(reader.struct_value(type_name, prop_path))
+            else:
+                decode_func: Callable
+                if array_type == "EnumProperty":
+                    decode_func = reader.fstring
+                elif array_type == "NameProperty":
+                    decode_func = reader.fstring
+                elif array_type == "Guid":
+                    decode_func = reader.guid
+                elif array_type == "ByteProperty":
+                    if self.size == self.count:
+                        # Special case this and read faster in one go
+                        return reader.byte_list(self.count)
+                    else:
+                        raise Exception("Labelled ByteProperty not implemented")
+                else:
+                    raise Exception(f"Unknown array type: {array_type} ({self.path})")
+                for _ in range(self.count):
+                    prop_values.append(decode_func())
+        os._exit(0)
+
+
+class FProgressArchiveReader(FArchiveReader):
+    processlist = {}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fallbackData = None
+        self.mp_loading = False
+        if sys.platform == 'linux':
+            with open("/proc/meminfo", "r", encoding='utf-8') as f:
+                for line in f:
+                    if 'MemFree:' == line[0:8]:
+                        remain = line.split(": ")[1].strip().split(" ")
+                        if remain[1] == 'kB' and int(remain[0]) > 1048576 > 4:  # Over 4 GB memory remains
+                            self.mp_loading = False if getattr(args, "reduce_memory", False) else True
+        elif sys.platform == 'darwin' or sys.platform == 'win32':
+            self.mp_loading = False if getattr(args, "reduce_memory", False) else True
+
+    def progress(self):
+        return self.data.tell()
+
+    def load_mp_map(self, properties, path, size):
+        key_type = self.fstring()
+        value_type = self.fstring()
+        _id = self.optional_guid()
+        ext_data_offset = self.data.tell()
+        self.u32()
+        count = self.u32()
+        key_path = path + ".Key"
+        if key_type == "StructProperty":
+            key_struct_type = self.get_type_or(key_path, "Guid")
+        else:
+            key_struct_type = None
+        value_path = path + ".Value"
+        if value_type == "StructProperty":
+            value_struct_type = self.get_type_or(value_path, "StructProperty")
+        else:
+            value_struct_type = None
+
+        share_mp = MPMapProperty(size=size * 4, count=count)
+        properties.update({
+            "type": "MapProperty",
+            "key_type": key_type,
+            "value_type": value_type,
+            "key_struct_type": key_struct_type,
+            "value_struct_type": value_struct_type,
+            "id": _id,
+            "value": share_mp.shm.name
+        })
+        p = MPMapPropertyProcess(self, properties, count, path, self.read(size - (self.data.tell() - ext_data_offset)))
+        p.start()
+        properties.update({
+            'value': share_mp
+        })
+        return p
+
+    def load_mp_array(self, properties, path, size):
+        array_type = self.fstring()
+        _id = self.optional_guid()
+
+        ext_data_offset = self.data.tell()
+        count = self.u32()
+
+        mp_ctx = MPArrayProperty(size=size * 4, count=count)
+        properties.update({
+            "type": "ArrayProperty",
+            "array_type": array_type,
+            "id": _id,
+            "value": {
+                "values": mp_ctx.shm.name
+            }
+        })
+
+        if array_type == "StructProperty":
+            prop_name = self.fstring()
+            prop_type = self.fstring()
+            self.u64()
+            type_name = self.fstring()
+            _id = self.guid()
+            self.skip(1)
+            properties['value'].update({
+                "prop_name": prop_name,
+                "prop_type": prop_type,
+                "type_name": type_name,
+                "id": _id
+            })
+        p = MPArrayPropertyProcess(self, properties, count, size, path,
+                                   self.read(size - (self.data.tell() - ext_data_offset)))
+        p.start()
+        properties['value'].update({
+            'values': mp_ctx
+        })
+        return p
+
+    def property(
+            self, type_name: str, size: int, path: str, nested_caller_path: str = ""
+    ) -> dict[str, Any]:
+        if size == -1:
+            return self.fallbackData
+        return super().property(type_name, size, path, nested_caller_path)
+
+    def properties_until_end(self, path: str = "") -> dict[str, Any]:
+        properties = {}
+        while True:
+            name = self.fstring()
+            if name == "None":
+                break
+            type_name = self.fstring()
+            size = self.u64()
+            sub_path = f"{path}.{name}"
+            if self.mp_loading and path == ".worldSaveData" and type_name == "MapProperty" and size > 1048576 and not (
+                    sub_path in self.custom_properties and self.custom_properties[sub_path][0] is skip_decode):
+                properties[name] = {}
+                self.processlist[sub_path] = self.load_mp_map(properties[name], sub_path, size)
+            elif self.mp_loading and path == ".worldSaveData" and type_name == "ArrayProperty" and size > 1048576 and not (
+                    sub_path in self.custom_properties and self.custom_properties[sub_path][0] is skip_decode):
+                properties[name] = {}
+                self.processlist[sub_path] = self.load_mp_array(properties[name], sub_path, size)
+            else:
+                properties[name] = self.property(type_name, size, f"{path}.{name}")
+        if path == "":
+            for mp_path in self.processlist:
+                self.processlist[mp_path].join()
+                if mp_path in self.custom_properties:
+                    self.fallbackData = properties['worldSaveData']['value'][mp_path[15:]]
+                    properties['worldSaveData']['value'][mp_path[15:]] = \
+                        self.custom_properties[mp_path][0](self,
+                                                           properties['worldSaveData']['value'][mp_path[15:]]['type'],
+                                                           -1, mp_path)
+                    properties['worldSaveData']['value'][mp_path[15:]]["custom_type"] = mp_path
+        return properties
+
+
 class JsonPalSimpleObject:
     type = None
     value = None
@@ -416,6 +715,7 @@ class JsonPalSimpleObject:
         self.type = _type
         self.value = _value
         self.custom_type = custom_type
+
 
 class CustomEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -427,6 +727,7 @@ class CustomEncoder(json.JSONEncoder):
             else:
                 return f"PalObject.{obj.type}({repr(obj.value)})"
         return super(CustomEncoder, self).default(obj)
+
 
 def AutoMakeStruct(struct):
     structs = {}
@@ -444,11 +745,17 @@ def AutoMakeStruct(struct):
                 struct['value'][k] = JsonPalSimpleObject(struct['value'][k]['struct_type'], None)
             elif struct['value'][k]['type'] == 'ArrayProperty':
                 # struct['value'][k]['value']['values'][0]
-                struct['value'][k] = JsonPalSimpleObject("ArrayProperty", struct['value'][k]['array_type'], struct['value'][k]['custom_type'] if 'custom_type' in struct['value'][k] else None)
+                struct['value'][k] = JsonPalSimpleObject("ArrayProperty", struct['value'][k]['array_type'],
+                                                         struct['value'][k]['custom_type'] if 'custom_type' in
+                                                                                              struct['value'][
+                                                                                                  k] else None)
         if struct['struct_type'] not in dir(PalObject):
             structs[struct['struct_type']] = "    @staticmethod\n" + \
-                 f"    def {struct['struct_type']}():\n" + \
-                 f"        return "  + re.sub(r"\"PalObject\.(.+)\",?", "PalObject.\\1,", json.dumps(struct, indent=4, cls=CustomEncoder).replace("\n", "\n        "))
+                                             f"    def {struct['struct_type']}():\n" + \
+                                             f"        return " + re.sub(r"\"PalObject\.(.+)\",?", "PalObject.\\1,",
+                                                                         json.dumps(struct, indent=4,
+                                                                                    cls=CustomEncoder).replace("\n",
+                                                                                                               "\n        "))
     return structs
 
 # print("\n\n".join(AutoMakeStruct(copy.deepcopy(MappingCache.CharacterSaveParameterMap[toUUID('1dd8d2a0-4dd7-4b05-f3c0-7ab60ebd95e4')]['value']['RawData']['value']['object']['SaveParameter'])).values()))

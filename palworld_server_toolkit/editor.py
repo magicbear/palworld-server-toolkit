@@ -4,7 +4,6 @@
 import json
 import os, datetime, time
 import pathlib
-import posix
 import sys
 import threading
 import pprint
@@ -270,87 +269,7 @@ class MappingCacheObject:
 
 MappingCache: MappingCacheObject = None
 
-
-def skip_decode(
-        reader: FArchiveReader, type_name: str, size: int, path: str
-) -> dict[str, Any]:
-    if type_name == "ArrayProperty":
-        array_type = reader.fstring()
-        value = {
-            "skip_type": type_name,
-            "array_type": array_type,
-            "id": reader.optional_guid(),
-            "value": reader.read(size)
-        }
-    elif type_name == "MapProperty":
-        key_type = reader.fstring()
-        value_type = reader.fstring()
-        _id = reader.optional_guid()
-        value = {
-            "skip_type": type_name,
-            "key_type": key_type,
-            "value_type": value_type,
-            "id": _id,
-            "value": reader.read(size),
-        }
-    elif type_name == "StructProperty":
-        value = {
-            "skip_type": type_name,
-            "struct_type": reader.fstring(),
-            "struct_id": reader.guid(),
-            "id": reader.optional_guid(),
-            "value": reader.read(size),
-        }
-    else:
-        raise Exception(
-            f"Expected ArrayProperty or MapProperty or StructProperty, got {type_name} in {path}"
-        )
-    return value
-
-
-def skip_encode(
-        writer: FArchiveWriter, property_type: str, properties: dict[str, Any]
-) -> int:
-    if "skip_type" not in properties:
-        if properties['custom_type'] in PALWORLD_CUSTOM_PROPERTIES is not None:
-            # print("process parent encoder -> ", properties['custom_type'])
-            return PALWORLD_CUSTOM_PROPERTIES[properties["custom_type"]][1](
-                writer, property_type, properties
-            )
-        else:
-            # Never be run to here
-            return writer.property_inner(writer, property_type, properties)
-    if property_type == "ArrayProperty":
-        del properties["custom_type"]
-        del properties["skip_type"]
-        writer.fstring(properties["array_type"])
-        writer.optional_guid(properties.get("id", None))
-        writer.write(properties["value"])
-        return len(properties["value"])
-    elif property_type == "MapProperty":
-        del properties["custom_type"]
-        del properties["skip_type"]
-        writer.fstring(properties["key_type"])
-        writer.fstring(properties["value_type"])
-        writer.optional_guid(properties.get("id", None))
-        writer.write(properties["value"])
-        return len(properties["value"])
-    elif property_type == "StructProperty":
-        del properties["custom_type"]
-        del properties["skip_type"]
-        writer.fstring(properties["struct_type"])
-        writer.guid(properties["struct_id"])
-        writer.optional_guid(properties.get("id", None))
-        writer.write(properties["value"])
-        return len(properties["value"])
-    else:
-        raise Exception(
-            f"Expected ArrayProperty or MapProperty or StructProperty, got {property_type}"
-        )
-
-
 loadingTitle = ""
-
 
 def set_loadingTitle(title):
     loadingTitle = title
@@ -392,257 +311,6 @@ class skip_loading_progress(threading.Thread):
             pass
         except RuntimeError:
             pass
-
-class MPMapPropertyProcess(multiprocessing.Process):
-    def __init__(self, reader, properties, count, path, data):
-        super().__init__()
-        self.reader = reader
-        self.properties = properties
-        self.count = count
-        self.data = data
-        self.path = path
-
-    def run(self) -> None:
-        prop_val = MPMapProperty(name=self.properties['value'])
-        key_type = self.properties['key_type']
-        key_struct_type = self.properties['key_struct_type']
-        value_type = self.properties['value_type']
-        value_struct_type = self.properties['value_struct_type']
-        key_path = self.path + ".Key"
-        value_path = self.path + ".Value"
-        with FArchiveReader(
-                self.data,
-                type_hints=self.reader.type_hints,
-                custom_properties=self.reader.custom_properties,
-                allow_nan=self.reader.allow_nan,
-        ) as reader:
-            for _ in range(self.count):
-                key = reader.prop_value(key_type, key_struct_type, key_path)
-                value = reader.prop_value(value_type, value_struct_type, value_path)
-                prop_val.append({
-                    "key": key,
-                    "value": value
-                })
-        posix.kill(os.getpid(), 9)
-
-class MPArrayPropertyProcess(multiprocessing.Process):
-    def __init__(self, reader, properties, count, size, path, data):
-        super().__init__()
-        self.reader = reader
-        self.properties = properties
-        self.count = count
-        self.size = size
-        self.data = data
-        self.path = path
-
-    def run(self) -> None:
-        prop_values = MPArrayProperty(name=self.properties['value']['values'])
-        with FArchiveReader(
-                self.data,
-                type_hints=self.reader.type_hints,
-                custom_properties=self.reader.custom_properties,
-                allow_nan=self.reader.allow_nan,
-        ) as reader:
-            array_type = self.properties['array_type']
-            if array_type == "StructProperty":
-                type_name = self.properties['value']['type_name']
-                prop_path = f"{self.path}.{self.properties['value']['prop_name']}"
-                for _ in range(self.count):
-                    prop_values.append(reader.struct_value(type_name, prop_path))
-            else:
-                decode_func: Callable
-                if array_type == "EnumProperty":
-                    decode_func = reader.fstring
-                elif array_type == "NameProperty":
-                    decode_func = reader.fstring
-                elif array_type == "Guid":
-                    decode_func = reader.guid
-                elif array_type == "ByteProperty":
-                    if self.size == self.count:
-                        # Special case this and read faster in one go
-                        return reader.byte_list(self.count)
-                    else:
-                        raise Exception("Labelled ByteProperty not implemented")
-                else:
-                    raise Exception(f"Unknown array type: {array_type} ({self.path})")
-                for _ in range(self.count):
-                    prop_values.append(decode_func())
-        posix.kill(os.getpid(), 9)
-
-
-class FProgressArchiveReader(FArchiveReader):
-    processlist = {}
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fallbackData = None
-        self.mp_loading = False
-        if sys.platform == 'linux':
-            with open("/proc/meminfo", "r", encoding='utf-8') as f:
-                for line in f:
-                    if 'MemFree:' == line[0:8]:
-                        remain = line.split(": ")[1].strip().split(" ")
-                        if remain[1] == 'kB' and int(remain[0]) > 1048576 > 4:  # Over 4 GB memory remains
-                            self.mp_loading = True
-        elif sys.platform == 'darwin':
-            self.mp_loading = True
-
-    def progress(self):
-        return self.data.tell()
-
-    @staticmethod
-    def mp_array_process(properties, count, size, path, data, type_hints, custom_properties, allow_nan):
-        prop_values = properties['value']['values']
-        with FArchiveReader(
-                data,
-                type_hints=type_hints,
-                custom_properties=custom_properties,
-                allow_nan=allow_nan,
-        ) as reader:
-            array_type = properties['array_type']
-            if array_type == "StructProperty":
-                type_name = properties['value']['type_name']
-                prop_path = f"{path}.{properties['value']['prop_name']}"
-                for _ in range(count):
-                    prop_values.append(reader.struct_value(type_name, prop_path))
-            else:
-                decode_func: Callable
-                if array_type == "EnumProperty":
-                    decode_func = reader.fstring
-                elif array_type == "NameProperty":
-                    decode_func = reader.fstring
-                elif array_type == "Guid":
-                    decode_func = reader.guid
-                elif array_type == "ByteProperty":
-                    if size == count:
-                        # Special case this and read faster in one go
-                        return reader.byte_list(count)
-                    else:
-                        raise Exception("Labelled ByteProperty not implemented")
-                else:
-                    raise Exception(f"Unknown array type: {array_type} ({path})")
-                for _ in range(count):
-                    prop_values.append(decode_func())
-        posix.kill(os.getpid(), 9)
-
-    def load_mp_map(self, properties, path, size):
-        key_type = self.fstring()
-        value_type = self.fstring()
-        _id = self.optional_guid()
-        ext_data_offset = self.data.tell()
-        self.u32()
-        count = self.u32()
-        key_path = path + ".Key"
-        if key_type == "StructProperty":
-            key_struct_type = self.get_type_or(key_path, "Guid")
-        else:
-            key_struct_type = None
-        value_path = path + ".Value"
-        if value_type == "StructProperty":
-            value_struct_type = self.get_type_or(value_path, "StructProperty")
-        else:
-            value_struct_type = None
-
-        share_mp = MPMapProperty(size=size * 4, count=count)
-        properties.update({
-            "type": "MapProperty",
-            "key_type": key_type,
-            "value_type": value_type,
-            "key_struct_type": key_struct_type,
-            "value_struct_type": value_struct_type,
-            "id": _id,
-            "value": share_mp.shm.name
-        })
-        p = MPMapPropertyProcess(self, properties, count, path, self.read(size - (self.data.tell() - ext_data_offset)))
-        p.start()
-        properties.update({
-            'value': share_mp
-        })
-        return p
-
-    def load_mp_array(self, properties, path, size):
-        array_type = self.fstring()
-        _id = self.optional_guid()
-
-        ext_data_offset = self.data.tell()
-        count = self.u32()
-
-        mp_ctx = MPArrayProperty(size=size * 4, count=count)
-        properties.update({
-            "type": "ArrayProperty",
-            "array_type": array_type,
-            "id": _id,
-            "value": {
-                "values": mp_ctx.shm.name
-            }
-        })
-
-        if array_type == "StructProperty":
-            prop_name = self.fstring()
-            prop_type = self.fstring()
-            self.u64()
-            type_name = self.fstring()
-            _id = self.guid()
-            self.skip(1)
-            properties['value'].update({
-                "prop_name": prop_name,
-                "prop_type": prop_type,
-                "type_name": type_name,
-                "id": _id
-            })
-        p = MPArrayPropertyProcess(self, properties, count, size, path, self.read(size - (self.data.tell() - ext_data_offset)))
-        p.start()
-        properties['value'].update({
-            'values': mp_ctx
-        })
-        return p
-
-    def property(
-            self, type_name: str, size: int, path: str, nested_caller_path: str = ""
-    ) -> dict[str, Any]:
-        if size == -1:
-            return self.fallbackData
-        return super().property(type_name, size, path, nested_caller_path)
-
-    def properties_until_end(self, path: str = "") -> dict[str, Any]:
-        properties = {}
-        while True:
-            if path == ".worldSaveData":
-                t1 = time.time()
-            name = self.fstring()
-            if name == "None":
-                break
-            type_name = self.fstring()
-            size = self.u64()
-            sub_path = f"{path}.{name}"
-            if self.mp_loading and path == ".worldSaveData" and type_name == "MapProperty" and size > 1048576 and not (
-                    sub_path in self.custom_properties and self.custom_properties[sub_path][0] is skip_decode):
-                properties[name] = {}
-                self.processlist[sub_path] = self.load_mp_map(properties[name], sub_path, size)
-            # elif self.mp_loading and path == ".worldSaveData" and type_name == "ArrayProperty" and size > 1048576 and not (
-            #         sub_path in self.custom_properties and self.custom_properties[sub_path][0] is skip_decode):
-            #     properties[name] = {}
-            #     self.processlist[sub_path] = self.load_mp_array(properties[name], sub_path, size)
-            else:
-                properties[name] = self.property(type_name, size, f"{path}.{name}")
-            if path == ".worldSaveData":
-                # print(type_name)
-                loadingStatistics[name] = time.time() - t1
-        if path == "":
-            for mp_path in self.processlist:
-                self.processlist[mp_path].join()
-                if mp_path in self.custom_properties:
-                    self.fallbackData = properties['worldSaveData']['value'][mp_path[15:]]
-                    properties['worldSaveData']['value'][mp_path[15:]] = self.custom_properties[mp_path][0](self,
-                                                                                                            properties[
-                                                                                                                'worldSaveData'][
-                                                                                                                'value'][
-                                                                                                                mp_path[
-                                                                                                                15:]][
-                                                                                                                'type'],
-                                                                                                            -1, mp_path)
-                    properties['worldSaveData']['value'][mp_path[15:]]["custom_type"] = mp_path
-        return properties
 
 
 class ProgressGvasFile(GvasFile):
@@ -727,10 +395,10 @@ def parse_skiped_item(properties, skip_path, progress=True, recursive=True, mp=N
     ) as reader:
         if progress:
             skip_loading_progress(reader, len(properties['value'])).start()
-        if mp is not None and properties["skip_type"] == "MapProperty":
+        if reader.mp_loading and mp is not None and properties["skip_type"] == "MapProperty":
             mp[f".worldSaveData.{skip_path}"] = reader.load_mp_map(properties, f".worldSaveData.{skip_path}",
                                                                    len(properties['value']))
-        elif mp is not None and properties["skip_type"] == "ArrayProperty":
+        elif reader.mp_loading and mp is not None and properties["skip_type"] == "ArrayProperty":
             mp[f".worldSaveData.{skip_path}"] = reader.load_mp_array(properties, f".worldSaveData.{skip_path}",
                                                                      len(properties['value']))
         else:
@@ -752,7 +420,7 @@ def load_skipped_decode(_worldSaveData, skip_paths, recursive=True):
     if isinstance(skip_paths, str):
         skip_paths = [skip_paths]
 
-    mp = {} if sys.platform == 'linux' else None
+    mp = {}
     t2 = time.time()
     parsed = 0
     skip_paths.sort()
@@ -924,6 +592,12 @@ def main():
         action="store_true",
         help="Open GUI",
     )
+    parser.add_argument(
+        "--reduce-memory",
+        "-r",
+        action="store_true",
+        help="Reduce Memory",
+    )
 
     if len(sys.argv) == 1:
         bk_f = filedialog.askopenfilename(filetypes=[("Level.sav file", "*.sav")], title="Open Level.sav")
@@ -932,11 +606,6 @@ def main():
             args.filename = bk_f
             args.gui = True
             args.statistics = False
-            args.fix_missing = False
-            args.fix_capture = False
-            args.fix_duplicate = False
-            args.del_unref_item = False
-            args.del_damage_object = False
             args.output = None
         else:
             args = parser.parse_args()
@@ -989,15 +658,15 @@ def main():
 
     print("Total load in %.3fms" % (1000 * (time.time() - t1)))
 
-    if args.fix_missing:
+    if getattr(args, "fix_missing", False):
         FixMissing()
-    if args.fix_capture:
+    if getattr(args, "fix_capture", False):
         FixCaptureLog()
-    if args.fix_duplicate:
+    if getattr(args, "fix_duplicate", False):
         FixDuplicateUser()
-    if args.del_unref_item:
+    if getattr(args, "del_unref_item", False):
         BatchDeleteUnreferencedItemContainers()
-    if args.del_damage_object:
+    if getattr(args, 'del_damage_object', False):
         FixBrokenDamageRefItemContainer()
 
     if sys.flags.interactive:
