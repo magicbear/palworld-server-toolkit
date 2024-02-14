@@ -380,6 +380,8 @@ class skip_loading_progress(threading.Thread):
                         gui.progressbar['value'] = 100 * self.reader.data.tell() / self.size
                 except AttributeError:
                     pass
+                except RuntimeError:
+                    pass
                 time.sleep(0.05)
         except ValueError:
             pass
@@ -387,6 +389,8 @@ class skip_loading_progress(threading.Thread):
             if gui is not None:
                 gui.progressbar['value'] = 100
         except AttributeError:
+            pass
+        except RuntimeError:
             pass
 
 
@@ -408,14 +412,15 @@ class FProgressArchiveReader(FArchiveReader):
     def progress(self):
         return self.data.tell()
 
-    def mp_map_process(self, properties, count, key_type, key_struct_type, key_path, value_type, value_struct_type,
-                       value_path, data):
+    @staticmethod
+    def mp_map_process(properties, count, key_type, key_struct_type, key_path, value_type, value_struct_type,
+                       value_path, data, type_hints, custom_properties, allow_nan):
         prop_val = properties['value']
         with FArchiveReader(
                 data,
-                type_hints=self.type_hints,
-                custom_properties=self.custom_properties,
-                allow_nan=self.allow_nan,
+                type_hints=type_hints,
+                custom_properties=custom_properties,
+                allow_nan=allow_nan,
         ) as reader:
             for _ in range(count):
                 key = reader.prop_value(key_type, key_struct_type, key_path)
@@ -426,13 +431,14 @@ class FProgressArchiveReader(FArchiveReader):
                 })
         posix.kill(os.getpid(), 9)
 
-    def mp_array_process(self, properties, count, size, path, data):
+    @staticmethod
+    def mp_array_process(properties, count, size, path, data, type_hints, custom_properties, allow_nan):
         prop_values = properties['value']['values']
         with FArchiveReader(
                 data,
-                type_hints=self.type_hints,
-                custom_properties=self.custom_properties,
-                allow_nan=self.allow_nan,
+                type_hints=type_hints,
+                custom_properties=custom_properties,
+                allow_nan=allow_nan,
         ) as reader:
             array_type = properties['array_type']
             if array_type == "StructProperty":
@@ -443,15 +449,15 @@ class FProgressArchiveReader(FArchiveReader):
             else:
                 decode_func: Callable
                 if array_type == "EnumProperty":
-                    decode_func = self.fstring
+                    decode_func = reader.fstring
                 elif array_type == "NameProperty":
-                    decode_func = self.fstring
+                    decode_func = reader.fstring
                 elif array_type == "Guid":
-                    decode_func = self.guid
+                    decode_func = reader.guid
                 elif array_type == "ByteProperty":
                     if size == count:
                         # Special case this and read faster in one go
-                        return self.byte_list(count)
+                        return reader.byte_list(count)
                     else:
                         raise Exception("Labelled ByteProperty not implemented")
                 else:
@@ -491,7 +497,8 @@ class FProgressArchiveReader(FArchiveReader):
                                                                       key_type, key_struct_type, key_path, value_type,
                                                                       value_struct_type, value_path,
                                                                       self.read(
-                                                                          size - (self.data.tell() - ext_data_offset))))
+                                                                          size - (self.data.tell() - ext_data_offset)),
+                                                                        self.type_hints, self.custom_properties, self.allow_nan))
         p.start()
         return p
 
@@ -524,9 +531,10 @@ class FProgressArchiveReader(FArchiveReader):
                 "type_name": type_name,
                 "id": _id
             })
-        p = multiprocessing.Process(target=self.mp_array_process, args=(properties, count, size, path,
+        p = multiprocessing.Process(target=FProgressArchiveReader.mp_array_process, args=(properties, count, size, path,
                                                                         self.read(size - (
-                                                                                    self.data.tell() - ext_data_offset))))
+                                                                                self.data.tell() - ext_data_offset)),
+                                                                        self.type_hints, self.custom_properties, self.allow_nan))
         p.start()
         return p
 
@@ -801,6 +809,7 @@ def gui_thread():
         GUI()
         if gui is None:
             return
+        gui.load()
         gui.mainloop()
     except tk.TclError:
         print(f"{terminalColor(31)}Failed to create GUI{terminalColor(0)}")
@@ -891,6 +900,17 @@ def main():
     t1 = time.time()
     LoadFile(args.filename)
 
+    if args.gui and sys.platform == 'darwin':
+        if sys.flags.interactive:
+            print("Error: Mac OS python not support interactive with GUI")
+            gui = GUI()
+            gui.load()
+            gui.gui.update()
+    #         gui_thread()
+    #         sys.exit(0)
+    elif args.gui and sys.flags.interactive:
+        threading.Thread(target=gui_thread, daemon=True).start()
+
     if args.statistics:
         Statistics()
 
@@ -920,9 +940,6 @@ def main():
         BatchDeleteUnreferencedItemContainers()
     if args.del_damage_object:
         FixBrokenDamageRefItemContainer()
-
-    if args.gui and sys.flags.interactive:
-        threading.Thread(target=gui_thread).start()
 
     if sys.flags.interactive:
         print("Go To Interactive Mode (no auto save), we have follow command:")
@@ -1785,16 +1802,12 @@ class GUI():
         self.language = None
         self.pal_i18n = None
         self.g_move_guild_owner = None
-        global gui
         try:
             if tk is None:
                 pass
         except NameError:
             print("ERROR: Without Tkinter Environment, GUI not work")
             return
-        if gui is not None:
-            gui.gui.destroy()
-        gui = self
         self.i18n = {}
         self.gui = None
         self.src_player = None
@@ -2436,6 +2449,8 @@ class GUI():
         self.progressbar.pack(fill=tk.constants.X)
 
         self.set_i18n(list(i18n_list.keys())[0])
+
+    def load(self):
         self.load_players()
         self.load_guilds()
 
@@ -2961,18 +2976,19 @@ def FindPlayersFromInactiveGuild(days):
     for group_id in MappingCache.GuildSaveDataMap:
         guild = MappingCache.GuildSaveDataMap[group_id]
         group_data = guild['value']['RawData']['value']
-        players_list_guild = [] # Current guild's players list
+        players_list_guild = []  # Current guild's players list
         for g_player in group_data['players']:
             # If any member is active, skip this guild
-            if (wsd['GameTimeSaveData']['value']['RealDateTimeTicks']['value'] - g_player['player_info']['last_online_real_time']) / 1e7 > days * 86400:
-                players_list_guild.append(g_player['player_uid'])
-            else:
+            if (wsd['GameTimeSaveData']['value']['RealDateTimeTicks']['value'] - g_player['player_info'][
+                'last_online_real_time']) / 1e7 <= days * 86400:
                 break
+            else:
+                players_list_guild.append(g_player['player_uid'])
         else:
             player_list.extend(players_list_guild)
-    
+
     return player_list
-  
+
 
 def MigratePlayer(player_uid, new_player_uid):
     load_skipped_decode(wsd, ['MapObjectSaveData', 'GroupSaveDataMap'], False)

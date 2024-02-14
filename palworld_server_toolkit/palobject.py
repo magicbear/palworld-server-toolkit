@@ -6,6 +6,7 @@ import copy
 from multiprocessing import shared_memory, Array, Value
 import pickle
 import msgpack
+import ctypes
 
 def toUUID(uuid_str):
     if isinstance(uuid_str, UUID):
@@ -33,7 +34,7 @@ class PalObject:
             'type': type,
             'value': val
         }}
-    
+
     @staticmethod
     def BoolProperty(val):
         return {'id': None, 'type': 'BoolProperty', 'value': val}
@@ -41,7 +42,7 @@ class PalObject:
     @staticmethod
     def FloatProperty(val):
         return {'id': None, 'type': 'FloatProperty', 'value': val}
-    
+
     @staticmethod
     def ArrayProperty(array_type, val, custom_type=None):
         rc = {'id': None, 'type': 'ArrayProperty', "array_type": array_type, 'value': val}
@@ -225,22 +226,22 @@ class PalObject:
 class MPMapValue(dict):
     def __init__(self, obj):
         self.obj = obj
-    
+
     def load(self):
         _data = pickle.loads(self.obj)
         self.__getitem__ = super().__getitem__
         self.update(_data)
         self.__iter__ = super().__iter__
         self.__setitem__ = super().__setitem__
-        
+
     def __getitem__(self, key):
         self.load()
         return super().__getitem__(key)
-    
+
     def __setitem__(self, key, value):
         self.load()
         return super().__setitem__(key, value)
-    
+
     def __iter__(self):
         self.load()
         return super().__iter__()
@@ -274,6 +275,9 @@ class MPMapObject(dict):
                 self.update({
                     'key': self.key
                 })
+            if self.parsed_value:
+                self.__getitem__ = super().__getitem__
+                self.__iter__ = super().__iter__
             return self.key
         if key == 'value':
             if not self.parsed_value:
@@ -283,9 +287,12 @@ class MPMapObject(dict):
                 self.update({
                     'value': self.value
                 })
+            if self.parsed_key:
+                self.__getitem__ = super().__getitem__
+                self.__iter__ = super().__iter__
             return self.value
         return super().__getitem__(key)
-    
+
     def __iter__(self):
         for key in super().__iter__():
             yield key
@@ -299,25 +306,36 @@ class MPMapProperty(list):
     def __init__(self, *args, **kwargs):
         count = kwargs.get("count", 0)
         size = kwargs.get("size", 0)
-        super().__init__([None] * count)
-        self.shm = shared_memory.SharedMemory(create=True, size=size)
-        self.index = Array('i', count)
-        self.key_size = Array('i', count)
-        self.value_size = Array('i', count)
-        self.current = Value('i', 0)
-        self.last = Value('i', 0)
-        self.count = count
-        self.parsed_count = 0
+        intsize = ctypes.sizeof(ctypes.c_ulong)
+        if kwargs.get("name", None) is not None:
+            self.shm = shared_memory.SharedMemory(name=kwargs.get("name", None))
+        else:
+            self.shm = shared_memory.SharedMemory(create=True, size=size)
+        # int_buf = self.shm.buf.cast("L")
+        # int_objects = np.frombuffer(self.shm.buf.obj, dtype=np.uint64)
+        self.memaddr = ctypes.addressof(ctypes.c_void_p.from_buffer(self.shm.buf.obj))
+        self.current = ctypes.c_ulong.from_buffer(self.shm.buf.obj)
+        self.last = ctypes.c_ulong.from_address(self.memaddr + intsize)
+        self.count = ctypes.c_ulong.from_address(self.memaddr + intsize * 2)
+        if kwargs.get("name", None) is None:
+            ctypes.memset(self.memaddr, 0, intsize*(count*3+4))
+            self.count.value = count
+            self.last.value = intsize * 4 + intsize * count * 3
+        self.parsed_count = ctypes.c_ulong.from_address(self.memaddr + intsize * 3)
+        self.index = (ctypes.c_ulong * self.count.value).from_address(self.memaddr + intsize * 4)
+        self.key_size = (ctypes.c_ulong * self.count.value).from_address(self.memaddr + intsize * 4 + intsize * self.count.value)
+        self.value_size = (ctypes.c_ulong * self.count.value).from_address(self.memaddr + intsize * 4 + intsize * self.count.value * 2)
+        super().__init__([None] * self.count.value)
 
     def append(self, obj):
-        if self.current.value < self.count:
+        if self.current.value < self.count.value:
             key = msgpack.packb(obj['key'], default=encode_uuid, use_bin_type=True)
             val = msgpack.packb(obj['value'], default=encode_uuid, use_bin_type=True)
             self.index[self.current.value] = self.last.value
             self.key_size[self.current.value] = len(key)
             self.value_size[self.current.value] = len(val)
-            self.shm.buf[self.last.value:self.last.value + len(key)] = key
-            self.shm.buf[self.last.value + len(key):self.last.value + len(key) + len(val)] = val
+            ctypes.memmove(self.memaddr + self.last.value, key, len(key))
+            ctypes.memmove(self.memaddr + self.last.value + len(key), val, len(val))
             self.last.value += len(key) + len(val)
             self.current.value += 1
         else:
@@ -333,35 +351,42 @@ class MPMapProperty(list):
             v_s = self.index[item] + self.key_size[item]
             self[item] = MPMapObject(self.shm.buf[k_s:v_s],
                                             self.shm.buf[v_s:v_s + self.value_size[item]])
-            self.parsed_count += 1
+            self.parsed_count.value += 1
+            if self.parsed_count.value == self.count.value:
+                self.shm.buf.release()
         return super().__getitem__(item)
-
-    def __str__(self):
-        return super().__str__()
-        
-    def __repr__(self):
-        return super().__repr__()
 
 
 class MPArrayProperty(list):
     def __init__(self, *args, **kwargs):
         count = kwargs.get("count", 0)
         size = kwargs.get("size", 0)
-        super().__init__([None] * count)
-        self.shm = shared_memory.SharedMemory(create=True, size=size)
-        self.index = Array('i', count)
-        self.value_size = Array('i', count)
-        self.current = Value('i', 0)
-        self.last = Value('i', 0)
-        self.count = count
-        self.parsed_count = 0
+        intsize = ctypes.sizeof(ctypes.c_ulong)
+        if kwargs.get("name", None) is not None:
+            self.shm = shared_memory.SharedMemory(name=kwargs.get("name", None))
+        else:
+            self.shm = shared_memory.SharedMemory(create=True, size=size)
+        # int_buf = self.shm.buf.cast("L")
+        # int_objects = np.frombuffer(self.shm.buf.obj, dtype=np.uint64)
+        self.memaddr = ctypes.addressof(ctypes.c_void_p.from_buffer(self.shm.buf.obj))
+        self.current = ctypes.c_ulong.from_buffer(self.shm.buf.obj)
+        self.last = ctypes.c_ulong.from_address(self.memaddr + intsize)
+        self.count = ctypes.c_ulong.from_address(self.memaddr + intsize * 2)
+        if kwargs.get("name", None) is None:
+            ctypes.memset(self.memaddr, 0, intsize*(count*3+4))
+            self.count.value = count
+            self.last.value = intsize * 4 + intsize * count * 2
+        self.parsed_count = ctypes.c_ulong.from_address(self.memaddr + intsize * 3)
+        self.index = (ctypes.c_ulong * self.count.value).from_address(self.memaddr + intsize * 4)
+        self.value_size = (ctypes.c_ulong * self.count.value).from_address(self.memaddr + intsize * 4 + intsize * self.count.value)
+        super().__init__([None] * self.count.value)
 
     def append(self, obj):
-        if self.current.value < self.count:
+        if self.current.value < self.count.value:
             val = msgpack.packb(obj, default=encode_uuid, use_bin_type=True)
             self.index[self.current.value] = self.last.value
             self.value_size[self.current.value] = len(val)
-            self.shm.buf[self.last.value:self.last.value + len(val)] = val
+            ctypes.memmove(self.memaddr + self.last.value, val, len(val))
             self.last.value += len(val)
             self.current.value += 1
         else:
@@ -376,21 +401,17 @@ class MPArrayProperty(list):
             v_s = self.index[item]
             v_e = self.index[item] + self.value_size[item]
             self[item] = msgpack.unpackb(self.shm.buf[v_s:v_e], object_hook=decode_uuid, raw=False)
-            self.parsed_count += 1
+            self.parsed_count.value += 1
+            if self.parsed_count.value == self.count.value:
+                self.shm.buf.release()
         return super().__getitem__(item)
-
-    def __str__(self):
-        return super().__str__()
-
-    def __repr__(self):
-        return super().__repr__()
 
 
 class JsonPalSimpleObject:
     type = None
     value = None
     custom_type = None
-    
+
     def __init__(self, _type, _value, custom_type=None):
         self.type = _type
         self.value = _value
@@ -430,10 +451,6 @@ def AutoMakeStruct(struct):
                  f"        return "  + re.sub(r"\"PalObject\.(.+)\",?", "PalObject.\\1,", json.dumps(struct, indent=4, cls=CustomEncoder).replace("\n", "\n        "))
     return structs
 
-# shm_map = MPMapProperty(size=10485760, count=2)
-# shm_map.append({"key":toUUID(uuid.uuid4()), "value": {"A": 456, "B": 789}})
-# shm_map.append({"key":567, "value": {"A": 456}})
-# print(shm_map[0]['key'])
 # print("\n\n".join(AutoMakeStruct(copy.deepcopy(MappingCache.CharacterSaveParameterMap[toUUID('1dd8d2a0-4dd7-4b05-f3c0-7ab60ebd95e4')]['value']['RawData']['value']['object']['SaveParameter'])).values()))
 
 # print("".join(AutoMakeStruct({"type":"StructProperty","struct_type":"A","value":s['value']['Slots']['value']['values'][0]}).values()))

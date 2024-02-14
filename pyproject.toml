@@ -21,7 +21,8 @@ dependencies = [
     "palworld-save-tools >=0.18.0",
     "pillow",
     "pyperclip",
-    "recordclass"
+    "recordclass",
+    "msgpack"
 ]
 dynamic = ["version"]
 
