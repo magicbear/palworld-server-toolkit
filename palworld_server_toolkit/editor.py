@@ -2685,6 +2685,23 @@ def FindInactivePlayer(days):
     
     return player_list
 
+def FindPlayersFromInactiveGuild(days):
+    player_list = []
+    for group_id in MappingCache.GuildSaveDataMap:
+        guild = MappingCache.GuildSaveDataMap[group_id]
+        group_data = guild['value']['RawData']['value']
+        players_list_guild = [] # Current guild's players list
+        for g_player in group_data['players']:
+            # If any member is active, skip this guild
+            if (wsd['GameTimeSaveData']['value']['RealDateTimeTicks']['value'] - g_player['player_info']['last_online_real_time']) / 1e7 > days * 86400:
+                players_list_guild.append(g_player['player_uid'])
+            else:
+                break
+        else:
+            player_list.extend(players_list_guild)
+    
+    return player_list
+
 def MigratePlayer(player_uid, new_player_uid):
     load_skiped_decode(wsd, ['MapObjectSaveData', 'GroupSaveDataMap'], False)
 
