@@ -327,6 +327,7 @@ class ProgressGvasFile(GvasFile):
                 type_hints=type_hints,
                 custom_properties=custom_properties,
                 allow_nan=allow_nan,
+                reduce_memory=getattr(args, "reduce_memory", False)
         ) as reader:
             skip_loading_progress(reader, len(data)).start()
             gvas_file.header = GvasHeader.read(reader)
@@ -391,7 +392,8 @@ def parse_skiped_item(properties, skip_path, progress=True, recursive=True, mp=N
 
     with FProgressArchiveReader(
             writer.bytes(), PALWORLD_TYPE_HINTS,
-            localProperties
+            localProperties,
+            reduce_memory=getattr(args, "reduce_memory", False)
     ) as reader:
         if progress:
             skip_loading_progress(reader, len(properties['value'])).start()

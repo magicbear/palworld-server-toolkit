@@ -9,6 +9,7 @@ from multiprocessing import shared_memory
 import pickle
 import msgpack
 import ctypes
+import sys
 
 
 def toUUID(uuid_str):
@@ -578,6 +579,10 @@ class FProgressArchiveReader(FArchiveReader):
     processlist = {}
 
     def __init__(self, *args, **kwargs):
+        reduce_memory = False
+        if 'reduce_memory' in kwargs:
+            reduce_memory = kwargs['reduce_memory']
+            del kwargs['reduce_memory']
         super().__init__(*args, **kwargs)
         self.fallbackData = None
         self.mp_loading = False
@@ -587,9 +592,9 @@ class FProgressArchiveReader(FArchiveReader):
                     if 'MemFree:' == line[0:8]:
                         remain = line.split(": ")[1].strip().split(" ")
                         if remain[1] == 'kB' and int(remain[0]) > 1048576 > 4:  # Over 4 GB memory remains
-                            self.mp_loading = False if getattr(args, "reduce_memory", False) else True
+                            self.mp_loading = False if reduce_memory else True
         elif sys.platform == 'darwin' or sys.platform == 'win32':
-            self.mp_loading = False if getattr(args, "reduce_memory", False) else True
+            self.mp_loading = False if reduce_memory else True
 
     def progress(self):
         return self.data.tell()
