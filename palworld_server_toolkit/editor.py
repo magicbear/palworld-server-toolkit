@@ -670,9 +670,12 @@ def main():
         Save()
 
     for key in wsd:
-        if isinstance(wsd[key]['value'], MPArrayProperty) or isinstance(wsd[key]['value'], MPMapProperty):
+        if isinstance(wsd[key]['value'], MPMapProperty):
             wsd[key]['value'].close()
             wsd[key]['value'].release()
+        elif isinstance(wsd[key]['value'], dict) and 'values' in wsd[key]['value'] and isinstance(wsd[key]['value']['values'], MPArrayProperty):
+            wsd[key]['value']['values'].close()
+            wsd[key]['value']['values'].release()
     os._exit(0)
 
 try:

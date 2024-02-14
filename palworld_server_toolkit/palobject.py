@@ -328,6 +328,8 @@ class MPMapProperty(list):
         count = kwargs.get("count", 0)
         size = kwargs.get("size", 0)
         intsize = ctypes.sizeof(ctypes.c_ulong)
+        self.closed = False
+        self.loaded = False
         if kwargs.get("name", None) is not None:
             self.shm = shared_memory.SharedMemory(name=kwargs.get("name", None))
         else:
@@ -351,6 +353,9 @@ class MPMapProperty(list):
         super().extend([None] * self.count.value)
 
     def close(self):
+        if self.closed:
+            return
+        self.closed = True
         del self.current
         del self.last
         del self.count
@@ -365,7 +370,9 @@ class MPMapProperty(list):
         self.shm.unlink()
 
     def append(self, obj):
-        if self.current.value < self.count.value:
+        if self.closed and not self.loaded:
+            raise ValueError("Share Memory closed")
+        if not self.closed and self.current.value < self.count.value:
             key = msgpack.packb(obj['key'], default=encode_uuid, use_bin_type=True)
             val = msgpack.packb(obj['value'], default=encode_uuid, use_bin_type=True)
             self.index[self.current.value] = self.last.value
@@ -384,25 +391,30 @@ class MPMapProperty(list):
 
     def __getitem__(self, item):
         if super().__getitem__(item) is None:
+            if self.closed:
+                raise ValueError("Share Memory closed")
             k_s = self.index[item]
             v_s = self.index[item] + self.key_size[item]
-            self[item] = MPMapObject(self.shm.buf[k_s:v_s],
-                                     self.shm.buf[v_s:v_s + self.value_size[item]])
+            self[item] = MPMapObject(bytes(self.shm.buf[k_s:v_s]),
+                                     bytes(self.shm.buf[v_s:v_s + self.value_size[item]]))
             self.parsed_count.value += 1
             if self.parsed_count.value == self.count.value:
-                self.__iter__ = super().__iter__
-                self.shm.buf.release()
+                self.loaded = True
+                self.close()
         return super().__getitem__(item)
 
     def load_all_items(self):
-        if self.parsed_count.value == self.count.value:
+        if self.loaded:
             return
+        if self.closed:
+            raise ValueError("Share Memory closed")
         for i in range(self.current.value):
             self.__getitem__(i)
 
     def __delitem__(self, item):
         self.load_all_items()
-        self.current.value -= 1
+        if not self.loaded:
+            self.current.value -= 1
         return super().__delitem__(item)
 
 
@@ -411,6 +423,8 @@ class MPArrayProperty(list):
         super().__init__()
         count = kwargs.get("count", 0)
         size = kwargs.get("size", 0)
+        self.closed = False
+        self.loaded = False
         intsize = ctypes.sizeof(ctypes.c_ulong)
         if kwargs.get("name", None) is not None:
             self.shm = shared_memory.SharedMemory(name=kwargs.get("name", None))
@@ -433,6 +447,9 @@ class MPArrayProperty(list):
         self += [None] * self.count.value
 
     def close(self):
+        if self.closed:
+            return
+        self.closed = True
         del self.current
         del self.last
         del self.count
@@ -446,7 +463,9 @@ class MPArrayProperty(list):
         self.shm.unlink()
 
     def append(self, obj):
-        if self.current.value < self.count.value:
+        if self.closed and not self.loaded:
+            raise ValueError("Share Memory closed")
+        if not self.closed and self.current.value < self.count.value:
             val = msgpack.packb(obj, default=encode_uuid, use_bin_type=True)
             self.index[self.current.value] = self.last.value
             self.value_size[self.current.value] = len(val)
@@ -458,33 +477,33 @@ class MPArrayProperty(list):
 
     def __getitem__(self, item):
         if super().__getitem__(item) is None:
+            if self.closed:
+                raise ValueError("Share Memory closed")
             v_s = self.index[item]
             v_e = self.index[item] + self.value_size[item]
-            self[item] = msgpack.unpackb(self.shm.buf[v_s:v_e], object_hook=decode_uuid, raw=False)
+            self[item] = msgpack.unpackb(bytes(self.shm.buf[v_s:v_e]), object_hook=decode_uuid, raw=False)
             self.parsed_count.value += 1
             if self.parsed_count.value == self.count.value:
-                self.shm.buf.release()
+                self.loaded = True
+                self.close()
         return super().__getitem__(item)
 
     def __iter__(self):
         for i in range(len(self)):
             yield self.__getitem__(i)
 
-    def __delitem__(self, item):
-        del self.index[item]
-        del self.value_size[item]
-        self.current.value -= 1
-        return super().__delitem__(item)
-
     def load_all_items(self):
-        if self.parsed_count.value == self.count.value:
+        if self.loaded:
             return
+        if self.closed:
+            raise ValueError("Share Memory closed")
         for i in range(self.current.value):
             self.__getitem__(i)
 
     def __delitem__(self, item):
         self.load_all_items()
-        self.current.value -= 1
+        if not self.loaded:
+            self.current.value -= 1
         return super().__delitem__(item)
 
 

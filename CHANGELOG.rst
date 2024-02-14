@@ -14,6 +14,14 @@ Changelog
     Note that they these tags will not actually close the issue/PR until they
     are merged into the "default" branch.
 
+v0.6.8
+-------
+
+Fix:
+
+- Gui Open error
+- Memory leak for shared memory
+
 v0.6.7
 -------
 
