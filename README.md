@@ -11,7 +11,7 @@
 <img alt="Python" src="https://img.shields.io/badge/Python-FFD43B?style=for-the-badge&logo=python&logoColor=blue">&nbsp;&nbsp;
 </p>
 
-世界上最高速的帕鲁服务器存档编辑器, 1.1秒打开对应转换时间1分40秒的约1.5GB的JSON。
+世界上最高速的帕鲁服务器存档编辑器, 1.9秒 打开对应转换时间 4分54秒 的约 5.1GB 的JSON。
 
 - 这个工具包可用于在 Palworld 世界间转移角色，允许朋友们将他们的角色转移到彼此的服务器上，而不会失去任何进度。
 

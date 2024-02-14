@@ -4,6 +4,7 @@
 import json
 import os, datetime, time
 import pathlib
+import posix
 import sys
 import threading
 import pprint
@@ -13,18 +14,19 @@ import copy
 import importlib.metadata
 import traceback
 from functools import reduce
+import multiprocessing
 
 module_dir = os.path.dirname(os.path.realpath(__file__))
 if not os.path.exists("%s/resources/gui.json" % module_dir) and getattr(sys, 'frozen', False):
     module_dir = os.path.dirname(sys.executable)
 
-# sys.path.insert(0, module_dir)
+sys.path.insert(0, module_dir)
 sys.path.insert(0, os.path.join(module_dir, "../save_tools"))
 from palworld_save_tools.gvas import GvasFile, GvasHeader
 from palworld_save_tools.palsav import compress_gvas_to_sav, decompress_sav_to_gvas
 from palworld_save_tools.paltypes import PALWORLD_CUSTOM_PROPERTIES, PALWORLD_TYPE_HINTS
 from palworld_save_tools.archive import *
-from palworld_server_toolkit.palobject import *
+from palobject import *
 
 try:
     from palworld_save_tools.rawdata import map_concrete_model_module
@@ -78,25 +80,28 @@ class GvasPrettyPrint(pprint.PrettyPrinter):
             rep = ""
             dict_type = set(object.keys())
             if {'id', 'type', 'value'}.issubset(dict_type) and object['id'] is None:
-                dict_type -= {'id', 'type', 'value', 'custom_type'}
+                dict_type -= {'id', 'type', 'value', 'custom_type', 'skip_type'}
                 if dict_type == set() and object['type'] in ["Int64Property", "NameProperty", "EnumProperty",
                                                              "IntProperty", "BoolProperty",
                                                              "FloatProperty", "StrProperty"]:
                     fmtValue = True
-                    rep = object['type']
+                    rep = object['type'][:-8]
                 elif dict_type == {'struct_id', 'struct_type'} and object['type'] == "StructProperty" and str(
                         object['struct_id']) == '00000000-0000-0000-0000-000000000000':
                     rep = f"Struct:{object['struct_type']}"
                     fmtValue = True
                 elif dict_type == {'array_type'} and object['type'] == "ArrayProperty":
-                    rep = f"ArrayProperty:{object['array_type']}"
+                    rep = f"Array:{object['array_type']}"
                     fmtValue = True
                 # elif dict_type == {'key_type', 'key_struct_type', 'value_type', 'value_struct_type'} and object['type'] == "MapProperty":
                 #     rep = f"Map:{object['key_type']}{{{object['key_struct_type']}}}={object['value_type']}{{{object['value_struct_type']}}}"
                 #     fmtValue = True
             if fmtValue:
                 repr = self._repr('value', context, level)
-                write(f"{terminalColor(36)}{rep}{terminalColor(0)}=")
+                if 'custom_type' in object:
+                    write(f"{terminalColor(92)}{rep}{terminalColor(0)}=")
+                else:
+                    write(f"{terminalColor(36)}{rep}{terminalColor(0)}=")
                 if rep == "Struct:Guid":
                     write(
                         terminalColor('43;31') if str(
@@ -105,8 +110,14 @@ class GvasPrettyPrint(pprint.PrettyPrinter):
                                  context, level)
                     write(terminalColor(0))
                 else:
-                    self._format(object['value'], stream, indent + len(repr) + 1, allowance,
-                                 context, level)
+                    if 'skip_type' in object:
+                        write(f"{terminalColor(91)}**Skip Load**{terminalColor(0)}")
+                    elif rep == "Array:ByteProperty" and 'values' in object['value'] and isinstance(
+                            object['value']['values'], tuple):
+                        write(f"{terminalColor(91)}**Unparsed**{terminalColor(0)}")
+                    else:
+                        self._format(object['value'], stream, indent + len(repr) + 1, allowance,
+                                     context, level)
             else:
                 self._format_dict_items(items, stream, indent, allowance + 1,
                                         context, level)
@@ -141,6 +152,7 @@ filetime = -1
 gui = None
 backup_path: Optional[str] = None
 delete_files = []
+loadingStatistics = {}
 
 
 class MappingCacheObject:
@@ -201,12 +213,12 @@ class MappingCacheObject:
             return self.GuildInstanceMapping
 
     def LoadWorkSaveData(self):
-        load_skiped_decode(self._worldSaveData, ['WorkSaveData'], False)
+        load_skipped_decode(self._worldSaveData, ['WorkSaveData'], False)
         self.WorkSaveData = {wrk['RawData']['value']['id']: wrk for wrk in
                              self._worldSaveData['WorkSaveData']['value']['values']}
 
     def LoadMapObjectMaps(self):
-        load_skiped_decode(self._worldSaveData, ['MapObjectSaveData', 'MapObjectSpawnerInStageSaveData'], False)
+        load_skipped_decode(self._worldSaveData, ['MapObjectSaveData', 'MapObjectSpawnerInStageSaveData'], False)
         self.MapObjectSaveData = {
             mapobj['MapObjectInstanceId']['value']: mapobj for mapobj in
             self._worldSaveData['MapObjectSaveData']['value']['values']}
@@ -226,7 +238,7 @@ class MappingCacheObject:
                                        self._worldSaveData['CharacterSaveParameterMap']['value'])}
 
     def LoadItemContainerMaps(self):
-        load_skiped_decode(self._worldSaveData, ['ItemContainerSaveData', 'DynamicItemSaveData'], False)
+        load_skipped_decode(self._worldSaveData, ['ItemContainerSaveData', 'DynamicItemSaveData'], False)
         self.ItemContainerSaveData = {container['key']['ID']['value']: container for container in
                                       self._worldSaveData['ItemContainerSaveData']['value']}
         self.DynamicItemSaveData = {dyn_item_data['ID']['value']['LocalIdInCreatedWorld']['value']: dyn_item_data
@@ -234,7 +246,7 @@ class MappingCacheObject:
                                     dyn_item_data in self._worldSaveData['DynamicItemSaveData']['value']['values']}
 
     def LoadCharacterContainerMaps(self):
-        load_skiped_decode(self._worldSaveData, ['CharacterContainerSaveData'], False)
+        load_skipped_decode(self._worldSaveData, ['CharacterContainerSaveData'], False)
         self.CharacterContainerSaveData = {container['key']['ID']['value']: container for container in
                                            self._worldSaveData['CharacterContainerSaveData']['value']}
 
@@ -250,7 +262,7 @@ class MappingCacheObject:
     def LoadGuildInstanceMapping(self):
         self.GuildInstanceMapping = {}
         for group_id in self.GuildSaveDataMap:
-            group_data = self.GuildSaveDataMap[group_id]
+            group_data = parse_item(self.GuildSaveDataMap[group_id], "GroupSaveDataMap")
             item = group_data['value']['RawData']['value']
             self.GuildInstanceMapping.update(
                 {ind_char['guid']: ind_char['instance_id'] for ind_char in item['individual_character_handle_ids']})
@@ -268,8 +280,7 @@ def skip_decode(
             "skip_type": type_name,
             "array_type": array_type,
             "id": reader.optional_guid(),
-            "value": reader.read(size),
-            "size": size
+            "value": reader.read(size)
         }
     elif type_name == "MapProperty":
         key_type = reader.fstring()
@@ -380,27 +391,191 @@ class skip_loading_progress(threading.Thread):
 
 
 class FProgressArchiveReader(FArchiveReader):
-    sub_progress = None
+    processlist = {}
 
-    def progress(self, lv=0):
-        ext_prog = 0
-        if self.sub_progress is not None:
-            proc, total_len = self.sub_progress
-            ext_prog = proc.progress(lv + 1)
-            if ext_prog >= total_len:
-                self.sub_progress = None
-        return self.data.tell() + ext_prog
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fallbackData = None
+        self.mp_loading = False
+        if sys.platform == 'linux':
+            with open("/proc/meminfo", "r", encoding='utf-8') as f:
+                for line in f:
+                    if 'MemFree:' == line[0:8]:
+                        remain = line.split(": ")[1].strip().split(" ")
+                        if remain[1] == 'kB' and int(remain[0]) > 1048576 > 4:  # Over 4 GB memory remains
+                            self.mp_loading = True
 
-    def internal_copy(self, data, debug: bool) -> "FArchiveReader":
-        inst = FProgressArchiveReader(
-            data,
-            self.type_hints,
-            self.custom_properties,
-            debug=debug,
-            allow_nan=self.allow_nan,
-        )
-        self.sub_progress = (inst, len(data))
-        return inst
+    def progress(self):
+        return self.data.tell()
+
+    def mp_map_process(self, properties, count, key_type, key_struct_type, key_path, value_type, value_struct_type,
+                       value_path, data):
+        prop_val = properties['value']
+        with FArchiveReader(
+                data,
+                type_hints=self.type_hints,
+                custom_properties=self.custom_properties,
+                allow_nan=self.allow_nan,
+        ) as reader:
+            for _ in range(count):
+                key = reader.prop_value(key_type, key_struct_type, key_path)
+                value = reader.prop_value(value_type, value_struct_type, value_path)
+                prop_val.append({
+                    "key": key,
+                    "value": value
+                })
+        posix.kill(os.getpid(), 9)
+
+    def mp_array_process(self, properties, count, size, path, data):
+        prop_values = properties['value']['values']
+        with FArchiveReader(
+                data,
+                type_hints=self.type_hints,
+                custom_properties=self.custom_properties,
+                allow_nan=self.allow_nan,
+        ) as reader:
+            array_type = properties['array_type']
+            if array_type == "StructProperty":
+                type_name = properties['value']['type_name']
+                prop_path = f"{path}.{properties['value']['prop_name']}"
+                for _ in range(count):
+                    prop_values.append(reader.struct_value(type_name, prop_path))
+            else:
+                decode_func: Callable
+                if array_type == "EnumProperty":
+                    decode_func = self.fstring
+                elif array_type == "NameProperty":
+                    decode_func = self.fstring
+                elif array_type == "Guid":
+                    decode_func = self.guid
+                elif array_type == "ByteProperty":
+                    if size == count:
+                        # Special case this and read faster in one go
+                        return self.byte_list(count)
+                    else:
+                        raise Exception("Labelled ByteProperty not implemented")
+                else:
+                    raise Exception(f"Unknown array type: {array_type} ({path})")
+                for _ in range(count):
+                    prop_values.append(decode_func())
+        posix.kill(os.getpid(), 9)
+
+    def load_mp_map(self, properties, path, size):
+        key_type = self.fstring()
+        value_type = self.fstring()
+        _id = self.optional_guid()
+        ext_data_offset = self.data.tell()
+        self.u32()
+        count = self.u32()
+        key_path = path + ".Key"
+        if key_type == "StructProperty":
+            key_struct_type = self.get_type_or(key_path, "Guid")
+        else:
+            key_struct_type = None
+        value_path = path + ".Value"
+        if value_type == "StructProperty":
+            value_struct_type = self.get_type_or(value_path, "StructProperty")
+        else:
+            value_struct_type = None
+
+        properties.update({
+            "type": "MapProperty",
+            "key_type": key_type,
+            "value_type": value_type,
+            "key_struct_type": key_struct_type,
+            "value_struct_type": value_struct_type,
+            "id": _id,
+            "value": MPMapProperty(size=size * 4, count=count)
+        })
+        p = multiprocessing.Process(target=self.mp_map_process, args=(properties, count,
+                                                                      key_type, key_struct_type, key_path, value_type,
+                                                                      value_struct_type, value_path,
+                                                                      self.read(
+                                                                          size - (self.data.tell() - ext_data_offset))))
+        p.start()
+        return p
+
+    def load_mp_array(self, properties, path, size):
+        array_type = self.fstring()
+        _id = self.optional_guid()
+
+        ext_data_offset = self.data.tell()
+        count = self.u32()
+
+        properties.update({
+            "type": "ArrayProperty",
+            "array_type": array_type,
+            "id": _id,
+            "value": {
+                "values": MPArrayProperty(size=size * 4, count=count)
+            }
+        })
+
+        if array_type == "StructProperty":
+            prop_name = self.fstring()
+            prop_type = self.fstring()
+            self.u64()
+            type_name = self.fstring()
+            _id = self.guid()
+            self.skip(1)
+            properties['value'].update({
+                "prop_name": prop_name,
+                "prop_type": prop_type,
+                "type_name": type_name,
+                "id": _id
+            })
+        p = multiprocessing.Process(target=self.mp_array_process, args=(properties, count, size, path,
+                                                                        self.read(size - (
+                                                                                    self.data.tell() - ext_data_offset))))
+        p.start()
+        return p
+
+    def property(
+            self, type_name: str, size: int, path: str, nested_caller_path: str = ""
+    ) -> dict[str, Any]:
+        if size == -1:
+            return self.fallbackData
+        return super().property(type_name, size, path, nested_caller_path)
+
+    def properties_until_end(self, path: str = "") -> dict[str, Any]:
+        properties = {}
+        while True:
+            if path == ".worldSaveData":
+                t1 = time.time()
+            name = self.fstring()
+            if name == "None":
+                break
+            type_name = self.fstring()
+            size = self.u64()
+            sub_path = f"{path}.{name}"
+            if self.mp_loading and path == ".worldSaveData" and type_name == "MapProperty" and size > 1048576 and not (
+                    sub_path in self.custom_properties and self.custom_properties[sub_path][0] is skip_decode):
+                properties[name] = {}
+                self.processlist[sub_path] = self.load_mp_map(properties[name], sub_path, size)
+            elif self.mp_loading and path == ".worldSaveData" and type_name == "ArrayProperty" and size > 1048576 and not (
+                    sub_path in self.custom_properties and self.custom_properties[sub_path][0] is skip_decode):
+                properties[name] = {}
+                self.processlist[sub_path] = self.load_mp_array(properties[name], sub_path, size)
+            else:
+                properties[name] = self.property(type_name, size, f"{path}.{name}")
+            if path == ".worldSaveData":
+                # print(type_name)
+                loadingStatistics[name] = time.time() - t1
+        if path == "":
+            for mp_path in self.processlist:
+                self.processlist[mp_path].join()
+                if mp_path in self.custom_properties:
+                    self.fallbackData = properties['worldSaveData']['value'][mp_path[15:]]
+                    properties['worldSaveData']['value'][mp_path[15:]] = self.custom_properties[mp_path][0](self,
+                                                                                                            properties[
+                                                                                                                'worldSaveData'][
+                                                                                                                'value'][
+                                                                                                                mp_path[
+                                                                                                                15:]][
+                                                                                                                'type'],
+                                                                                                            -1, mp_path)
+                    properties['worldSaveData']['value'][mp_path[15:]]["custom_type"] = mp_path
+        return properties
 
 
 class ProgressGvasFile(GvasFile):
@@ -448,7 +623,7 @@ def parse_item(properties, skip_path):
     return properties
 
 
-def parse_skiped_item(properties, skip_path, progress=True, recursive=True):
+def parse_skiped_item(properties, skip_path, progress=True, recursive=True, mp=None):
     if "skip_type" not in properties:
         return properties
 
@@ -485,35 +660,72 @@ def parse_skiped_item(properties, skip_path, progress=True, recursive=True):
     ) as reader:
         if progress:
             skip_loading_progress(reader, len(properties['value'])).start()
-        decoded_properties = reader.property(properties["skip_type"], len(properties['value']),
-                                             ".worldSaveData.%s" % skip_path)
-        for k in decoded_properties:
-            properties[k] = decoded_properties[k]
+        if mp is not None and properties["skip_type"] == "MapProperty":
+            mp[f".worldSaveData.{skip_path}"] = reader.load_mp_map(properties, f".worldSaveData.{skip_path}",
+                                                                   len(properties['value']))
+        elif mp is not None and properties["skip_type"] == "ArrayProperty":
+            mp[f".worldSaveData.{skip_path}"] = reader.load_mp_array(properties, f".worldSaveData.{skip_path}",
+                                                                     len(properties['value']))
+        else:
+            decoded_properties = reader.property(properties["skip_type"], len(properties['value']),
+                                                 ".worldSaveData.%s" % skip_path)
+            for k in decoded_properties:
+                properties[k] = decoded_properties[k]
     if not keep_custom_type:
         del properties['custom_type']
     del properties["skip_type"]
     return properties
 
 
-# 
+#
 # import json
 # from palworld_save_tools.json_tools import  CustomEncoder
 
-def load_skiped_decode(wsd, skip_paths, recursive=True):
+def load_skipped_decode(_worldSaveData, skip_paths, recursive=True):
     if isinstance(skip_paths, str):
         skip_paths = [skip_paths]
-    for skip_path in skip_paths:
-        properties = wsd[skip_path]
+
+    mp = {}
+    t2 = time.time()
+    parsed = 0
+    skip_paths.sort()
+    for skip_path in sorted(skip_paths,
+                            key=lambda x: 'Z' + x if f".worldSaveData.{x}" in PALWORLD_CUSTOM_PROPERTIES else x):
+        properties = _worldSaveData[skip_path]
 
         if "skip_type" not in properties:
             continue
-        print("Parsing worldSaveData.%s..." % skip_path, end="", flush=True)
+        parsed += 1
+        print("Parsing .worldSaveData.%s..." % skip_path, end="", flush=True)
         t1 = time.time()
-        parse_skiped_item(properties, skip_path, True, recursive)
+        parse_skiped_item(properties, skip_path, True, recursive,
+                          None if f".worldSaveData.{skip_path}" in PALWORLD_CUSTOM_PROPERTIES else mp)
         print("Done in %.2fs" % (time.time() - t1))
-        # t1 = time.time()
-        # a=json.dumps(wsd[skip_path], cls=CustomEncoder)
-        # print("str %.2f" % (time.time()-t1))
+
+    while mp is not None and len(mp.keys()) > 0:
+        s = len(mp.keys())
+        for mp_path in mp:
+            mp[mp_path].join(timeout=0)
+            t3 = time.time() - t2
+            if mp[mp_path].is_alive():
+                continue
+            if mp_path in PALWORLD_CUSTOM_PROPERTIES:
+                with FProgressArchiveReader(
+                        b"", PALWORLD_TYPE_HINTS,
+                        PALWORLD_CUSTOM_PROPERTIES
+                ) as reader:
+                    reader.fallbackData = _worldSaveData[mp_path[15:]]
+                    _worldSaveData[mp_path[15:]] = PALWORLD_CUSTOM_PROPERTIES[mp_path][0](reader,
+                                                                                          _worldSaveData[mp_path[15:]][
+                                                                                              'type'], -1, mp_path)
+                    _worldSaveData[mp_path[15:]]["custom_type"] = mp_path
+            print("Loading %s in %.2fs, extra parse %.2fs" % (mp_path, t3, time.time() - t2 - t3))
+            del mp[mp_path]
+            break
+        if len(mp.keys()) - s == 0:
+            time.sleep(0.01)
+    if parsed > 0:
+        print("Parse skipped data in %.2fs" % (time.time() - t2))
 
 
 # ArrayProperty: -> .Value
@@ -538,13 +750,61 @@ SKP_PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.ItemContainerSaveData"] = (skip_d
 SKP_PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.ItemContainerSaveData.Value.BelongInfo"] = (skip_decode, skip_encode)
 SKP_PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.ItemContainerSaveData.Value.Slots"] = (skip_decode, skip_encode)
 SKP_PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.ItemContainerSaveData.Value.RawData"] = (skip_decode, skip_encode)
+import palworld_save_tools.rawdata.group as palworld_save_group
+
+
+def group_decode(
+        reader: FArchiveReader, type_name: str, size: int, path: str
+) -> dict[str, Any]:
+    if type_name != "MapProperty":
+        raise Exception(f"Expected MapProperty, got {type_name}")
+    value = reader.property(type_name, size, path, nested_caller_path=path)
+    # Decode the raw bytes and replace the raw data
+    group_map = value["value"]
+    for group in group_map:
+        group_type = group["value"]["GroupType"]["value"]["value"]
+        if group_type != "EPalGroupType::Guild":
+            continue
+        group['value'] = parse_item(group['value'], "GroupSaveDataMap.Value")
+        group_bytes = group["value"]["RawData"]["value"]["values"]
+        group["value"]["RawData"]["value"] = palworld_save_group.decode_bytes(
+            reader, group_bytes, group_type
+        )
+    return value
+
+
+def group_encode(
+        writer: FArchiveWriter, property_type: str, properties: dict[str, Any]
+) -> int:
+    if property_type != "MapProperty":
+        raise Exception(f"Expected MapProperty, got {property_type}")
+    del properties["custom_type"]
+    group_map = properties["value"]
+    for group in group_map:
+        group_type = group["value"]["GroupType"]["value"]["value"]
+        if group_type != "EPalGroupType::Guild":
+            continue
+        if "values" in group["value"]["RawData"]["value"]:
+            continue
+        p = group["value"]["RawData"]["value"]
+        encoded_bytes = palworld_save_group.encode_bytes(p)
+        group["value"]["RawData"]["value"] = {"values": [b for b in encoded_bytes]}
+    return writer.property_inner(property_type, properties)
+
+
+SKP_PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.GroupSaveDataMap"] = (group_decode, group_encode)
+SKP_PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.GroupSaveDataMap.Value.RawData"] = (skip_decode, skip_encode)
 
 
 def gui_thread():
-    GUI()
-    if gui is None:
-        return
-    gui.mainloop()
+    try:
+        GUI()
+        if gui is None:
+            return
+        gui.mainloop()
+    except tk.TclError:
+        print(f"{terminalColor(31)}Failed to create GUI{terminalColor(0)}")
+        pass
 
 
 def main():
@@ -628,6 +888,7 @@ def main():
         print(f"{args.filename} is not a file")
         exit(1)
 
+    t1 = time.time()
     LoadFile(args.filename)
 
     if args.statistics:
@@ -646,6 +907,8 @@ def main():
         traceback.print_exception(e)
         print("ERROR: Corrupted Save File")
         Statistics()
+
+    print("Total load in %.3fms" % (1000 * (time.time() - t1)))
 
     if args.fix_missing:
         FixMissing()
@@ -1621,7 +1884,7 @@ class GUI():
         src_uuid, target_uuid = self.gui_parse_uuid()
         if src_uuid is None:
             return
-        if not os.path.exists(os.path.abspath(args.filename) + "/Players/"):
+        if not os.path.exists(os.path.dirname(os.path.abspath(args.filename)) + "/Players/"):
             messagebox.showerror("Cleanup", self.lang_data['msg_player_folder_not_exists'])
             return
         _playerMapping = LoadPlayers(wsd if self.data_source.current() == 0 else backup_wsd)
@@ -1852,7 +2115,7 @@ class GUI():
         if toUUID(target_uuid) not in MappingCache.CharacterSaveParameterMap:
             messagebox.showerror("Copy Instance Error", "Instance Not Found")
             return
-        if not os.path.exists(os.path.abspath(args.filename) + "/Players/"):
+        if not os.path.exists(os.path.dirname(os.path.abspath(args.filename)) + "/Players/"):
             messagebox.showerror("Cleanup", self.lang_data['msg_player_folder_not_exists'])
             return
         instance = MappingCache.CharacterSaveParameterMap[toUUID(target_uuid)]['value']['RawData']['value']['object'][
@@ -1877,7 +2140,7 @@ class GUI():
         target_uuid = self.parse_target_uuid()
         if target_uuid is None:
             return
-        if not os.path.exists(os.path.abspath(args.filename) + "/Players/"):
+        if not os.path.exists(os.path.dirname(os.path.abspath(args.filename)) + "/Players/"):
             messagebox.showerror("Cleanup", self.lang_data['msg_player_folder_not_exists'])
             return
         PlayerItemEdit(target_uuid, self.language)
@@ -1886,7 +2149,7 @@ class GUI():
         target_uuid = self.parse_target_uuid()
         if target_uuid is None:
             return
-        if not os.path.exists(os.path.abspath(args.filename) + "/Players/"):
+        if not os.path.exists(os.path.dirname(os.path.abspath(args.filename)) + "/Players/"):
             messagebox.showerror("Cleanup", self.lang_data['msg_player_folder_not_exists'])
             return
         PlayerSaveEdit(target_uuid)
@@ -1943,7 +2206,7 @@ class GUI():
                                          groupMapping[target_guild_uuid]['value']['RawData']['value']['base_ids']]
 
     def cleanup_item(self):
-        if not os.path.exists(os.path.abspath(args.filename) + "/Players/"):
+        if not os.path.exists(os.path.dirname(os.path.abspath(args.filename)) + "/Players/"):
             messagebox.showerror("Cleanup", self.lang_data['msg_player_folder_not_exists'])
             return
         if 'yes' == messagebox.showwarning("Cleanup", self.lang_data['msg_confirm_beta'],
@@ -1951,7 +2214,7 @@ class GUI():
             BatchDeleteUnreferencedItemContainers()
 
     def cleanup_character(self):
-        if not os.path.exists(os.path.abspath(args.filename) + "/Players/"):
+        if not os.path.exists(os.path.dirname(os.path.abspath(args.filename)) + "/Players/"):
             messagebox.showerror("Cleanup", self.lang_data['msg_player_folder_not_exists'])
             return
         if 'yes' == messagebox.showwarning("Cleanup", self.lang_data['msg_confirm_beta'],
@@ -2229,7 +2492,12 @@ def LoadFile(filename):
 
 def Statistics():
     for key in wsd:
-        print("%40s\t%.3f MB\tKey: %d" % (key, len(str(wsd[key])) / 1048576, len(wsd[key]['value'])))
+        print("%40s\t%.3f MB\tLoading: %10.2fms\t%20s\t%s: %d" % (key, len(str(wsd[key])) / 1048576,
+                                                                  1000 * loadingStatistics[key],
+                                                                  wsd[key]['type'] if 'type' in wsd[key] else "",
+                                                                  "Bytes" if isinstance(wsd[key]['value'],
+                                                                                        bytes) else "Key",
+                                                                  len(wsd[key]['value'])))
 
 
 def GetPlayerGvas(player_uid):
@@ -2280,7 +2548,7 @@ def RenamePlayer(player_uid, new_name):
 
 
 def GetPlayerItems(player_uid):
-    load_skiped_decode(wsd, ["ItemContainerSaveData"])
+    load_skipped_decode(wsd, ["ItemContainerSaveData"])
     item_containers = {}
     for item_container in wsd["ItemContainerSaveData"]['value']:
         item_containers[str(item_container['key']['ID']['value'])] = [{
@@ -2331,14 +2599,14 @@ def SetGuildOwner(group_id, new_player_uid):
 
 
 def CopyItemContainers(src_containers, targetInstanceId):
-    load_skiped_decode(wsd, ['ItemContainerSaveData'], False)
+    load_skipped_decode(wsd, ['ItemContainerSaveData'], False)
     new_containers = parse_item(copy.deepcopy(src_containers), "ItemContainerSaveData")
     new_containers['key']['ID']['value'] = targetInstanceId
     wsd['ItemContainerSaveData']['value'].append(new_containers)
 
 
 def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
-    load_skiped_decode(wsd, ['DynamicItemSaveData', 'CharacterSaveParameterMap', 'GroupSaveDataMap'], False)
+    load_skipped_decode(wsd, ['DynamicItemSaveData', 'CharacterSaveParameterMap', 'GroupSaveDataMap'], False)
     # load_skiped_decode(old_wsd, ['DynamicItemSaveData', 'CharacterSaveParameterMap', 'GroupSaveDataMap'], False)
     srcMappingCache = MappingCacheObject.get(old_wsd)
     MappingCache.LoadItemContainerMaps()
@@ -2674,19 +2942,41 @@ def CleanupWorkerSick():
             print("Delete WorkerSick on %s" % CharacterDescription(MappingCache.CharacterSaveParameterMap[instanceId]))
             del characterData['WorkerSick']
 
+
 def FindInactivePlayer(days):
     player_list = []
     for group_id in MappingCache.GuildSaveDataMap:
         guild = MappingCache.GuildSaveDataMap[group_id]
         group_data = guild['value']['RawData']['value']
         for g_player in group_data['players']:
-            if (wsd['GameTimeSaveData']['value']['RealDateTimeTicks']['value'] - g_player['player_info']['last_online_real_time']) / 1e7 > days * 86400:
+            if (wsd['GameTimeSaveData']['value']['RealDateTimeTicks']['value'] - g_player['player_info'][
+                'last_online_real_time']) / 1e7 > days * 86400:
                 player_list.append(g_player['player_uid'])
-    
+
     return player_list
 
+
+def FindPlayersFromInactiveGuild(days):
+    player_list = []
+    for group_id in MappingCache.GuildSaveDataMap:
+        guild = MappingCache.GuildSaveDataMap[group_id]
+        group_data = guild['value']['RawData']['value']
+        players_list_guild = []  # Current guild's players list
+        for g_player in group_data['players']:
+            # If any member is active, skip this guild
+            if (wsd['GameTimeSaveData']['value']['RealDateTimeTicks']['value'] - g_player['player_info'][
+                'last_online_real_time']) / 1e7 <= days * 86400:
+                break
+            else:
+                players_list_guild.append(g_player['player_uid'])
+        else:
+            player_list.extend(players_list_guild)
+
+    return player_list
+
+
 def MigratePlayer(player_uid, new_player_uid):
-    load_skiped_decode(wsd, ['MapObjectSaveData', 'GroupSaveDataMap'], False)
+    load_skipped_decode(wsd, ['MapObjectSaveData', 'GroupSaveDataMap'], False)
 
     err, player_gvas, player_sav_file, player_gvas_file = GetPlayerGvas(player_uid)
     if err:
@@ -2817,7 +3107,7 @@ def PrintReferenceMapObjects():
 
 # NON FINISHED
 def BatchDeleteMapObject(map_object_ids):
-    load_skiped_decode(wsd, ['MapObjectSpawnerInStageSaveData', 'MapObjectSaveData'], False)
+    load_skipped_decode(wsd, ['MapObjectSpawnerInStageSaveData', 'MapObjectSaveData'], False)
 
     delete_map_object_ids = set()
     delete_item_container_ids = []
@@ -2932,7 +3222,7 @@ def CopyMapObject(map_object_id, src_wsd, dry_run=False):
 
 
 def DeleteMapObject(map_object_id):
-    load_skiped_decode(wsd, ['MapObjectSpawnerInStageSaveData'], False)
+    load_skipped_decode(wsd, ['MapObjectSpawnerInStageSaveData'], False)
     if toUUID(map_object_id) not in MappingCache.MapObjectSaveData:
         print(f"Error: Map Object {map_object_id} not found")
         return False
@@ -3164,7 +3454,7 @@ def BatchDeleteCharacterContainer(characterContainerIds):
 
 
 def FindReferenceItemContainerIds():
-    load_skiped_decode(wsd, ['MapObjectSaveData'], False)
+    load_skipped_decode(wsd, ['MapObjectSaveData'], False)
     reference_ids = set()
 
     for mapObject in wsd['MapObjectSaveData']['value']['values']:
@@ -3242,7 +3532,7 @@ def CleanupCharacterContainer(container_id):
 
 
 def CleanupAllCharacterContainer():
-    load_skiped_decode(wsd, ['CharacterContainerSaveData'])
+    load_skipped_decode(wsd, ['CharacterContainerSaveData'])
     for container_id in MappingCache.CharacterContainerSaveData:
         CleanupCharacterContainer(container_id)
 
@@ -3341,8 +3631,8 @@ def FindAllUnreferencedItemContainerIds():
 
 
 def DoubleCheckForUnreferenceItemContainers():
-    load_skiped_decode(wsd, ['MapObjectSaveData', 'FoliageGridSaveDataMap', 'MapObjectSpawnerInStageSaveData',
-                             'ItemContainerSaveData', 'DynamicItemSaveData', 'CharacterContainerSaveData'])
+    load_skipped_decode(wsd, ['MapObjectSaveData', 'FoliageGridSaveDataMap', 'MapObjectSpawnerInStageSaveData',
+                              'ItemContainerSaveData', 'DynamicItemSaveData', 'CharacterContainerSaveData'])
     unreferencedContainerIds = FindAllUnreferencedItemContainerIds()
     for nRunning, itemContainerId in enumerate(unreferencedContainerIds):
         if nRunning % 100 == 0:
@@ -3435,7 +3725,7 @@ def DeleteItemContainer(itemContainerId):
 # DeleteMapObject("6137354f-422d-73af-5791-2faf850bdaed")
 
 def DeletePlayer(player_uid, InstanceId=None, dry_run=False):
-    load_skiped_decode(wsd, ['ItemContainerSaveData', 'CharacterContainerSaveData', 'MapObjectSaveData'], False)
+    load_skipped_decode(wsd, ['ItemContainerSaveData', 'CharacterContainerSaveData', 'MapObjectSaveData'], False)
     if isinstance(player_uid, int):
         player_uid = str(uuid.UUID("%08x-0000-0000-0000-000000000000" % player_uid))
 
@@ -3877,8 +4167,8 @@ guid_mapping = None
 
 def LoadAllUUID():
     global guid_mapping
-    load_skiped_decode(wsd, ['MapObjectSaveData', 'FoliageGridSaveDataMap', 'MapObjectSpawnerInStageSaveData',
-                             'ItemContainerSaveData', 'DynamicItemSaveData', 'CharacterContainerSaveData'])
+    load_skipped_decode(wsd, ['MapObjectSaveData', 'FoliageGridSaveDataMap', 'MapObjectSpawnerInStageSaveData',
+                              'ItemContainerSaveData', 'DynamicItemSaveData', 'CharacterContainerSaveData'])
     if guid_mapping is None:
         print("Loading GUID Mapping")
         guid_mapping = search_guid(wsd, printout=False)
@@ -3986,8 +4276,8 @@ def _DoubleCheckForDeleteWorkSaveData(wrk_id):
 
 
 def CopyBaseCamp(base_id, group_id, old_wsd, dry_run=False):
-    load_skiped_decode(old_wsd, ['MapObjectSaveData', 'MapObjectSpawnerInStageSaveData'], False)
-    load_skiped_decode(wsd, ['MapObjectSaveData', 'MapObjectSpawnerInStageSaveData'], False)
+    load_skipped_decode(old_wsd, ['MapObjectSaveData', 'MapObjectSpawnerInStageSaveData'], False)
+    load_skipped_decode(wsd, ['MapObjectSaveData', 'MapObjectSpawnerInStageSaveData'], False)
     srcMappingCache = MappingCacheObject.get(old_wsd)
     base_id = toUUID(base_id)
     group_id = toUUID(group_id)
@@ -4391,7 +4681,10 @@ def Save(exit_now=True):
     print("Done")
     print("File saved to %s" % output_path)
     for del_file in delete_files:
-        os.unlink(del_file)
+        try:
+            os.unlink(del_file)
+        except FileNotFoundError:
+            pass
     if exit_now:
         sys.exit(0)
 

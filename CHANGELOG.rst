@@ -14,6 +14,21 @@ Changelog
     Note that they these tags will not actually close the issue/PR until they
     are merged into the "default" branch.
 
+v0.6.6
+-------
+
+Major:
+
+- Improve loading speed
+- Multi processing loading to increase performance for loading
+
+v0.6.5
+-------
+
+Fix:
+
+- Check for Players folder process with wrong
+
 v0.6.4
 -------
 
