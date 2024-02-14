@@ -2,6 +2,7 @@ import re
 
 from palworld_save_tools.archive import *
 from palworld_save_tools.paltypes import *
+import palworld_save_tools.rawdata.group as palworld_save_group
 import json
 import copy
 import multiprocessing
@@ -313,6 +314,7 @@ class MPMapObject(dict):
 
 class MPMapProperty(list):
     def __init__(self, *args, **kwargs):
+        super().__init__()
         count = kwargs.get("count", 0)
         size = kwargs.get("size", 0)
         intsize = ctypes.sizeof(ctypes.c_ulong)
@@ -336,7 +338,7 @@ class MPMapProperty(list):
             self.memaddr + intsize * 4 + intsize * self.count.value)
         self.value_size = (ctypes.c_ulong * self.count.value).from_address(
             self.memaddr + intsize * 4 + intsize * self.count.value * 2)
-        super().__init__([None] * self.count.value)
+        super().extend([None] * self.count.value)
 
     def append(self, obj):
         if self.current.value < self.count.value:
@@ -353,7 +355,7 @@ class MPMapProperty(list):
             super().append(obj)
 
     def __iter__(self):
-        for i in range(self.current.value):
+        for i in range(len(self)):
             yield self.__getitem__(i)
 
     def __getitem__(self, item):
@@ -364,12 +366,24 @@ class MPMapProperty(list):
                                      self.shm.buf[v_s:v_s + self.value_size[item]])
             self.parsed_count.value += 1
             if self.parsed_count.value == self.count.value:
+                self.__iter__ = super().__iter__
                 self.shm.buf.release()
         return super().__getitem__(item)
 
+    def load_all_items(self):
+        if self.parsed_count.value == self.count.value:
+            return
+        for i in range(self.current.value):
+            self.__getitem__(i)
+
+    def __delitem__(self, item):
+        self.load_all_items()
+        self.current.value -= 1
+        return super().__delitem__(item)
 
 class MPArrayProperty(list):
     def __init__(self, *args, **kwargs):
+        super().__init__()
         count = kwargs.get("count", 0)
         size = kwargs.get("size", 0)
         intsize = ctypes.sizeof(ctypes.c_ulong)
@@ -391,7 +405,7 @@ class MPArrayProperty(list):
         self.index = (ctypes.c_ulong * self.count.value).from_address(self.memaddr + intsize * 4)
         self.value_size = (ctypes.c_ulong * self.count.value).from_address(
             self.memaddr + intsize * 4 + intsize * self.count.value)
-        super().__init__([None] * self.count.value)
+        self += [None] * self.count.value
 
     def append(self, obj):
         if self.current.value < self.count.value:
@@ -404,10 +418,6 @@ class MPArrayProperty(list):
         else:
             super().append(obj)
 
-    def __iter__(self):
-        for i in range(self.current.value):
-            yield self.__getitem__(i)
-
     def __getitem__(self, item):
         if super().__getitem__(item) is None:
             v_s = self.index[item]
@@ -418,6 +428,26 @@ class MPArrayProperty(list):
                 self.shm.buf.release()
         return super().__getitem__(item)
 
+    def __iter__(self):
+        for i in range(len(self)):
+            yield self.__getitem__(i)
+
+    def __delitem__(self, item):
+        del self.index[item]
+        del self.value_size[item]
+        self.current.value -= 1
+        return super().__delitem__(item)
+
+    def load_all_items(self):
+        if self.parsed_count.value == self.count.value:
+            return
+        for i in range(self.current.value):
+            self.__getitem__(i)
+
+    def __delitem__(self, item):
+        self.load_all_items()
+        self.current.value -= 1
+        return super().__delitem__(item)
 
 def skip_decode(
         reader: FArchiveReader, type_name: str, size: int, path: str
@@ -709,6 +739,104 @@ class FProgressArchiveReader(FArchiveReader):
                                                            -1, mp_path)
                     properties['worldSaveData']['value'][mp_path[15:]]["custom_type"] = mp_path
         return properties
+
+    def parse_item(self, properties, skip_path):
+        if isinstance(properties, dict):
+            if 'skip_type' in properties:
+                # print("Parsing worldSaveData.%s..." % skip_path, end="", flush=True)
+                properties_parsed = self.parse_skiped_item(properties, skip_path)
+                for k in properties_parsed:
+                    properties[k] = properties_parsed[k]
+                # print("Done")
+            else:
+                for key in properties:
+                    call_skip_path = skip_path + "." + key[0].upper() + key[1:]
+                    properties[key] = self.parse_item(properties[key], call_skip_path)
+        elif isinstance(properties, list):
+            top_skip_path = ".".join(skip_path.split(".")[:-1])
+            for idx, item in enumerate(properties):
+                properties[idx] = self.parse_item(item, top_skip_path)
+        return properties
+
+    def parse_skiped_item(self, properties, skip_path):
+        if "skip_type" not in properties:
+            return properties
+
+        writer = FArchiveWriter(PALWORLD_CUSTOM_PROPERTIES)
+        if properties["skip_type"] == "ArrayProperty":
+            writer.fstring(properties["array_type"])
+            writer.optional_guid(properties.get("id", None))
+            writer.write(properties['value'])
+        elif properties["skip_type"] == "MapProperty":
+            writer.fstring(properties["key_type"])
+            writer.fstring(properties["value_type"])
+            writer.optional_guid(properties.get("id", None))
+            writer.write(properties["value"])
+        elif properties["skip_type"] == "StructProperty":
+            writer.fstring(properties["struct_type"])
+            writer.guid(properties["struct_id"])
+            writer.optional_guid(properties.get("id", None))
+            writer.write(properties["value"])
+
+        keep_custom_type = False
+        localProperties = copy.deepcopy(PALWORLD_CUSTOM_PROPERTIES)
+        if ".worldSaveData.%s" % skip_path in PALWORLD_CUSTOM_PROPERTIES:
+            localProperties[".worldSaveData.%s" % skip_path] = PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.%s" % skip_path]
+            keep_custom_type = True
+        elif ".worldSaveData.%s" % skip_path in localProperties:
+            del localProperties[".worldSaveData.%s" % skip_path]
+
+        with FProgressArchiveReader(
+                writer.bytes(), PALWORLD_TYPE_HINTS,
+                localProperties
+        ) as reader:
+            decoded_properties = reader.property(properties["skip_type"], len(properties['value']),
+                                                 ".worldSaveData.%s" % skip_path)
+            for k in decoded_properties:
+                properties[k] = decoded_properties[k]
+        if not keep_custom_type:
+            del properties['custom_type']
+        del properties["skip_type"]
+        return properties
+
+
+def group_decode(
+        reader: FProgressArchiveReader, type_name: str, size: int, path: str
+) -> dict[str, Any]:
+    if type_name != "MapProperty":
+        raise Exception(f"Expected MapProperty, got {type_name}")
+    value = reader.property(type_name, size, path, nested_caller_path=path)
+    # Decode the raw bytes and replace the raw data
+    group_map = value["value"]
+    for group in group_map:
+        group_type = group["value"]["GroupType"]["value"]["value"]
+        if group_type != "EPalGroupType::Guild":
+            continue
+        group['value'] = reader.parse_item(group['value'], "GroupSaveDataMap.Value")
+        group_bytes = group["value"]["RawData"]["value"]["values"]
+        group["value"]["RawData"]["value"] = palworld_save_group.decode_bytes(
+            reader, group_bytes, group_type
+        )
+    return value
+
+
+def group_encode(
+        writer: FArchiveWriter, property_type: str, properties: dict[str, Any]
+) -> int:
+    if property_type != "MapProperty":
+        raise Exception(f"Expected MapProperty, got {property_type}")
+    del properties["custom_type"]
+    group_map = properties["value"]
+    for group in group_map:
+        group_type = group["value"]["GroupType"]["value"]["value"]
+        if group_type != "EPalGroupType::Guild":
+            continue
+        if "values" in group["value"]["RawData"]["value"]:
+            continue
+        p = group["value"]["RawData"]["value"]
+        encoded_bytes = palworld_save_group.encode_bytes(p)
+        group["value"]["RawData"]["value"] = {"values": [b for b in encoded_bytes]}
+    return writer.property_inner(property_type, properties)
 
 
 class JsonPalSimpleObject:

@@ -487,48 +487,6 @@ SKP_PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.ItemContainerSaveData"] = (skip_d
 SKP_PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.ItemContainerSaveData.Value.BelongInfo"] = (skip_decode, skip_encode)
 SKP_PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.ItemContainerSaveData.Value.Slots"] = (skip_decode, skip_encode)
 SKP_PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.ItemContainerSaveData.Value.RawData"] = (skip_decode, skip_encode)
-import palworld_save_tools.rawdata.group as palworld_save_group
-
-
-def group_decode(
-        reader: FArchiveReader, type_name: str, size: int, path: str
-) -> dict[str, Any]:
-    if type_name != "MapProperty":
-        raise Exception(f"Expected MapProperty, got {type_name}")
-    value = reader.property(type_name, size, path, nested_caller_path=path)
-    # Decode the raw bytes and replace the raw data
-    group_map = value["value"]
-    for group in group_map:
-        group_type = group["value"]["GroupType"]["value"]["value"]
-        if group_type != "EPalGroupType::Guild":
-            continue
-        group['value'] = parse_item(group['value'], "GroupSaveDataMap.Value")
-        group_bytes = group["value"]["RawData"]["value"]["values"]
-        group["value"]["RawData"]["value"] = palworld_save_group.decode_bytes(
-            reader, group_bytes, group_type
-        )
-    return value
-
-
-def group_encode(
-        writer: FArchiveWriter, property_type: str, properties: dict[str, Any]
-) -> int:
-    if property_type != "MapProperty":
-        raise Exception(f"Expected MapProperty, got {property_type}")
-    del properties["custom_type"]
-    group_map = properties["value"]
-    for group in group_map:
-        group_type = group["value"]["GroupType"]["value"]["value"]
-        if group_type != "EPalGroupType::Guild":
-            continue
-        if "values" in group["value"]["RawData"]["value"]:
-            continue
-        p = group["value"]["RawData"]["value"]
-        encoded_bytes = palworld_save_group.encode_bytes(p)
-        group["value"]["RawData"]["value"] = {"values": [b for b in encoded_bytes]}
-    return writer.property_inner(property_type, properties)
-
-
 SKP_PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.GroupSaveDataMap"] = (group_decode, group_encode)
 SKP_PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.GroupSaveDataMap.Value.RawData"] = (skip_decode, skip_encode)
 
@@ -2237,8 +2195,7 @@ def LoadFile(filename):
 
 def Statistics():
     for key in wsd:
-        print("%40s\t%.3f MB\tLoading: %10.2fms\t%20s\t%s: %d" % (key, len(str(wsd[key])) / 1048576,
-                                                                  1000 * loadingStatistics[key],
+        print("%40s\t%.3f MB\t%20s\t%s: %d" % (key, len(str(wsd[key])) / 1048576,
                                                                   wsd[key]['type'] if 'type' in wsd[key] else "",
                                                                   "Bytes" if isinstance(wsd[key]['value'],
                                                                                         bytes) else "Key",
@@ -3500,6 +3457,7 @@ def DeletePlayer(player_uid, InstanceId=None, dry_run=False):
                     DeleteItemContainer(player_gvas['inventoryInfo']['value'][key]['value']['ID']['value'])
                 player_container_ids.append(player_gvas['inventoryInfo']['value'][key]['value']['ID']['value'])
     # Remove item from CharacterSaveParameterMap
+    deleteCharacters = []
     for item in wsd['CharacterSaveParameterMap']['value']:
         player = item['value']['RawData']['value']['object']['SaveParameter']['value']
         if str(item['key']['PlayerUId']['value']) == player_uid \
@@ -3510,14 +3468,14 @@ def DeletePlayer(player_uid, InstanceId=None, dry_run=False):
                     str(item['key']['InstanceId']['value']), player['Level']['value'] if 'Level' in player else -1,
                     player['NickName']['value'] if 'NickName' in player else "*** INVALID ***"))
             if not dry_run:
-                DeleteCharacter(item['key']['InstanceId']['value'])
+                deleteCharacters.append(item['key']['InstanceId']['value'])
         elif 'OwnerPlayerUId' in player and str(player['OwnerPlayerUId']['value']) == player_uid and InstanceId is None:
             print(
                 f"{terminalColor(31)}Delete Pal{terminalColor(0)}  UUID: %s  Owner: %s  CharacterID: %s" % (
                     str(item['key']['InstanceId']['value']), str(player['OwnerPlayerUId']['value']),
                     player['CharacterID']['value']))
             if not dry_run:
-                DeleteCharacter(item['key']['InstanceId']['value'])
+                deleteCharacters.append(item['key']['InstanceId']['value'])
         elif 'SlotID' in player and player['SlotID']['value']['ContainerId']['value']['ID'][
             'value'] in player_container_ids and InstanceId is None:
             print(
@@ -3526,7 +3484,9 @@ def DeletePlayer(player_uid, InstanceId=None, dry_run=False):
                     str(player['SlotID']['value']['ContainerId']['value']['ID']['value']),
                     player['CharacterID']['value']))
             if not dry_run:
-                DeleteCharacter(item['key']['InstanceId']['value'])
+                deleteCharacters.append(item['key']['InstanceId']['value'])
+    for instance_id in deleteCharacters:
+        DeleteCharacter(instance_id)
     # Remove Item from GroupSaveDataMap
     remove_guilds = []
     for group_data in wsd['GroupSaveDataMap']['value']:
