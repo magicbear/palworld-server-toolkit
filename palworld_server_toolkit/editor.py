@@ -393,6 +393,82 @@ class skip_loading_progress(threading.Thread):
         except RuntimeError:
             pass
 
+class MPMapPropertyProcess(multiprocessing.Process):
+    def __init__(self, reader, properties, count, path, data):
+        super().__init__()
+        self.reader = reader
+        self.properties = properties
+        self.count = count
+        self.data = data
+        self.path = path
+
+    def run(self) -> None:
+        prop_val = MPMapProperty(name=self.properties['value'])
+        key_type = self.properties['key_type']
+        key_struct_type = self.properties['key_struct_type']
+        value_type = self.properties['value_type']
+        value_struct_type = self.properties['value_struct_type']
+        key_path = self.path + ".Key"
+        value_path = self.path + ".Value"
+        with FArchiveReader(
+                self.data,
+                type_hints=self.reader.type_hints,
+                custom_properties=self.reader.custom_properties,
+                allow_nan=self.reader.allow_nan,
+        ) as reader:
+            for _ in range(self.count):
+                key = reader.prop_value(key_type, key_struct_type, key_path)
+                value = reader.prop_value(value_type, value_struct_type, value_path)
+                prop_val.append({
+                    "key": key,
+                    "value": value
+                })
+        posix.kill(os.getpid(), 9)
+
+class MPArrayPropertyProcess(multiprocessing.Process):
+    def __init__(self, reader, properties, count, size, path, data):
+        super().__init__()
+        self.reader = reader
+        self.properties = properties
+        self.count = count
+        self.size = size
+        self.data = data
+        self.path = path
+
+    def run(self) -> None:
+        prop_values = MPArrayProperty(name=self.properties['value']['values'])
+        with FArchiveReader(
+                self.data,
+                type_hints=self.reader.type_hints,
+                custom_properties=self.reader.custom_properties,
+                allow_nan=self.reader.allow_nan,
+        ) as reader:
+            array_type = self.properties['array_type']
+            if array_type == "StructProperty":
+                type_name = self.properties['value']['type_name']
+                prop_path = f"{self.path}.{self.properties['value']['prop_name']}"
+                for _ in range(self.count):
+                    prop_values.append(reader.struct_value(type_name, prop_path))
+            else:
+                decode_func: Callable
+                if array_type == "EnumProperty":
+                    decode_func = reader.fstring
+                elif array_type == "NameProperty":
+                    decode_func = reader.fstring
+                elif array_type == "Guid":
+                    decode_func = reader.guid
+                elif array_type == "ByteProperty":
+                    if self.size == self.count:
+                        # Special case this and read faster in one go
+                        return reader.byte_list(self.count)
+                    else:
+                        raise Exception("Labelled ByteProperty not implemented")
+                else:
+                    raise Exception(f"Unknown array type: {array_type} ({self.path})")
+                for _ in range(self.count):
+                    prop_values.append(decode_func())
+        posix.kill(os.getpid(), 9)
+
 
 class FProgressArchiveReader(FArchiveReader):
     processlist = {}
@@ -408,28 +484,11 @@ class FProgressArchiveReader(FArchiveReader):
                         remain = line.split(": ")[1].strip().split(" ")
                         if remain[1] == 'kB' and int(remain[0]) > 1048576 > 4:  # Over 4 GB memory remains
                             self.mp_loading = True
+        elif sys.platform == 'darwin':
+            self.mp_loading = True
 
     def progress(self):
         return self.data.tell()
-
-    @staticmethod
-    def mp_map_process(properties, count, key_type, key_struct_type, key_path, value_type, value_struct_type,
-                       value_path, data, type_hints, custom_properties, allow_nan):
-        prop_val = properties['value']
-        with FArchiveReader(
-                data,
-                type_hints=type_hints,
-                custom_properties=custom_properties,
-                allow_nan=allow_nan,
-        ) as reader:
-            for _ in range(count):
-                key = reader.prop_value(key_type, key_struct_type, key_path)
-                value = reader.prop_value(value_type, value_struct_type, value_path)
-                prop_val.append({
-                    "key": key,
-                    "value": value
-                })
-        posix.kill(os.getpid(), 9)
 
     @staticmethod
     def mp_array_process(properties, count, size, path, data, type_hints, custom_properties, allow_nan):
@@ -484,6 +543,7 @@ class FProgressArchiveReader(FArchiveReader):
         else:
             value_struct_type = None
 
+        share_mp = MPMapProperty(size=size * 4, count=count)
         properties.update({
             "type": "MapProperty",
             "key_type": key_type,
@@ -491,15 +551,13 @@ class FProgressArchiveReader(FArchiveReader):
             "key_struct_type": key_struct_type,
             "value_struct_type": value_struct_type,
             "id": _id,
-            "value": MPMapProperty(size=size * 4, count=count)
+            "value": share_mp.shm.name
         })
-        p = multiprocessing.Process(target=self.mp_map_process, args=(properties, count,
-                                                                      key_type, key_struct_type, key_path, value_type,
-                                                                      value_struct_type, value_path,
-                                                                      self.read(
-                                                                          size - (self.data.tell() - ext_data_offset)),
-                                                                        self.type_hints, self.custom_properties, self.allow_nan))
+        p = MPMapPropertyProcess(self, properties, count, path, self.read(size - (self.data.tell() - ext_data_offset)))
         p.start()
+        properties.update({
+            'value': share_mp
+        })
         return p
 
     def load_mp_array(self, properties, path, size):
@@ -509,12 +567,13 @@ class FProgressArchiveReader(FArchiveReader):
         ext_data_offset = self.data.tell()
         count = self.u32()
 
+        mp_ctx = MPArrayProperty(size=size * 4, count=count)
         properties.update({
             "type": "ArrayProperty",
             "array_type": array_type,
             "id": _id,
             "value": {
-                "values": MPArrayProperty(size=size * 4, count=count)
+                "values": mp_ctx.shm.name
             }
         })
 
@@ -531,11 +590,11 @@ class FProgressArchiveReader(FArchiveReader):
                 "type_name": type_name,
                 "id": _id
             })
-        p = multiprocessing.Process(target=FProgressArchiveReader.mp_array_process, args=(properties, count, size, path,
-                                                                        self.read(size - (
-                                                                                self.data.tell() - ext_data_offset)),
-                                                                        self.type_hints, self.custom_properties, self.allow_nan))
+        p = MPArrayPropertyProcess(self, properties, count, size, path, self.read(size - (self.data.tell() - ext_data_offset)))
         p.start()
+        properties['value'].update({
+            'values': mp_ctx
+        })
         return p
 
     def property(
@@ -560,10 +619,10 @@ class FProgressArchiveReader(FArchiveReader):
                     sub_path in self.custom_properties and self.custom_properties[sub_path][0] is skip_decode):
                 properties[name] = {}
                 self.processlist[sub_path] = self.load_mp_map(properties[name], sub_path, size)
-            elif self.mp_loading and path == ".worldSaveData" and type_name == "ArrayProperty" and size > 1048576 and not (
-                    sub_path in self.custom_properties and self.custom_properties[sub_path][0] is skip_decode):
-                properties[name] = {}
-                self.processlist[sub_path] = self.load_mp_array(properties[name], sub_path, size)
+            # elif self.mp_loading and path == ".worldSaveData" and type_name == "ArrayProperty" and size > 1048576 and not (
+            #         sub_path in self.custom_properties and self.custom_properties[sub_path][0] is skip_decode):
+            #     properties[name] = {}
+            #     self.processlist[sub_path] = self.load_mp_array(properties[name], sub_path, size)
             else:
                 properties[name] = self.property(type_name, size, f"{path}.{name}")
             if path == ".worldSaveData":
@@ -693,7 +752,7 @@ def load_skipped_decode(_worldSaveData, skip_paths, recursive=True):
     if isinstance(skip_paths, str):
         skip_paths = [skip_paths]
 
-    mp = {}
+    mp = {} if sys.platform == 'linux' else None
     t2 = time.time()
     parsed = 0
     skip_paths.sort()
