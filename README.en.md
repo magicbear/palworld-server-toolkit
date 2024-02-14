@@ -12,7 +12,7 @@
 <img alt="Python" src="https://img.shields.io/badge/Python-FFD43B?style=for-the-badge&logo=python&logoColor=blue">&nbsp;&nbsp;
 </p>
 
-The world fastest PalWorld server save editor, parse Level.sav in 1.1s for JSON about 1.5GB, and for convert.py time spent in 1m40s.
+The world fastest PalWorld server save editor, parse 45MB Level.sav in 1.9s for JSON about 5.1GB, and for convert.py time spent in 4m54s.
 
 - This toolkit transfers character between worlds in Palworld, which allows friends to transfer their characters to each other's server without losing one's progress.
 

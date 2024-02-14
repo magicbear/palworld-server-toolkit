@@ -3,6 +3,9 @@ import re
 from palworld_save_tools.archive import *
 import json
 import copy
+from multiprocessing import shared_memory, Array, Value
+import pickle
+import msgpack
 
 def toUUID(uuid_str):
     if isinstance(uuid_str, UUID):
@@ -219,6 +222,169 @@ class PalObject:
             }
         }
 
+class MPMapValue(dict):
+    def __init__(self, obj):
+        self.obj = obj
+    
+    def load(self):
+        _data = pickle.loads(self.obj)
+        self.__getitem__ = super().__getitem__
+        self.update(_data)
+        self.__iter__ = super().__iter__
+        self.__setitem__ = super().__setitem__
+        
+    def __getitem__(self, key):
+        self.load()
+        return super().__getitem__(key)
+    
+    def __setitem__(self, key, value):
+        self.load()
+        return super().__setitem__(key, value)
+    
+    def __iter__(self):
+        self.load()
+        return super().__iter__()
+
+def decode_uuid(obj):
+    if '__uuid__' in obj:
+        obj = UUID(obj['__uuid__'])
+    return obj
+
+def encode_uuid(obj):
+    if isinstance(obj, UUID):
+        return {'__uuid__': obj.raw_bytes}
+    return obj
+
+class MPMapObject(dict):
+    def __init__(self, key, obj):
+        self.parsed_key = False
+        self.parsed_value = False
+        self.key = key
+        self.value = obj
+        self.update({
+            'key': None,
+            'value': None
+        })
+
+    def __getitem__(self, key):
+        if key == 'key':
+            if not self.parsed_key:
+                self.parsed_key = True
+                self.key = msgpack.unpackb(self.key, object_hook=decode_uuid, raw=False)
+                self.update({
+                    'key': self.key
+                })
+            return self.key
+        if key == 'value':
+            if not self.parsed_value:
+                self.parsed_value = True
+                # pickle.loads
+                self.value = msgpack.unpackb(self.value, object_hook=decode_uuid, raw=False)
+                self.update({
+                    'value': self.value
+                })
+            return self.value
+        return super().__getitem__(key)
+    
+    def __iter__(self):
+        for key in super().__iter__():
+            yield key
+        if 'key' not in self:
+            yield 'key'
+        if 'value' not in self:
+            yield 'value'
+
+
+class MPMapProperty(list):
+    def __init__(self, *args, **kwargs):
+        count = kwargs.get("count", 0)
+        size = kwargs.get("size", 0)
+        super().__init__([None] * count)
+        self.shm = shared_memory.SharedMemory(create=True, size=size)
+        self.index = Array('i', count)
+        self.key_size = Array('i', count)
+        self.value_size = Array('i', count)
+        self.current = Value('i', 0)
+        self.last = Value('i', 0)
+        self.count = count
+        self.parsed_count = 0
+
+    def append(self, obj):
+        if self.current.value < self.count:
+            key = msgpack.packb(obj['key'], default=encode_uuid, use_bin_type=True)
+            val = msgpack.packb(obj['value'], default=encode_uuid, use_bin_type=True)
+            self.index[self.current.value] = self.last.value
+            self.key_size[self.current.value] = len(key)
+            self.value_size[self.current.value] = len(val)
+            self.shm.buf[self.last.value:self.last.value + len(key)] = key
+            self.shm.buf[self.last.value + len(key):self.last.value + len(key) + len(val)] = val
+            self.last.value += len(key) + len(val)
+            self.current.value += 1
+        else:
+            super().append(obj)
+
+    def __iter__(self):
+        for i in range(self.current.value):
+            yield self.__getitem__(i)
+
+    def __getitem__(self, item):
+        if super().__getitem__(item) is None:
+            k_s = self.index[item]
+            v_s = self.index[item] + self.key_size[item]
+            self[item] = MPMapObject(self.shm.buf[k_s:v_s],
+                                            self.shm.buf[v_s:v_s + self.value_size[item]])
+            self.parsed_count += 1
+        return super().__getitem__(item)
+
+    def __str__(self):
+        return super().__str__()
+        
+    def __repr__(self):
+        return super().__repr__()
+
+
+class MPArrayProperty(list):
+    def __init__(self, *args, **kwargs):
+        count = kwargs.get("count", 0)
+        size = kwargs.get("size", 0)
+        super().__init__([None] * count)
+        self.shm = shared_memory.SharedMemory(create=True, size=size)
+        self.index = Array('i', count)
+        self.value_size = Array('i', count)
+        self.current = Value('i', 0)
+        self.last = Value('i', 0)
+        self.count = count
+        self.parsed_count = 0
+
+    def append(self, obj):
+        if self.current.value < self.count:
+            val = msgpack.packb(obj, default=encode_uuid, use_bin_type=True)
+            self.index[self.current.value] = self.last.value
+            self.value_size[self.current.value] = len(val)
+            self.shm.buf[self.last.value:self.last.value + len(val)] = val
+            self.last.value += len(val)
+            self.current.value += 1
+        else:
+            super().append(obj)
+
+    def __iter__(self):
+        for i in range(self.current.value):
+            yield self.__getitem__(i)
+
+    def __getitem__(self, item):
+        if super().__getitem__(item) is None:
+            v_s = self.index[item]
+            v_e = self.index[item] + self.value_size[item]
+            self[item] = msgpack.unpackb(self.shm.buf[v_s:v_e], object_hook=decode_uuid, raw=False)
+            self.parsed_count += 1
+        return super().__getitem__(item)
+
+    def __str__(self):
+        return super().__str__()
+
+    def __repr__(self):
+        return super().__repr__()
+
 
 class JsonPalSimpleObject:
     type = None
@@ -264,6 +430,10 @@ def AutoMakeStruct(struct):
                  f"        return "  + re.sub(r"\"PalObject\.(.+)\",?", "PalObject.\\1,", json.dumps(struct, indent=4, cls=CustomEncoder).replace("\n", "\n        "))
     return structs
 
+# shm_map = MPMapProperty(size=10485760, count=2)
+# shm_map.append({"key":toUUID(uuid.uuid4()), "value": {"A": 456, "B": 789}})
+# shm_map.append({"key":567, "value": {"A": 456}})
+# print(shm_map[0]['key'])
 # print("\n\n".join(AutoMakeStruct(copy.deepcopy(MappingCache.CharacterSaveParameterMap[toUUID('1dd8d2a0-4dd7-4b05-f3c0-7ab60ebd95e4')]['value']['RawData']['value']['object']['SaveParameter'])).values()))
 
 # print("".join(AutoMakeStruct({"type":"StructProperty","struct_type":"A","value":s['value']['Slots']['value']['values'][0]}).values()))
