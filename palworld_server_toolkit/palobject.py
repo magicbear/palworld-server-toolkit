@@ -350,6 +350,20 @@ class MPMapProperty(list):
             self.memaddr + intsize * 4 + intsize * self.count.value * 2)
         super().extend([None] * self.count.value)
 
+    def close(self):
+        del self.current
+        del self.last
+        del self.count
+        del self.parsed_count
+        del self.index
+        del self.key_size
+        del self.value_size
+        self.shm.buf.release()
+        self.shm.close()
+
+    def release(self):
+        self.shm.unlink()
+
     def append(self, obj):
         if self.current.value < self.count.value:
             key = msgpack.packb(obj['key'], default=encode_uuid, use_bin_type=True)
@@ -417,6 +431,19 @@ class MPArrayProperty(list):
         self.value_size = (ctypes.c_ulong * self.count.value).from_address(
             self.memaddr + intsize * 4 + intsize * self.count.value)
         self += [None] * self.count.value
+
+    def close(self):
+        del self.current
+        del self.last
+        del self.count
+        del self.parsed_count
+        del self.index
+        del self.value_size
+        self.shm.buf.release()
+        self.shm.close()
+
+    def release(self):
+        self.shm.unlink()
 
     def append(self, obj):
         if self.current.value < self.count.value:
@@ -569,7 +596,8 @@ class MPMapPropertyProcess(multiprocessing.Process):
                     "key": key,
                     "value": value
                 })
-        os._exit(0)
+        prop_val.close()
+        sys.exit(0)
 
 
 class MPArrayPropertyProcess(multiprocessing.Process):
@@ -614,7 +642,10 @@ class MPArrayPropertyProcess(multiprocessing.Process):
                     raise Exception(f"Unknown array type: {array_type} ({self.path})")
                 for _ in range(self.count):
                     prop_values.append(decode_func())
-        os._exit(0)
+        # os._exit(0)
+        prop_values.close()
+        # os._exit(0)
+        sys.exit(0)
 
 
 class FProgressArchiveReader(FArchiveReader):
@@ -628,7 +659,9 @@ class FProgressArchiveReader(FArchiveReader):
         super().__init__(*args, **kwargs)
         self.fallbackData = None
         self.mp_loading = False
-        if sys.platform == 'linux':
+        if getattr(sys, 'frozen', False):
+            pass
+        elif sys.platform == 'linux':
             with open("/proc/meminfo", "r", encoding='utf-8') as f:
                 for line in f:
                     if 'MemFree:' == line[0:8]:

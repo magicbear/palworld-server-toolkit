@@ -2,7 +2,7 @@ import sys, os
 from cx_Freeze import setup, Executable
 
 build_options = {
-    "includes": ["pyperclip", "palworld_save_tools"],
+    "includes": ["pyperclip", "palworld_save_tools", "msgpack", "recordclass"],
     "excludes": [],
     "zip_include_packages": ["zip_includes", "palworld_save_tools"],
     "replace_paths": [("palworld_server_toolkit/resources", "resources")],
@@ -11,6 +11,7 @@ build_options = {
 }
 
 base = "Win32GUI" if sys.platform == "win32" else None
+base = "console"
 
 ver = ""
 with open("setup.cfg", "r") as f:

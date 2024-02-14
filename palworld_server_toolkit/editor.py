@@ -20,12 +20,13 @@ if not os.path.exists("%s/resources/gui.json" % module_dir) and getattr(sys, 'fr
     module_dir = os.path.dirname(sys.executable)
 
 sys.path.insert(0, module_dir)
+sys.path.insert(0, os.path.join(module_dir, "../"))
 sys.path.insert(0, os.path.join(module_dir, "../save_tools"))
+from palworld_server_toolkit.palobject import *
 from palworld_save_tools.gvas import GvasFile, GvasHeader
 from palworld_save_tools.palsav import compress_gvas_to_sav, decompress_sav_to_gvas
 from palworld_save_tools.paltypes import PALWORLD_CUSTOM_PROPERTIES, PALWORLD_TYPE_HINTS
 from palworld_save_tools.archive import *
-from palobject import *
 
 try:
     from palworld_save_tools.rawdata import map_concrete_model_module
@@ -494,9 +495,7 @@ SKP_PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.GroupSaveDataMap.Value.RawData"] 
 
 def gui_thread():
     try:
-        GUI()
-        if gui is None:
-            return
+        gui = GUI()
         gui.load()
         gui.mainloop()
     except tk.TclError:
@@ -569,9 +568,9 @@ def main():
             args.statistics = False
             args.output = None
         else:
-            args = parser.parse_args()
+            args = parser.parse_args(sys.argv[1:])
     else:
-        args = parser.parse_args()
+        args = parser.parse_args(sys.argv[1:])
 
     if not reduce(lambda x, b: x or getattr(args, b, False), filter(lambda x: 'del_' in x or 'fix_' in x, dir(args)),
                   False) and not sys.flags.interactive:
@@ -667,11 +666,14 @@ def main():
         return
     elif args.gui:
         gui_thread()
-        return
-
-    if args.fix_missing or args.fix_capture:
+    elif args.fix_missing or args.fix_capture:
         Save()
 
+    for key in wsd:
+        if isinstance(wsd[key]['value'], MPArrayProperty) or isinstance(wsd[key]['value'], MPMapProperty):
+            wsd[key]['value'].close()
+            wsd[key]['value'].release()
+    os._exit(0)
 
 try:
     class AutocompleteCombobox(ttk.Combobox):
