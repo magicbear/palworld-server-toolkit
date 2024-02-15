@@ -495,6 +495,7 @@ SKP_PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.GroupSaveDataMap.Value.RawData"] 
 
 def gui_thread():
     try:
+        global gui
         gui = GUI()
         gui.load()
         gui.mainloop()
