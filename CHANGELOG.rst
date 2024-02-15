@@ -14,6 +14,14 @@ Changelog
     Note that they these tags will not actually close the issue/PR until they
     are merged into the "default" branch.
 
+v0.7.2
+-------
+
+Fix:
+
+- OpenBackup cause error on Linux platform
+- Migrate Player / Repair Player move Pals that working on base to user Pal Container
+
 v0.7.1
 -------
 

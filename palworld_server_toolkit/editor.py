@@ -2786,6 +2786,8 @@ def RepairPlayer(player_uid):
 
     standbySlots = []
     unloadedSlots = []
+    unknowSlots = set()
+    workerSlots = set()
     for instanceId in MappingCache.CharacterSaveParameterMap:
         item = MappingCache.CharacterSaveParameterMap[instanceId]
         player = item['value']['RawData']['value']['object']['SaveParameter']['value']
@@ -2798,11 +2800,38 @@ def RepairPlayer(player_uid):
                     player_gvas['PalStorageContainerId']['value']['ID']['value']:
                 standbySlots.append(item['key']['InstanceId']['value'])
             elif 'SlotID' in player:
-                player['SlotID']['value']['ContainerId']['value']['ID']['value'] = \
-                    player_gvas['PalStorageContainerId']['value']['ID']['value']
-                standbySlots.append(item['key']['InstanceId']['value'])
-                unloadedSlots.append(item['key']['InstanceId']['value'])
-                rebuildPalStorageContainerId = True
+                slot_id = player['SlotID']['value']['ContainerId']['value']['ID']['value']
+                if slot_id not in MappingCache.CharacterContainerSaveData:
+                    print(f"{tcl(33)} Player {tcl(93)}{player_uid}{tcl(33)} SlotID "
+                          f"{tcl(93)}{slot_id}{tcl(33)} invalid{tcl(0)}")
+                    player['SlotID']['value']['ContainerId']['value']['ID']['value'] = \
+                        player_gvas['PalStorageContainerId']['value']['ID']['value']
+                    standbySlots.append(item['key']['InstanceId']['value'])
+                    rebuildPalStorageContainerId = True
+                else:
+                    container = parse_item(MappingCache.CharacterContainerSaveData[slot_id], "CharacterContainerSaveData")
+                    slotItems = container['value']['Slots']['value']['values']
+                    try:
+                        slotItem = slotItems[player['SlotID']['value']['SlotIndex']['value']]
+                        if slotItem['RawData']['value']['instance_id'] != item['key']['InstanceId']['value']:
+                            print(f"{tcl(33)} Player {tcl(93)}{player_uid}{tcl(33)} SlotID "
+                                  f"{tcl(93)}{slot_id}{tcl(33)} ItemIndex not matched -> "
+                                  f"{player['SlotID']['value']['SlotIndex']['value']}{tcl(0)}")
+                            raise IndexError()
+                    except IndexError:
+                        for idx_slot, _slot in enumerate(slotItems):
+                            if _slot['RawData']['value']['instance_id'] == item['key']['InstanceId']['value']:
+                                player['SlotID']['value']['SlotIndex']['value'] = idx_slot
+                                slotItem = _slot
+                                break
+
+                    if slotItem['PermissionTribeID']['value']['value'] == "EPalTribeID::GrassMammoth":
+                        workerSlots.add(item['key']['InstanceId']['value'])
+                    else:
+                        if slotItem['PermissionTribeID']['value']['value'] != "None":
+                            gp(slotItem)
+                        unknowSlots.add(player['SlotID']['value']['ContainerId']['value']['ID']['value'])
+                        unloadedSlots.append(item['key']['InstanceId']['value'])
 
             if 'OldOwnerPlayerUIds' in player:
                 if player_uid not in player['OldOwnerPlayerUIds']['value']['values']:
@@ -2832,8 +2861,13 @@ def RepairPlayer(player_uid):
             anyFix = True
 
     if len(unloadedSlots) > 0:
-        print(f"{tcl(33)}Warning: Player {tcl(93)}{player_uid}{tcl(33)} Have character {tcl(32)}{len(unloadedSlots)}"
-              f"{tcl(33)} not in containers, loaded: {len(loaded_instance)} / standby: {len(standbySlots)}{tcl(0)}")
+        print(f"{tcl(33)}Warning: Player {tcl(93)}{player_uid}{tcl(33)} Have {tcl(32)}{len(unloadedSlots)}{tcl(33)} "
+              f"character not in player containers, worker in base: {tcl(32)}{len(workerSlots)}{tcl(33)}, "
+              f"loaded: {tcl(32)}{len(loaded_instance)}{tcl(33)} / standby: {tcl(32)}{len(standbySlots)}{tcl(0)}")
+        print(f"Container ids: %s" % ",".join([str(x) for x in unknowSlots]))
+        for container_id in unknowSlots:
+            container = parse_item(MappingCache.CharacterContainerSaveData[container_id], "CharacterContainerSaveData")
+            # gp(container)
 
     player = MappingCache.PlayerIdMapping[player_uid]
     group_id = player['value']['RawData']['value']['group_id']

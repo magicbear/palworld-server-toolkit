@@ -1043,7 +1043,7 @@ class FProgressArchiveReader(FArchiveReader):
                 else:
                     properties[name] = self.property(type_name, size, f"{path}.{name}")
             except Exception as e:
-                print(f"\033[31mDecodeing Failed on Decodeing Path {path} -> {str(e)}\033[0m")
+                print(f"\033[31mDecodeing Failed on Decodeing Path {path} -> {type(e)}: {str(e)}\033[0m")
                 raise e
         if path == "":
             for mp_path in self.processlist:
