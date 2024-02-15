@@ -31,6 +31,7 @@
   "del_old_player": "Del Inactive Player",
   "repair_all_user": "Repair All User",
   "prompt_howlong_day": "How many days inactived?",
+  "msg_confirm_fix_mapobject": "Found damaged map object {MAP_COUNT}, player {SAVE_COUNT}, character {CHARACTER_COUNT}\nConfirm to continue?",
   "msg_confirm_delete": "Confirm to delete {COUNT} players？\nWarning: This is a test feature, be sure you are already backup the file!\nPlease open game to confirm all things is working\nConfirm to continue?",
   "msg_confirm_beta": "This is a test feature, be sure you are already backup the file!\nPlease open game to confirm all things is working\nConfirm to continue?",
   "msg_player_folder_not_exists": "Players folder not exists on the same directory of Level.sav"

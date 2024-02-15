@@ -514,11 +514,6 @@ def main():
     )
     parser.add_argument("filename")
     parser.add_argument(
-        "--fix-missing",
-        action="store_true",
-        help="Delete the missing characters",
-    )
-    parser.add_argument(
         "--statistics",
         action="store_true",
         help="Show the statistics for all key",
@@ -626,8 +621,6 @@ def main():
 
     print("Total load in %.3fms" % (1000 * (time.time() - t1)))
 
-    if getattr(args, "fix_missing", False):
-        FixMissing()
     if getattr(args, "fix_capture", False):
         FixCaptureLog()
     if getattr(args, "fix_duplicate", False):
@@ -640,7 +633,6 @@ def main():
     if sys.flags.interactive:
         print("Go To Interactive Mode (no auto save), we have follow command:")
         print("  ShowPlayers()                              - List the Players")
-        print("  FixMissing(dry_run=False)                  - Remove missing player instance")
         print("  FixCaptureLog(dry_run=False)               - Remove unused capture log")
         print("  FixDuplicateUser(dry_run=False)            - Remove duplicate player instance")
         print("  ShowGuild()                                - List the Guild and members")
@@ -1969,10 +1961,25 @@ class GUI():
         if not os.path.exists(os.path.dirname(os.path.abspath(args.filename)) + "/Players/"):
             messagebox.showerror("Cleanup", self.lang_data['msg_player_folder_not_exists'])
             return
-        if 'yes' == messagebox.showwarning("Cleanup", self.lang_data['msg_confirm_beta'],
-                                           type=messagebox.YESNO):
-            FixBrokenDamageRefItemContainer()
-            self.load_players()
+        answer = messagebox.showwarning("Cleanup", self.lang_data['msg_confirm_beta'],
+                                           type=messagebox.YESNO)
+        if answer != 'yes':
+            return
+
+        delete_objects = FixBrokenObject(True)
+        BrokenObjects = FindDamageRefItemContainer()
+
+        answer = messagebox.showwarning("Cleanup",
+                        self.lang_data['msg_confirm_fix_mapobject']
+                            .replace("{MAP_COUNT}", "%d" % (len(BrokenObjects['MapObject']) + len(delete_objects)))
+                            .replace("{SAVE_COUNT}", "%d" % (len(BrokenObjects['Character']['SaveContainers'])))
+                            .replace("{CHARACTER_COUNT}", "%d" % (len(BrokenObjects['Character']['Owner']))),
+                        type=messagebox.YESNO)
+        if answer != 'yes':
+            return
+        FixBrokenObject()
+        FixBrokenDamageRefItemContainer()
+        self.load_players()
 
     def delete_old_player(self):
         if not os.path.exists(os.path.dirname(os.path.abspath(args.filename)) + "/Players/"):
@@ -2943,8 +2950,7 @@ def MigratePlayer(player_uid, new_player_uid):
         print(f"{tcl(33)}Warning: Player Sav file Not exists: {player_sav_file}{tcl(0)}")
         return
 
-
-    err, new_player_gvas, new_player_sav_file, new_player_gvas_file = GetPlayerGvas(new_player_uid)
+    # err, new_player_gvas, new_player_sav_file, new_player_gvas_file = GetPlayerGvas(new_player_uid)
     # if not err:
     #     print(f"{tcl(33)}Warning: Player Sav file Not exists: {player_sav_file}{tcl(0)}")
     #     return
@@ -3614,6 +3620,7 @@ def FindDamageRefItemContainer():
         "MapObject": [],
         'Character': {
             "SaveContainers": [],
+            "Owner": [],
             "EquipItemContainerId": [],
             "ItemContainerId": []
         }
@@ -3625,19 +3632,24 @@ def FindDamageRefItemContainer():
             print(f"%s {playerId} -> SaveContainers Cannot Get" % CharacterDescription(
                 MappingCache.PlayerIdMapping[playerId]))
             InvalidObjects['Character']['SaveContainers'].append(
-                MappingCache.PlayerIdMapping[playerId]['key']['InstanceId']['value'])
+                MappingCache.PlayerIdMapping[playerId]['key']['PlayerUId']['value'])
         for containerId in container_ids:
             if containerId not in MappingCache.ItemContainerSaveData:
                 InvalidObjects['Character']['SaveContainers'].append(
-                    MappingCache.PlayerIdMapping[playerId]['key']['InstanceId']['value'])
+                    MappingCache.PlayerIdMapping[playerId]['key']['PlayerUId']['value'])
                 print(f"%s {playerId} -> SaveContainers {containerId} Invalid" % CharacterDescription(
                     MappingCache.PlayerIdMapping[playerId]))
                 break
 
-    InvalidCharacters = []
     for character in wsd['CharacterSaveParameterMap']['value']:
         characterData = character['value']['RawData']['value']['object']['SaveParameter']['value']
         # Ignored for Boss, Boss will have empty EquipItemContainerId but work
+        if 'OwnerPlayerUId' in characterData and characterData['OwnerPlayerUId']['value'] not in MappingCache.PlayerIdMapping:
+            print(f"{tcl(31)}Invalid item on CharacterSaveParameterMap{tcl(0)}  UUID: %s  Owner: %s  CharacterID: %s" % (
+                    str(character['key']['InstanceId']['value']), str(characterData['OwnerPlayerUId']['value']),
+                    characterData['CharacterID']['value']))
+            InvalidObjects['Character']['Owner'].append(character['key']['InstanceId']['value'])
+
         if 'EquipItemContainerId' in characterData:
             if characterData['EquipItemContainerId']['value']['ID']['value'] not in MappingCache.ItemContainerSaveData:
                 InvalidObjects['Character']['EquipItemContainerId'].append(character['key']['InstanceId']['value'])
@@ -3654,11 +3666,11 @@ def FindDamageRefItemContainer():
     for mapObject in parse_item(wsd['MapObjectSaveData'], 'MapObjectSaveData')['value']['values']:
         for concrete in mapObject['ConcreteModel']['value']['ModuleMap']['value']:
             if concrete['key'] == "EPalMapObjectConcreteModelModuleType::ItemContainer":
-                if concrete['value']['RawData']['value'][
-                    'target_container_id'] not in MappingCache.ItemContainerSaveData:
+                if concrete['value']['RawData']['value']['target_container_id'] \
+                        not in MappingCache.ItemContainerSaveData:
                     InvalidObjects['MapObject'].append(mapObject['MapObjectInstanceId']['value'])
-                    print(
-                        f"MapObject {mapObject['MapObjectInstanceId']['value']} -> ItemContainer {concrete['value']['RawData']['value']['target_container_id']} Invalid")
+                    print(f"MapObject {mapObject['MapObjectInstanceId']['value']} -> ItemContainer "
+                          f"{concrete['value']['RawData']['value']['target_container_id']} Invalid")
     return InvalidObjects
 
 
@@ -3666,37 +3678,33 @@ def FixBrokenDamageRefItemContainer(withInvalidEqualItemContainer=False, withInv
     BrokenObjects = FindDamageRefItemContainer()
     BatchDeleteMapObject(BrokenObjects['MapObject'])
     if withInvalidEqualItemContainer:
-        for characterId in BrokenObjects['Character']['EquipItemContainerId']:
-            DeleteCharacter(characterId)
+        BatchDeleteCharacter(BrokenObjects['Character']['EquipItemContainerId'])
     if withInvalidItemContainer:
-        for characterId in BrokenObjects['Character']['ItemContainerId']:
-            DeleteCharacter(characterId)
+        BatchDeleteCharacter(BrokenObjects['Character']['ItemContainerId'])
     for characterId in BrokenObjects['Character']['SaveContainers']:
-        DeleteCharacter(characterId)
+        DeletePlayer(characterId)
+    BatchDeleteCharacter(BrokenObjects['Character']['Owner'])
 
-    delete_player_uid = []
-    for player_uid in MappingCache.PlayerIdMapping:
-        err, player_gvas, player_sav_file, player_gvas_file = GetPlayerGvas(player_uid)
-        if err:
-            delete_player_uid.append(player_uid)
-            continue
-
-        for key in ['CommonContainerId', 'DropSlotContainerId', 'EssentialContainerId', 'FoodEquipContainerId',
-                    'PlayerEquipArmorContainerId', 'WeaponLoadOutContainerId']:
-            if player_gvas['inventoryInfo']['value'][key]['value']['ID']['value'] \
-                    not in MappingCache.ItemContainerSaveData:
-                print(f"{tcl(33)}Error: Item Container {tcl(36)}{key[:-2]}{tcl(0)} "
-                      f"{tcl(32)}{player_gvas['inventoryInfo']['value'][key]['value']['ID']['value']}{tcl(0)} Not exists")
-                delete_player_uid.append(player_uid)
-                break
-
-    for player_uid in delete_player_uid:
-        DeletePlayer(player_uid)
     MappingCache.LoadItemContainerMaps()
     MappingCache.LoadGroupSaveDataMap()
     MappingCache.LoadCharacterSaveParameterMap()
     MappingCache.LoadCharacterContainerMaps()
 
+def FixBrokenObject(dry_run=False):
+    delete_map_objects = []
+    for mapObjectId in MappingCache.MapObjectSaveData:
+        map_data = MappingCache.MapObjectSaveData[mapObjectId]
+        if map_data['Model']['value']['RawData']['value']['build_player_uid'] == PalObject.EmptyUUID:
+            continue
+        if map_data['Model']['value']['RawData']['value']['build_player_uid'] not in MappingCache.PlayerIdMapping:
+            delete_map_objects.append(map_data['MapObjectInstanceId']['value'])
+            print(f"{tcl(31)}Error: Map Object {tcl(93)}{map_data['MapObjectInstanceId']['value']}{tcl(31)} Owner "
+                  f"{tcl(93)}{map_data['Model']['value']['RawData']['value']['build_player_uid']}{tcl(31)} Not Exists"
+                  f"{tcl(0)}")
+    if len(delete_map_objects) > 0 and not dry_run:
+        BatchDeleteMapObject(delete_map_objects)
+        MappingCache.LoadMapObjectMaps()
+    return delete_map_objects
 
 def GetReferencedItemContainerIdsByPlayer(player_uid):
     err, player_gvas, player_sav_file, player_gvas_file = GetPlayerGvas(player_uid)
@@ -3913,7 +3921,7 @@ def DeletePlayer(player_uid, InstanceId=None, dry_run=False):
     delete_map_ids = []
     if InstanceId is None:
         for map_data in wsd['MapObjectSaveData']['value']['values']:
-            if str(map_data['Model']['value']['RawData']['value']['build_player_uid']) == str(player_uid):
+            if map_data['Model']['value']['RawData']['value']['build_player_uid'] == player_uid:
                 delete_map_ids.append(map_data['MapObjectInstanceId']['value'])
     if not dry_run:
         BatchDeleteMapObject(delete_map_ids)
@@ -4115,23 +4123,6 @@ def ShowPlayers(data_source=None):
                                    toUUID(playerUId)] else tcl(31),
                     playerMeta['InstanceId'],
                     playerMeta['Level'] if 'Level' in playerMeta else -1))
-
-
-def FixMissing(dry_run=False):
-    # Remove Unused in CharacterSaveParameterMap
-    removeItems = []
-    for item in wsd['CharacterSaveParameterMap']['value']:
-        if "00000000-0000-0000-0000-000000000000" == str(item['key']['PlayerUId']['value']):
-            player = item['value']['RawData']['value']['object']['SaveParameter']['value']
-            if 'OwnerPlayerUId' in player and str(player['OwnerPlayerUId']['value']) not in playerMapping:
-                print(
-                    f"{tcl(31)}Invalid item on CharacterSaveParameterMap{tcl(0)}  UUID: %s  Owner: %s  CharacterID: %s" % (
-                        str(item['key']['InstanceId']['value']), str(player['OwnerPlayerUId']['value']),
-                        player['CharacterID']['value']))
-                removeItems.append(item)
-    if not dry_run:
-        for item in removeItems:
-            wsd['CharacterSaveParameterMap']['value'].remove(item)
 
 
 def FixCaptureLog(dry_run=False):

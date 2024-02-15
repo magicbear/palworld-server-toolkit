@@ -26,6 +26,7 @@ Feature:
 - Delete Inactive Player on GUI
 - Batch repair all player on GUI
 - One key migrate to local feature
+- Delete damage object will be also delete invalid map object
 
 v0.6.9
 -------
