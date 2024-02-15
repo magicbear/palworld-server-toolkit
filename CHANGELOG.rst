@@ -14,7 +14,7 @@ Changelog
     Note that they these tags will not actually close the issue/PR until they
     are merged into the "default" branch.
 
-v0.7.0
+v0.7.1
 -------
 
 Major:
@@ -23,6 +23,7 @@ Major:
 - Remove unused Fix Capture Log
 - Merge fix missing to Delete Invalid Object
 - Auto backup as a tar file with structure
+- Merge PalEdit to 0.6.1
 
 Feature:
 

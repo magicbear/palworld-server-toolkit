@@ -43,7 +43,6 @@ try:
     from tkinter import messagebox
     from tkinter import filedialog
     from tkinter import simpledialog
-    from PIL import ImageTk, Image
 except ImportError:
     print("ERROR: Without Tkinter Environment, GUI not work")
     pass
@@ -2041,8 +2040,8 @@ class GUI():
     def build_gui(self):
         #
         self.gui = tk.Tk()
-        self.gui.iconphoto(True, ImageTk.PhotoImage(
-            Image.open(f'{module_dir}/resources/palworld-save-editor.png').resize((240, 240))))
+
+        self.gui.iconphoto(True, tk.PhotoImage(file=f'{module_dir}/resources/palworld-save-editor.png'))
 
         self.gui.parent = self
         try:
@@ -3716,6 +3715,7 @@ def FixBrokenDamageRefItemContainer(withInvalidEqualItemContainer=False, withInv
 
 
 def FixBrokenObject(dry_run=False):
+    load_skipped_decode(wsd, ['MapObjectSaveData'], False)
     delete_map_objects = []
     for mapObjectId in MappingCache.MapObjectSaveData:
         map_data = MappingCache.MapObjectSaveData[mapObjectId]
