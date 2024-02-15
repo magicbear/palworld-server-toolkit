@@ -14,6 +14,18 @@ Changelog
     Note that they these tags will not actually close the issue/PR until they
     are merged into the "default" branch.
 
+v0.7.0
+-------
+
+Major:
+
+- Performance upgrade for DeletePlayer
+
+Feature:
+
+- Delete Inactive Player on GUI
+- Batch repair all player on GUI
+
 v0.6.9
 -------
 

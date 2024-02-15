@@ -20,6 +20,8 @@ def toUUID(uuid_str):
 
 
 class PalObject:
+    EmptyUUID = toUUID("00000000-0000-0000-0000-000000000000")
+
     @staticmethod
     def toUUID(uuid_str):
         if isinstance(uuid_str, UUID):
@@ -55,6 +57,21 @@ class PalObject:
         if custom_type is not None:
             rc['custom_type'] = custom_type
         return rc
+
+    @staticmethod
+    def ArrayStructProperty(prop_name, struct_type, val=[]):
+        return {
+            'id': None,
+            'type': 'ArrayProperty',
+            "array_type": "StructProperty",
+            "value": {
+                'id': toUUID('00000000-0000-0000-0000-000000000000'),
+                'prop_name': prop_name,
+                'prop_type': 'StructProperty',
+                'type_name': struct_type,
+                'values': val
+            }
+        }
 
     @staticmethod
     def Guid(guid):
@@ -134,17 +151,14 @@ class PalObject:
 
     @staticmethod
     def PalCharacterSlotSaveData_Array(InstanceId, PlayerUId, characterInstanceId):
-        rawData = PalObject.ArrayProperty("ByteProperty", {
-            'instance_id': toUUID(characterInstanceId),
-            'permission_tribe_id': 0,
-            'player_uid': toUUID(PlayerUId)
-        })
-        rawData['custom_type'] = ".worldSaveData.CharacterContainerSaveData.Value.Slots.Slots.RawData"
-
         return {
             'IndividualId': PalObject.PalInstanceID(InstanceId, PlayerUId),
-            'PermissionTribeID': PalObject.EnumProperty('EPalTribeID', 'EPalTribeID::GrassMammoth'),
-            'RawData': rawData
+            'PermissionTribeID': PalObject.EnumProperty('EPalTribeID', 'EPalTribeID::None'),
+            'RawData': PalObject.ArrayProperty("ByteProperty", {
+                'instance_id': toUUID(characterInstanceId),
+                'permission_tribe_id': 0,
+                'player_uid': toUUID(PlayerUId)
+            }, ".worldSaveData.CharacterContainerSaveData.Value.Slots.Slots.RawData")
         }
 
     @staticmethod
@@ -236,6 +250,27 @@ class PalObject:
                                    'type_b': []}
                 }, ".worldSaveData.ItemContainerSaveData.Value.RawData"),
                 "Slots": PalObject.ArrayProperty("StructProperty", PalObject.PalItemSlotSaveData_Slots(EmptySlots))
+            }
+        }
+
+    @staticmethod
+    def CharacterContainerSaveData_Array(InstanceId, EmptySlots, assign_slot=[]):
+        emptySlotArray = []
+        if isinstance(EmptySlots, int):
+            for n in range(EmptySlots):
+                emptySlotArray.append(PalObject.PalCharacterSlotSaveData_Array(
+                    "00000000-0000-0000-0000-000000000000",
+                    "00000000-0000-0000-0000-000000000000",
+                    "00000000-0000-0000-0000-000000000000" if n >= len(assign_slot) else
+                    assign_slot[n]))
+        return {
+            'key': {
+                'ID': PalObject.Guid(InstanceId)
+            },
+            'value': {
+                "bReferenceSlot": PalObject.BoolProperty(False),
+                "Slots": PalObject.ArrayStructProperty('Slots', "PalCharacterSlotSaveData", emptySlotArray),
+                "RawData": PalObject.ArrayProperty('ByteProperty', {'values': ()}),
             }
         }
 
@@ -616,7 +651,7 @@ class MPMapPropertyProcess(multiprocessing.Process):
                     "value": value
                 })
         prop_val.close()
-        sys.exit(0)
+        os._exit(0)
 
 
 class MPArrayPropertyProcess(multiprocessing.Process):
@@ -661,10 +696,8 @@ class MPArrayPropertyProcess(multiprocessing.Process):
                     raise Exception(f"Unknown array type: {array_type} ({self.path})")
                 for _ in range(self.count):
                     prop_values.append(decode_func())
-        # os._exit(0)
         prop_values.close()
-        # os._exit(0)
-        sys.exit(0)
+        os._exit(0)
 
 
 class FProgressArchiveReader(FArchiveReader):
@@ -958,4 +991,9 @@ def AutoMakeStruct(struct):
 
 # print("\n\n".join(AutoMakeStruct(copy.deepcopy(MappingCache.CharacterSaveParameterMap[toUUID('1dd8d2a0-4dd7-4b05-f3c0-7ab60ebd95e4')]['value']['RawData']['value']['object']['SaveParameter'])).values()))
 
-# print("".join(AutoMakeStruct({"type":"StructProperty","struct_type":"A","value":s['value']['Slots']['value']['values'][0]}).values()))
+# struct = parse_item(MappingCache.CharacterContainerSaveData[toUUID("e795ef48-966c-4ce9-9394-f48553ef3f69")],"CharacterContainerSaveData")
+# print("".join(AutoMakeStruct({
+#     "type": "StructProperty",
+#     "struct_type": "CharacterContainerSaveData",
+#     "value": struct['key']
+# }).values()))

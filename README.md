@@ -237,7 +237,7 @@ options:
 # FAQ
 
 - 复制玩家为将角色及其所有队伍和终端中的伙伴、角色身上的物品以及进度转移，但不会转移任何地图对象、原世界中箱子里的物品以及基地中工作的伙伴。（如果你想将它们一起转移，请将它们移动到身上/终端中）
-- 对于合作模式的存档，存档文件通常位于 `C:\Users¥<用户名>\AppData\Local\Pal\Saved\SaveGames<SteamID><世界文件夹>`
+- 对于合作模式的存档，存档文件通常位于 `%LocalAppData%\Pal\Saved\SaveGames<SteamID><世界文件夹>`
 - 对于Xbox Game Pass玩家的存档，存档文件通常位于 `C:\Users\<用户名>\AppData\Packages\ PocketpairInc.Palworld_ad4psfrxyesvt\SystemAppData\wgs`
 - 对于服务器存档，请通过 Steam 进入服务器的文件位置。
 - 你需要至少 3 个文件来完成转移：源玩家角色存档文件（在 Players/中），源世界的 level.sav 文件，以及目标世界的 Level.sav 文件
