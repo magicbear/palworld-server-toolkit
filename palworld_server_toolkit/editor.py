@@ -14,6 +14,7 @@ import importlib.metadata
 import traceback
 from functools import reduce
 import multiprocessing
+import tarfile
 
 module_dir = os.path.dirname(os.path.realpath(__file__))
 if not os.path.exists("%s/resources/gui.json" % module_dir) and getattr(sys, 'frozen', False):
@@ -1397,7 +1398,7 @@ try:
 
         def savedata(self):
             self.save(self.player, self.gui_attribute)
-            backup_file(self.player_sav_file)
+            backup_file(self.player_sav_file, True)
             with open(self.player_sav_file, "wb") as f:
                 if "Pal.PalWorldSaveGame" in self.player_gvas_file.header.save_game_class_name or \
                         "Pal.PalLocalWorldSaveGame" in self.player_gvas_file.header.save_game_class_name:
@@ -2657,11 +2658,11 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
     MappingCache.LoadGuildInstanceMapping()
     if not dry_run:
         if id(old_wsd) != id(wsd) and player_uid not in MappingCache.PlayerIdMapping:
-            backup_file(player_sav_file)
+            backup_file(player_sav_file, True)
             delete_files.append(player_sav_file)
         if new_player_sav_file in delete_files:
             delete_files.remove(new_player_sav_file)
-        backup_file(new_player_sav_file)
+        backup_file(new_player_sav_file, True)
         with open(new_player_sav_file, "wb") as f:
             print("Saving new player sav %s" % (new_player_sav_file))
             if "Pal.PalWorldSaveGame" in player_gvas_file.header.save_game_class_name or "Pal.PalLocalWorldSaveGame" in player_gvas_file.header.save_game_class_name:
@@ -2984,7 +2985,7 @@ def MigratePlayer(player_uid, new_player_uid):
                      InstanceId=MappingCache.PlayerIdMapping[new_player_uid]['key']['InstanceId']['value'])
         MappingCache.LoadCharacterSaveParameterMap()
 
-    backup_file(new_player_sav_file)
+    backup_file(new_player_sav_file, True)
     with open(new_player_sav_file, "wb") as f:
         print("Saving new player sav %s" % new_player_sav_file)
         if "Pal.PalWorldSaveGame" in player_gvas_file.header.save_game_class_name or "Pal.PalLocalWorldSaveGame" in player_gvas_file.header.save_game_class_name:
@@ -3061,7 +3062,7 @@ def MigratePlayer(player_uid, new_player_uid):
 
     if new_player_sav_file in delete_files:
         delete_files.remove(new_player_sav_file)
-    backup_file(player_sav_file)
+    backup_file(player_sav_file, True)
     delete_files.append(player_sav_file)
     MappingCache.LoadCharacterSaveParameterMap()
     RepairPlayer(new_player_uid)
@@ -3951,7 +3952,7 @@ def DeletePlayer(player_uid, InstanceId=None, dry_run=False):
     if not dry_run:
         BatchDeleteMapObject(delete_map_ids)
     if InstanceId is None:
-        backup_file(player_sav_file)
+        backup_file(player_sav_file, True)
         delete_files.append(player_sav_file)
         print("Finish to remove player from Save, please delete this file manually: %s" % player_sav_file)
 
@@ -4756,19 +4757,20 @@ def PrettyPrint(data, level=0):
                 print("%s</%s>" % ("  " * level, key))
 
 
-def backup_file(file):
+def backup_file(file, isPlayerSave=False):
     if not os.path.exists(file):
         return
     if not os.path.exists(os.path.dirname(backup_path)):
         os.mkdir(os.path.dirname(backup_path))
-    if not os.path.exists(backup_path):
-        os.mkdir(backup_path)
+    backup_tar = tarfile.open(f"{backup_path}.tar", mode='a')
     print(
-        f"Backup file {tcl(32)}{file}{tcl(0)} to {tcl(32)}{backup_path}{tcl(0)}...",
+        f"Backup file {tcl(32)}{file}{tcl(0)} to {tcl(32)}backup/{os.path.basename(backup_path)}.tar{tcl(0)}...",
         flush=True, end="")
     with open(file, "rb") as f:
-        with open(f"{backup_path}/{os.path.basename(file)}", "wb") as wf:
-            wf.write(f.read())
+        info = tarfile.TarInfo(("Players/" if isPlayerSave else "") + os.path.basename(file))
+        info.size = os.path.getsize(file)
+        backup_tar.addfile(info, f)
+        backup_tar.close()
     print("Done")
 
 
@@ -4782,7 +4784,7 @@ def Save(exit_now=True):
     print("Done")
 
     print("Saving Sav file...", end="", flush=True)
-    backup_file(output_path)
+    backup_file(output_path, False)
     with open(output_path, "wb") as f:
         f.write(sav_file)
     print("Done")

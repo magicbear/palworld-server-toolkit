@@ -22,6 +22,7 @@ Major:
 - Performance upgrade for DeletePlayer
 - Remove unused Fix Capture Log
 - Merge fix missing to Delete Invalid Object
+- Auto backup as a tar file with structure
 
 Feature:
 
