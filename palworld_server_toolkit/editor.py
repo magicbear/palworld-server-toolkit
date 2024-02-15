@@ -2856,6 +2856,8 @@ def RepairPlayer(player_uid):
                 loaded_instance.add(slot['RawData']['value']['instance_id'])
 
     standbySlots = []
+    unloadedSlots = []
+    rebuildPalStorageContainerId = False
     for instanceId in MappingCache.CharacterSaveParameterMap:
         item = MappingCache.CharacterSaveParameterMap[instanceId]
         player = item['value']['RawData']['value']['object']['SaveParameter']['value']
@@ -2864,8 +2866,25 @@ def RepairPlayer(player_uid):
                     player_gvas['OtomoCharacterContainerId']['value']['ID']['value']:
                 if item['key']['InstanceId']['value'] not in loaded_instance:
                     loaded_instance.add(item['key']['InstanceId']['value'])
-            elif item['key']['InstanceId']['value'] not in loaded_instance:
+            elif 'SlotID' in player and player['SlotID']['value']['ContainerId']['value']['ID']['value'] == \
+                    player_gvas['PalStorageContainerId']['value']['ID']['value']:
                 standbySlots.append(item['key']['InstanceId']['value'])
+            elif 'SlotID' in player:
+                player['SlotID']['value']['ContainerId']['value']['ID']['value'] = \
+                    player_gvas['PalStorageContainerId']['value']['ID']['value']
+                standbySlots.append(item['key']['InstanceId']['value'])
+                unloadedSlots.append(item['key']['InstanceId']['value'])
+                rebuildPalStorageContainerId = True
+            # elif item['key']['InstanceId']['value'] not in loaded_instance and \
+            #     item['key']['InstanceId']['value'] not in standbySlots:
+
+    if rebuildPalStorageContainerId and \
+            player_gvas['PalStorageContainerId']['value']['ID']['value'] in MappingCache.CharacterContainerSaveData:
+        print(f"{tcl(33)}Rebuild Player {tcl(93)}{player_uid}{tcl(33)} Character Container "
+              f"{player_gvas['PalStorageContainerId']['value']['ID']['value']}f{0}")
+        wsd['CharacterContainerSaveData']['value'].remove(
+            MappingCache.CharacterContainerSaveData[player_gvas['PalStorageContainerId']['value']['ID']['value']])
+        del MappingCache.CharacterContainerSaveData[player_gvas['PalStorageContainerId']['value']['ID']['value']]
 
     for idx_key in ['OtomoCharacterContainerId', 'PalStorageContainerId']:
         container_id = player_gvas[idx_key]['value']['ID']['value']
@@ -2877,6 +2896,10 @@ def RepairPlayer(player_uid):
             idx_key == 'OtomoCharacterContainerId' else standbySlots)
             wsd['CharacterContainerSaveData']['value'].append(n)
             anyFix = True
+
+    if len(unloadedSlots) > 0:
+        print(f"{tcl(33)}Warning: Player {tcl(93)}{player_uid}{tcl(33)} Have character {tcl(32)}{len(unloadedSlots)}"
+              f"{tcl(33)} not in containers, loaded: {len(loaded_instance)} / standby: {len(standbySlots)}{tcl(0)}")
 
     player = MappingCache.PlayerIdMapping[player_uid]
     group_id = player['value']['RawData']['value']['group_id']
@@ -2905,6 +2928,7 @@ def RepairPlayer(player_uid):
 
     if anyFix:
         MappingCache.LoadCharacterSaveParameterMap()
+        MappingCache.LoadCharacterContainerMaps()
         MappingCache.LoadItemContainerMaps()
         MappingCache.LoadGuildInstanceMapping()
 
@@ -2918,6 +2942,13 @@ def MigratePlayer(player_uid, new_player_uid):
     if err:
         print(f"{tcl(33)}Warning: Player Sav file Not exists: {player_sav_file}{tcl(0)}")
         return
+
+
+    err, new_player_gvas, new_player_sav_file, new_player_gvas_file = GetPlayerGvas(new_player_uid)
+    # if not err:
+    #     print(f"{tcl(33)}Warning: Player Sav file Not exists: {player_sav_file}{tcl(0)}")
+    #     return
+
     new_player_sav_file = os.path.dirname(
         os.path.abspath(args.filename)) + "/Players/" + new_player_uid.upper().replace("-", "") + ".sav"
     new_player_uid = toUUID(new_player_uid)
@@ -2978,11 +3009,12 @@ def MigratePlayer(player_uid, new_player_uid):
                 'value'] not in MappingCache.CharacterContainerSaveData:
                 print(f"{tcl(31)}Error: Invalid Character Container ID "
                       f"{player['SlotID']['value']['ContainerId']['value']['ID']['value']}{tcl(0)}")
+
     for group_data in wsd['GroupSaveDataMap']['value']:
         if str(group_data['value']['GroupType']['value']['value']) == "EPalGroupType::Guild":
             item = group_data['value']['RawData']['value']
             for player in item['players']:
-                if str(player['player_uid']) == str(player_uid):
+                if player['player_uid'] == player_uid:
                     player['player_uid'] = player_gvas['PlayerUId']['value']
                     print(
                         f"{tcl(32)}Migrate User from Guild{tcl(0)}  {tcl(93)}%s{tcl(0)}   [{tcl(92)}%s{tcl(0)}] Last Online: %d" % (
@@ -2990,7 +3022,7 @@ def MigratePlayer(player_uid, new_player_uid):
                             player['player_info']['last_online_real_time']))
                     remove_handle_ids = []
                     for ind_char in item['individual_character_handle_ids']:
-                        if str(ind_char['guid']) == str(player_uid):
+                        if ind_char['guid'] == player_uid:
                             remove_handle_ids.append(ind_char)
                             print(f"{tcl(31)}Delete Guild Character InstanceID %s {tcl(0)}" % str(
                                 ind_char['instance_id']))
@@ -3003,7 +3035,7 @@ def MigratePlayer(player_uid, new_player_uid):
                     print(f"{tcl(32)}Append Guild Character InstanceID %s {tcl(0)}" % (
                         str(player_gvas['IndividualId']['value']['InstanceId']['value'])))
                     break
-            if str(item['admin_player_uid']) == str(player_uid):
+            if item['admin_player_uid'] == player_uid:
                 item['admin_player_uid'] = player_gvas['PlayerUId']['value']
                 print(f"{tcl(32)}Migrate Guild Admin {tcl(0)}")
     for map_data in wsd['MapObjectSaveData']['value']['values']:
@@ -3029,8 +3061,8 @@ def MigratePlayer(player_uid, new_player_uid):
         delete_files.remove(new_player_sav_file)
     backup_file(player_sav_file)
     delete_files.append(player_sav_file)
-    RepairPlayer(new_player_uid)
     MappingCache.LoadCharacterSaveParameterMap()
+    RepairPlayer(new_player_uid)
     print("Finish to migrate player from Save, please delete this file manually: %s" % player_sav_file)
 
 
@@ -3858,7 +3890,7 @@ def DeletePlayer(player_uid, InstanceId=None, dry_run=False):
         group_data = MappingCache.GuildSaveDataMap[group_id]
         item = group_data['value']['RawData']['value']
         for player in item['players']:
-            if player['player_uid'] == player_uid and InstanceId is None:
+            if player['player_uid'] == player_uid:
                 print(
                     f"{tcl(31)}  Delete User {tcl(93)} %s {tcl(0)} from Guild{tcl(0)} {tcl(93)} %s {tcl(0)}   [{tcl(92)}%s{tcl(0)}] Last Online: %d" % (
                         player['player_info']['player_name'],
@@ -3869,18 +3901,20 @@ def DeletePlayer(player_uid, InstanceId=None, dry_run=False):
                     if len(item['players']) == 0:
                         remove_guilds.append(item['group_id'])
                 break
-    print(f"{tcl(32)}Delete guilds{tcl(0)}")
-    for guild in remove_guilds:
-        DeleteGuild(guild)
+    if InstanceId is None and len(remove_guilds) > 0:
+        print(f"{tcl(32)}Delete guilds{tcl(0)}")
+        for guild in remove_guilds:
+            DeleteGuild(guild)
 
     MappingCache.LoadGroupSaveDataMap()
     MappingCache.LoadCharacterSaveParameterMap()
     MappingCache.LoadCharacterContainerMaps()
 
     delete_map_ids = []
-    for map_data in wsd['MapObjectSaveData']['value']['values']:
-        if str(map_data['Model']['value']['RawData']['value']['build_player_uid']) == str(player_uid):
-            delete_map_ids.append(map_data['MapObjectInstanceId']['value'])
+    if InstanceId is None:
+        for map_data in wsd['MapObjectSaveData']['value']['values']:
+            if str(map_data['Model']['value']['RawData']['value']['build_player_uid']) == str(player_uid):
+                delete_map_ids.append(map_data['MapObjectInstanceId']['value'])
     if not dry_run:
         BatchDeleteMapObject(delete_map_ids)
     if InstanceId is None:
