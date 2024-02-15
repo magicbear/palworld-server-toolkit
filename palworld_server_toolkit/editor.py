@@ -329,7 +329,8 @@ class ProgressGvasFile(GvasFile):
                 type_hints=type_hints,
                 custom_properties=custom_properties,
                 allow_nan=allow_nan,
-                reduce_memory=getattr(args, "reduce_memory", False)
+                reduce_memory=getattr(args, "reduce_memory", False),
+                check_err=getattr(args, "check_file", False),
         ) as reader:
             skip_loading_progress(reader, len(data)).start()
             gvas_file.header = GvasHeader.read(reader)
@@ -559,6 +560,12 @@ def main():
         action="store_true",
         help="Reduce Memory",
     )
+    parser.add_argument(
+        "--check-file",
+        "-c",
+        action="store_true",
+        help="Check error on the file",
+    )
 
     if len(sys.argv) == 1:
         bk_f = filedialog.askopenfilename(filetypes=[("Level.sav file", "*.sav")], title="Open Level.sav")
@@ -674,10 +681,12 @@ def main():
         if isinstance(wsd[key]['value'], MPMapProperty):
             wsd[key]['value'].close()
             wsd[key]['value'].release()
-        elif isinstance(wsd[key]['value'], dict) and 'values' in wsd[key]['value'] and isinstance(wsd[key]['value']['values'], MPArrayProperty):
+        elif isinstance(wsd[key]['value'], dict) and 'values' in wsd[key]['value'] and isinstance(
+                wsd[key]['value']['values'], MPArrayProperty):
             wsd[key]['value']['values'].close()
             wsd[key]['value']['values'].release()
     os._exit(0)
+
 
 try:
     class AutocompleteCombobox(ttk.Combobox):
@@ -1972,7 +1981,9 @@ class GUI():
         days = simpledialog.askinteger("Delete Old Player", self.lang_data['prompt_howlong_day'])
         if days is not None:
             players = FindPlayersFromInactiveGuild(days)
-            if 'yes' == messagebox.showwarning("Cleanup", self.lang_data['msg_confirm_delete'].replace("{COUNT}", "%d" % len(players)),
+            if 'yes' == messagebox.showwarning("Cleanup", self.lang_data['msg_confirm_delete'].replace("{COUNT}",
+                                                                                                       "%d" % len(
+                                                                                                           players)),
                                                type=messagebox.YESNO):
                 for idx, player_id in enumerate(players):
                     self.progressbar['value'] = 100 * idx / len(players)
@@ -2127,8 +2138,9 @@ class GUI():
 
         g_multi_button_frame = tk.Frame()
 
-        self.btn_migrate_local = ttk.Button(master=g_multi_button_frame, text="Migrate To Local", style="custom.TButton",
-                                      command=self.migrate_to_local)
+        self.btn_migrate_local = ttk.Button(master=g_multi_button_frame, text="Migrate To Local",
+                                            style="custom.TButton",
+                                            command=self.migrate_to_local)
         self.i18n['migrate_to_local'] = self.btn_migrate_local
         self.btn_migrate_local.pack(side="left")
 
@@ -2173,7 +2185,7 @@ class GUI():
         g_edit_save.pack(side="left")
 
         g_repair = ttk.Button(master=g_button_frame, text="Repair", style="custom.TButton",
-                                 command=self.repair_player)
+                              command=self.repair_player)
         self.i18n['repair_user'] = g_repair
         g_repair.pack(side="left")
 
@@ -2204,13 +2216,14 @@ class GUI():
                                          command=self.cleanup_character)
         self.i18n['cleanup_character'] = g_cleanup_character
         g_cleanup_character.pack(side=tk.LEFT)
-        g_del_damange_container_obj = ttk.Button(master=g_wholefile_btngrp, text="Del Damage Object", style="custom.TButton",
+        g_del_damange_container_obj = ttk.Button(master=g_wholefile_btngrp, text="Del Damage Object",
+                                                 style="custom.TButton",
                                                  command=self.delete_damage_container)
         self.i18n['del_damage_obj'] = g_del_damange_container_obj
         g_del_damange_container_obj.pack(side=tk.LEFT)
 
         g_del_old_player = ttk.Button(master=g_wholefile_btngrp, text="Del Old Player", style="custom.TButton",
-                                                 command=self.delete_old_player)
+                                      command=self.delete_old_player)
         self.i18n['del_old_player'] = g_del_old_player
         g_del_old_player.pack(side=tk.LEFT)
 
@@ -2439,22 +2452,22 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
             if IsFound:
                 print(
                     f"{tcl(32)}Copy Character Container{tcl(0)} %s UUID: %s -> %s" % (idx_key,
-                                                                                                          str(container[
-                                                                                                                  'key'][
-                                                                                                                  'ID'][
-                                                                                                                  'value']),
-                                                                                                          str(
-                                                                                                              new_item[
-                                                                                                                  'key'][
-                                                                                                                  'ID'][
-                                                                                                                  'value'])))
+                                                                                      str(container[
+                                                                                              'key'][
+                                                                                              'ID'][
+                                                                                              'value']),
+                                                                                      str(
+                                                                                          new_item[
+                                                                                              'key'][
+                                                                                              'ID'][
+                                                                                              'value'])))
             else:
                 print(
                     f"{tcl(32)}Copy Character Container{tcl(0)} %s UUID: %s" % (idx_key,
-                                                                                                    str(container[
-                                                                                                            'key'][
-                                                                                                            'ID'][
-                                                                                                            'value'])))
+                                                                                str(container[
+                                                                                        'key'][
+                                                                                        'ID'][
+                                                                                        'value'])))
 
     cloneDynamicItemIds = []
     for idx_key in ['CommonContainerId', 'DropSlotContainerId', 'EssentialContainerId', 'FoodEquipContainerId',
@@ -2466,20 +2479,13 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
             if container_id in MappingCache.ItemContainerSaveData:
                 player_gvas['inventoryInfo']['value'][idx_key]['value']['ID']['value'] = toUUID(uuid.uuid4())
                 new_item['key']['ID']['value'] = player_gvas['inventoryInfo']['value'][idx_key]['value']['ID']['value']
-                print(f"{tcl(32)}mCreate Item Container{tcl(0)} %s UUID: %s -> %s" % (idx_key,
-                                                                                                          str(container[
-                                                                                                                  'key'][
-                                                                                                                  'ID'][
-                                                                                                                  'value']),
-                                                                                                          str(new_item[
-                                                                                                                  'key'][
-                                                                                                                  'ID'][
-                                                                                                                  'value'])))
+                print(f"{tcl(32)}mCreate Item Container{tcl(0)} %s UUID: %s -> %s" % (
+                    idx_key, str(container['key']['ID']['value']), str(new_item['key']['ID']['value'])))
             else:
                 print(f"{tcl(32)}Copy Item Container{tcl(0)} %s UUID: %s" % (idx_key,
-                                                                                                 str(container['key'][
-                                                                                                         'ID'][
-                                                                                                         'value'])))
+                                                                             str(container['key'][
+                                                                                     'ID'][
+                                                                                     'value'])))
             containerSlots = container['value']['Slots']['value']['values']
             for slotItem in containerSlots:
                 dynamicItemId = slotItem['ItemId']['value']['DynamicId']['value']['LocalIdInCreatedWorld']['value']
@@ -2774,13 +2780,50 @@ def FindPlayersFromInactiveGuild(days):
 
 
 def RepairPlayer(player_uid):
-    load_skipped_decode(wsd, ['DynamicItemSaveData', 'ItemContainerSaveData', 'CharacterContainerSaveData'], False)
     err, player_gvas, player_sav_file, player_gvas_file = GetPlayerGvas(player_uid)
     if err:
-        print(f"{tcl(33)}Warning: Player Sav file Not exists: {player_sav_file}{tcl(0)}")
+        print(f"{tcl(31)}Error: Player Sav file Not exists: {player_sav_file}{tcl(0)}")
         return
 
     player_uid = toUUID(player_uid)
+    replace_anyway = False
+
+    if player_uid != player_gvas['IndividualId']['value']['PlayerUId']['value']:
+        print(f"{tcl(31)}Error: Player {tcl(93)}{player_uid}{tcl(31)} not matched with save file "
+              f"{tcl(93)}{player_gvas['IndividualId']['value']['PlayerUId']['value']}{tcl(31)}, failed to repair{tcl(0)}")
+        return
+
+    if player_uid not in MappingCache.PlayerIdMapping:
+        print(f"{tcl(31)}Error: Player {tcl(93)}{player_uid}{tcl(31)} not exists, failed to repair{tcl(0)}")
+        return
+
+    player_instance_id = MappingCache.PlayerIdMapping[player_uid]['key']['InstanceId']['value']
+    if not MappingCache.PlayerIdMapping[player_uid] is MappingCache.CharacterSaveParameterMap[player_instance_id]:
+        print(f"{tcl(31)}Error: Player {tcl(93)}{player_uid}{tcl(31)} duplicated, please delete first{tcl(0)}")
+        return
+
+    if MappingCache.PlayerIdMapping[player_uid]['key']['InstanceId']['value'] != \
+            player_gvas['IndividualId']['value']['InstanceId']['value']:
+        print(f"{tcl(33)}Error: Instance ID not matched {tcl(93)}{player_instance_id}{tcl(33)} with save file "
+              f"{tcl(93)}{player_gvas['IndividualId']['value']['InstanceId']['value']}{tcl(0)}")
+        if player_gvas['IndividualId']['value']['InstanceId']['value'] in MappingCache.CharacterSaveParameterMap:
+            sav_instance_id = player_gvas['IndividualId']['value']['InstanceId']['value']
+            sav_instance = MappingCache.CharacterSaveParameterMap[sav_instance_id]
+            if sav_instance['key']['PlayerUId']['value'] != player_uid:
+                print(f"{tcl(31)}Error: Save file for {tcl(93)}{player_uid}{tcl(31)} "
+                      f"Instance ID {tcl(93)}{player_instance_id}{tcl(31)} is ref to player "
+                      f"{tcl(93)}{sav_instance['key']['PlayerUId']['value']}{tcl(31)}, fail to repair {tcl(0)}")
+                return
+            else:
+                print(f"{tcl(31)}Duplicate Instance, delete the instance "
+                      f"{tcl(93)}{MappingCache.PlayerIdMapping[player_uid]['key']['InstanceId']['value']}{tcl(0)}")
+                DeleteCharacter(MappingCache.PlayerIdMapping[player_uid]['key']['InstanceId']['value'])
+                MappingCache.LoadCharacterSaveParameterMap()
+        MappingCache.PlayerIdMapping[player_uid]['key']['InstanceId']['value'] = \
+            player_gvas['IndividualId']['value']['InstanceId']['value']
+        replace_anyway = True
+
+    load_skipped_decode(wsd, ['DynamicItemSaveData', 'ItemContainerSaveData', 'CharacterContainerSaveData'], False)
     emptySlots = {
         "CommonContainerId": 42,
         "DropSlotContainerId": 4,
@@ -2796,10 +2839,11 @@ def RepairPlayer(player_uid):
     for key in ['CommonContainerId', 'DropSlotContainerId', 'EssentialContainerId', 'FoodEquipContainerId',
                 'PlayerEquipArmorContainerId', 'WeaponLoadOutContainerId']:
         if player_gvas['inventoryInfo']['value'][key]['value']['ID']['value'] not in MappingCache.ItemContainerSaveData:
-            print(f"{tcl(33)}Error: Item Container {tcl(36)}{key[:-11]}{tcl(0)} "
+            print(f"{tcl(33)}Error: Player {tcl(93)}{player_uid}{tcl(33)} Item Container {tcl(36)}{key[:-11]}{tcl(0)} "
                   f"{tcl(32)}{player_gvas['inventoryInfo']['value'][key]['value']['ID']['value']}{tcl(0)} Not exists")
-            n = PalObject.ItemContainerSaveData_Array(player_gvas['inventoryInfo']['value'][key]['value']['ID']['value'],
-                                                  emptySlots[key])
+            n = PalObject.ItemContainerSaveData_Array(
+                player_gvas['inventoryInfo']['value'][key]['value']['ID']['value'],
+                emptySlots[key])
             wsd['ItemContainerSaveData']['value'].append(n)
             anyFix = True
 
@@ -2808,7 +2852,8 @@ def RepairPlayer(player_uid):
         container_id = player_gvas['OtomoCharacterContainerId']['value']['ID']['value']
         container = parse_item(MappingCache.CharacterContainerSaveData[container_id], "CharacterContainerSaveData")
         for slot in container['value']['Slots']['value']['values']:
-            loaded_instance.add(slot['RawData']['value']['instance_id'])
+            if slot['RawData']['value']['instance_id'] != PalObject.EmptyUUID:
+                loaded_instance.add(slot['RawData']['value']['instance_id'])
 
     standbySlots = []
     for instanceId in MappingCache.CharacterSaveParameterMap:
@@ -2825,20 +2870,48 @@ def RepairPlayer(player_uid):
     for idx_key in ['OtomoCharacterContainerId', 'PalStorageContainerId']:
         container_id = player_gvas[idx_key]['value']['ID']['value']
         if container_id not in MappingCache.CharacterContainerSaveData:
-            print(f"{tcl(33)}Error: Character Container {tcl(36)}{idx_key[:-11]}{tcl(0)} "
+            print(f"{tcl(33)}Error: Player {tcl(93)}{player_uid}{tcl(33)} Character Container {tcl(36)}{idx_key[:-11]}{tcl(0)} "
                   f"{tcl(32)}{container_id}{tcl(0)} Not exists")
 
             n = PalObject.CharacterContainerSaveData_Array(container_id, emptySlots[key], list(loaded_instance) if
-                                                           idx_key == 'OtomoCharacterContainerId' else standbySlots)
+            idx_key == 'OtomoCharacterContainerId' else standbySlots)
             wsd['CharacterContainerSaveData']['value'].append(n)
             anyFix = True
 
+    player = MappingCache.PlayerIdMapping[player_uid]
+    group_id = player['value']['RawData']['value']['group_id']
+    if group_id in MappingCache.GroupSaveDataMap:
+        group = MappingCache.GroupSaveDataMap[group_id]['value']['RawData']['value']
+        remove_handle_ids = []
+        new_handle_ids = [
+            {'guid': player_uid, 'instance_id': player_gvas['IndividualId']['value']['InstanceId']['value']}
+        ]
+        for instance_id in loaded_instance:
+            new_handle_ids.append({'guid': PalObject.EmptyUUID, 'instance_id': instance_id})
+        for instance_id in standbySlots:
+            new_handle_ids.append({'guid': PalObject.EmptyUUID, 'instance_id': instance_id})
+        start_items = len(new_handle_ids)
+        for ind_char in group['individual_character_handle_ids']:
+            if ind_char['guid'] == player_uid or ind_char['instance_id'] in loaded_instance or \
+                    ind_char['instance_id'] in standbySlots:
+                remove_handle_ids.append(ind_char)
+            else:
+                new_handle_ids.append(ind_char)
+        if start_items != len(remove_handle_ids) or replace_anyway:
+            anyFix = True
+            print(f"{tcl(33)}Error: Guild instance {tcl(36)}{group_id}{tcl(0)} invalid, local items: {start_items}, "
+                  f"replace with {len(group['individual_character_handle_ids'])} -> {len(new_handle_ids)}")
+            group['individual_character_handle_ids'] = new_handle_ids
+
     if anyFix:
+        MappingCache.LoadCharacterSaveParameterMap()
         MappingCache.LoadItemContainerMaps()
+        MappingCache.LoadGuildInstanceMapping()
 
 
 def MigratePlayer(player_uid, new_player_uid):
-    load_skipped_decode(wsd, ['MapObjectSaveData', 'GroupSaveDataMap', 'MapObjectSpawnerInStageSaveData', 'CharacterContainerSaveData',
+    load_skipped_decode(wsd, ['MapObjectSaveData', 'GroupSaveDataMap', 'MapObjectSpawnerInStageSaveData',
+                              'CharacterContainerSaveData',
                               'ItemContainerSaveData'], False)
 
     err, player_gvas, player_sav_file, player_gvas_file = GetPlayerGvas(player_uid)
@@ -2892,7 +2965,8 @@ def MigratePlayer(player_uid, new_player_uid):
                     print(f"{tcl(31)}Error: Invalid Equal Item Container ID "
                           f"{player['EquipItemContainerId']['value']['ID']['value']}{tcl(0)}")
                     wsd['ItemContainerSaveData']['value'].append(
-                        PalObject.ItemContainerSaveData_Array(player['EquipItemContainerId']['value']['ID']['value'], 2))
+                        PalObject.ItemContainerSaveData_Array(player['EquipItemContainerId']['value']['ID']['value'],
+                                                              2))
         elif 'OldOwnerPlayerUIds' in player and player_uid in player['OldOwnerPlayerUIds']['value']['values']:
             player['OldOwnerPlayerUIds']['value']['values'].remove(player_uid)
             print(
@@ -2900,9 +2974,10 @@ def MigratePlayer(player_uid, new_player_uid):
                     str(item['key']['InstanceId']['value']), str(player['OwnerPlayerUId']['value']),
                     player['CharacterID']['value']))
         if 'SlotID' in player:
-            if player['SlotID']['value']['ContainerId']['value']['ID']['value'] not in MappingCache.CharacterContainerSaveData:
+            if player['SlotID']['value']['ContainerId']['value']['ID'][
+                'value'] not in MappingCache.CharacterContainerSaveData:
                 print(f"{tcl(31)}Error: Invalid Character Container ID "
-                f"{player['SlotID']['value']['ContainerId']['value']['ID']['value']}{tcl(0)}")
+                      f"{player['SlotID']['value']['ContainerId']['value']['ID']['value']}{tcl(0)}")
     for group_data in wsd['GroupSaveDataMap']['value']:
         if str(group_data['value']['GroupType']['value']['value']) == "EPalGroupType::Guild":
             item = group_data['value']['RawData']['value']
@@ -2945,11 +3020,11 @@ def MigratePlayer(player_uid, new_player_uid):
                     if player_info['player_uid'] == player_uid:
                         player_info['player_uid'] = new_player_uid
                         print(f"{tcl(32)}Migrate ConcreteModel PasswordLock{tcl(0)}  {tcl(93)}%s{tcl(0)}" % (
-                    str(map_data['MapObjectInstanceId']['value'])))
+                            str(map_data['MapObjectInstanceId']['value'])))
         if map_data['Model']['value']['RawData']['value']['build_player_uid'] == player_uid:
             map_data['Model']['value']['RawData']['value']['build_player_uid'] = player_gvas['PlayerUId']['value']
             print(f"{tcl(32)}Migrate Building{tcl(0)}  {tcl(93)}%s{tcl(0)}" % (
-                    str(map_data['MapObjectInstanceId']['value'])))
+                str(map_data['MapObjectInstanceId']['value'])))
     if new_player_sav_file in delete_files:
         delete_files.remove(new_player_sav_file)
     backup_file(player_sav_file)
@@ -3316,14 +3391,16 @@ def BatchDeleteCharacter(characterIds):
                 for idx, ind in enumerate(group['value']['RawData']['value']['individual_character_handle_ids']):
                     if ind['instance_id'] not in characterIds:
                         new_individual_character_handle_ids.append(ind)
-                group['value']['RawData']['value']['individual_character_handle_ids'] = new_individual_character_handle_ids
+                group['value']['RawData']['value'][
+                    'individual_character_handle_ids'] = new_individual_character_handle_ids
             except KeyError:
                 pass
 
         if 'SlotID' in characterData:
             try:
                 characterContainer = parse_item(MappingCache.CharacterContainerSaveData[
-                                                characterData['SlotID']['value']['ContainerId']['value']['ID']['value']],
+                                                    characterData['SlotID']['value']['ContainerId']['value']['ID'][
+                                                        'value']],
                                                 "CharacterContainerSaveData")
                 for slotItem in characterContainer['value']['Slots']['value']['values']:
                     if slotItem['RawData']['value']['instance_id'] in characterIds:
@@ -3708,8 +3785,6 @@ def DeleteItemContainer(itemContainerId, isBatch=False):
         MappingCache.LoadItemContainerMaps()
 
 
-# DeleteMapObject("6137354f-422d-73af-5791-2faf850bdaed")
-
 def DeletePlayer(player_uid, InstanceId=None, dry_run=False):
     load_skipped_decode(wsd, ['ItemContainerSaveData', 'CharacterContainerSaveData', 'MapObjectSaveData',
                               'MapObjectSpawnerInStageSaveData', 'DynamicItemSaveData'], False)
@@ -3784,7 +3859,8 @@ def DeletePlayer(player_uid, InstanceId=None, dry_run=False):
         item = group_data['value']['RawData']['value']
         for player in item['players']:
             if player['player_uid'] == player_uid and InstanceId is None:
-                print(f"{tcl(31)}  Delete User {tcl(93)} %s {tcl(0)} from Guild{tcl(0)} {tcl(93)} %s {tcl(0)}   [{tcl(92)}%s{tcl(0)}] Last Online: %d" % (
+                print(
+                    f"{tcl(31)}  Delete User {tcl(93)} %s {tcl(0)} from Guild{tcl(0)} {tcl(93)} %s {tcl(0)}   [{tcl(92)}%s{tcl(0)}] Last Online: %d" % (
                         player['player_info']['player_name'],
                         item['guild_name'], str(player['player_uid']),
                         player['player_info']['last_online_real_time']))
@@ -3983,8 +4059,8 @@ def ShowPlayers(data_source=None):
                 f"PlayerUId {tcl(32)} %s {tcl(0)} [InstanceID %s %s {tcl(0)}] -> Level %2d  %s" % (
                     playerUId,
                     tcl(33) if toUUID(playerUId) in srcGuildMapping.GuildInstanceMapping and
-                                         playerMeta['InstanceId'] == srcGuildMapping.GuildInstanceMapping[
-                                             toUUID(playerUId)] else tcl(31),
+                               playerMeta['InstanceId'] == srcGuildMapping.GuildInstanceMapping[
+                                   toUUID(playerUId)] else tcl(31),
                     playerMeta['InstanceId'],
                     playerMeta['Level'] if 'Level' in playerMeta else -1, playerMeta['NickName']))
         except UnicodeEncodeError as e:
@@ -3992,17 +4068,17 @@ def ShowPlayers(data_source=None):
                 f"Corrupted Player Name {tcl(31)} %s {tcl(0)} PlayerUId {tcl(32)} %s {tcl(0)} [InstanceID %s %s {tcl(0)}]" %
                 (repr(playerMeta['NickName']), playerUId,
                  tcl(33) if toUUID(playerUId) in srcGuildMapping.GuildInstanceMapping and
-                                      playerMeta['InstanceId'] ==
-                                      srcGuildMapping.GuildInstanceMapping[
-                                          toUUID(playerUId)] else tcl(31),
+                            playerMeta['InstanceId'] ==
+                            srcGuildMapping.GuildInstanceMapping[
+                                toUUID(playerUId)] else tcl(31),
                  playerMeta['InstanceId']))
         except KeyError:
             print(
                 f"PlayerUId {tcl(32)} %s {tcl(0)} [InstanceID %s %s {tcl(0)}] -> Level %2d" % (
                     playerUId,
                     tcl(33) if toUUID(playerUId) in srcGuildMapping.GuildInstanceMapping and
-                                         playerMeta['InstanceId'] == srcGuildMapping.GuildInstanceMapping[
-                                             toUUID(playerUId)] else tcl(31),
+                               playerMeta['InstanceId'] == srcGuildMapping.GuildInstanceMapping[
+                                   toUUID(playerUId)] else tcl(31),
                     playerMeta['InstanceId'],
                     playerMeta['Level'] if 'Level' in playerMeta else -1))
 

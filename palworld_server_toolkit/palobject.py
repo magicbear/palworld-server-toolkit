@@ -705,9 +705,13 @@ class FProgressArchiveReader(FArchiveReader):
 
     def __init__(self, *args, **kwargs):
         reduce_memory = False
+        self.raise_error = False
         if 'reduce_memory' in kwargs:
             reduce_memory = kwargs['reduce_memory']
             del kwargs['reduce_memory']
+        if 'check_err' in kwargs:
+            self.raise_error = kwargs['check_err']
+            del kwargs['check_err']
         super().__init__(*args, **kwargs)
         self.fallbackData = None
         self.mp_loading = False
@@ -722,6 +726,54 @@ class FProgressArchiveReader(FArchiveReader):
                             self.mp_loading = False if reduce_memory else True
         elif sys.platform == 'darwin' or sys.platform == 'win32':
             self.mp_loading = False if reduce_memory else True
+
+    def internal_copy(self, data, debug: bool) -> "FProgressArchiveReader":
+        return FProgressArchiveReader(
+            data,
+            self.type_hints,
+            self.custom_properties,
+            debug=debug,
+            allow_nan=self.allow_nan,
+            check_err=self.raise_error
+        )
+
+    def fstring(self) -> str:
+        # in the hot loop, avoid function calls
+        reader = self.data
+        (size,) = FArchiveReader.unpack_i32(reader.read(4))
+
+        if size == 0:
+            return ""
+
+        data: bytes
+        encoding: str
+        if size < 0:
+            size = -size
+            data = reader.read(size * 2)[:-2]
+            encoding = "utf-16-le"
+        else:
+            data = reader.read(size)[:-1]
+            encoding = "ascii"
+
+        try:
+            return data.decode(encoding)
+        except Exception as e:
+            print(self.raise_error)
+            if self.raise_error:
+                raise Exception(
+                    f"Error decoding {encoding} string of length {size}: {bytes(data)!r}"
+                ) from e
+            else:
+                try:
+                    escaped = data.decode(encoding, errors="surrogatepass")
+                    print(
+                        f"Error decoding {encoding} string of length {size}, data loss may occur! {bytes(data)!r}"
+                    )
+                    return escaped
+                except Exception as e:
+                    raise Exception(
+                        f"Error decoding {encoding} string of length {size}: {bytes(data)!r}"
+                    ) from e
 
     def progress(self):
         return self.data.tell()
@@ -804,37 +856,126 @@ class FProgressArchiveReader(FArchiveReader):
     ) -> dict[str, Any]:
         if size == -1:
             return self.fallbackData
+        if self.raise_error:
+            if path in self.custom_properties and (
+                    path is not nested_caller_path or nested_caller_path == ""
+            ):
+                value = self.custom_properties[path][0](self, type_name, size, path)
+                value["custom_type"] = path
+                value["type"] = type_name
+                return value
+            elif type_name == "MapProperty":
+                key_type = self.fstring()
+                value_type = self.fstring()
+                _id = self.optional_guid()
+                self.u32()
+                count = self.u32()
+                key_path = path + ".Key"
+                if key_type == "StructProperty":
+                    key_struct_type = self.get_type_or(key_path, "Guid")
+                else:
+                    key_struct_type = None
+                value_path = path + ".Value"
+                if value_type == "StructProperty":
+                    value_struct_type = self.get_type_or(value_path, "StructProperty")
+                else:
+                    value_struct_type = None
+                values: list[dict[str, Any]] = []
+                for _ in range(count):
+                    try:
+                        key = self.prop_value(key_type, key_struct_type, key_path)
+                        value = self.prop_value(value_type, value_struct_type, value_path)
+                    except Exception as e:
+                        print(f"\033[31mDecodeing Failed on MapProperty {path}[{_}]\033[0m")
+                        raise e
+                    values.append(
+                        {
+                            "key": key,
+                            "value": value,
+                        }
+                    )
+                value = {
+                    "type": type_name,
+                    "key_type": key_type,
+                    "value_type": value_type,
+                    "key_struct_type": key_struct_type,
+                    "value_struct_type": value_struct_type,
+                    "id": _id,
+                    "value": values,
+                }
+                return value
         return super().property(type_name, size, path, nested_caller_path)
+
+    def array_property(self, array_type: str, size: int, path: str):
+        count = self.u32()
+        value = {}
+        if array_type == "StructProperty":
+            prop_name = self.fstring()
+            prop_type = self.fstring()
+            self.u64()
+            type_name = self.fstring()
+            _id = self.guid()
+            self.skip(1)
+            prop_values = []
+            for _ in range(count):
+                try:
+                    prop_values.append(self.struct_value(type_name, f"{path}.{prop_name}"))
+                except Exception as e:
+                    if self.raise_error:
+                        print(f"\033[31mDecodeing Failed on ArrayProperty {path}.{prop_name}[{_}]\033[0m")
+                    raise e
+            value = {
+                "prop_name": prop_name,
+                "prop_type": prop_type,
+                "values": prop_values,
+                "type_name": type_name,
+                "id": _id,
+            }
+        else:
+            value = {
+                "values": self.array_value(array_type, count, size, path),
+            }
+        return value
 
     def properties_until_end(self, path: str = "") -> dict[str, Any]:
         properties = {}
         while True:
-            name = self.fstring()
-            if name == "None":
-                break
-            type_name = self.fstring()
-            size = self.u64()
-            sub_path = f"{path}.{name}"
-            if self.mp_loading and path == ".worldSaveData" and type_name == "MapProperty" and size > 1048576 and not (
-                    sub_path in self.custom_properties and self.custom_properties[sub_path][0] is skip_decode):
-                properties[name] = {}
-                self.processlist[sub_path] = self.load_mp_map(properties[name], sub_path, size)
-            elif self.mp_loading and path == ".worldSaveData" and type_name == "ArrayProperty" and size > 1048576 and not (
-                    sub_path in self.custom_properties and self.custom_properties[sub_path][0] is skip_decode):
-                properties[name] = {}
-                self.processlist[sub_path] = self.load_mp_array(properties[name], sub_path, size)
-            else:
-                properties[name] = self.property(type_name, size, f"{path}.{name}")
+            try:
+                name = self.fstring()
+                if name == "None":
+                    break
+                type_name = self.fstring()
+                size = self.u64()
+                sub_path = f"{path}.{name}"
+                if self.mp_loading and path == ".worldSaveData" and type_name == "MapProperty" and size > 1048576 and not (
+                        sub_path in self.custom_properties and self.custom_properties[sub_path][0] is skip_decode):
+                    properties[name] = {}
+                    self.processlist[sub_path] = self.load_mp_map(properties[name], sub_path, size)
+                elif self.mp_loading and path == ".worldSaveData" and type_name == "ArrayProperty" and size > 1048576 and not (
+                        sub_path in self.custom_properties and self.custom_properties[sub_path][0] is skip_decode):
+                    properties[name] = {}
+                    self.processlist[sub_path] = self.load_mp_array(properties[name], sub_path, size)
+                else:
+                    properties[name] = self.property(type_name, size, f"{path}.{name}")
+            except Exception as e:
+                print(f"\033[31mDecodeing Failed on Decodeing Path {path} -> {str(e)}\033[0m")
+                raise e
         if path == "":
             for mp_path in self.processlist:
                 self.processlist[mp_path].join()
-                if mp_path in self.custom_properties:
-                    self.fallbackData = properties['worldSaveData']['value'][mp_path[15:]]
-                    properties['worldSaveData']['value'][mp_path[15:]] = \
-                        self.custom_properties[mp_path][0](self,
-                                                           properties['worldSaveData']['value'][mp_path[15:]]['type'],
-                                                           -1, mp_path)
-                    properties['worldSaveData']['value'][mp_path[15:]]["custom_type"] = mp_path
+                if mp_path in self.custom_properties and 'worldSaveData' in properties:
+                    try:
+                        self.fallbackData = properties['worldSaveData']['value'][mp_path[15:]]
+                        properties['worldSaveData']['value'][mp_path[15:]] = \
+                            self.custom_properties[mp_path][0](self,
+                                                               properties['worldSaveData']['value'][mp_path[15:]]['type'],
+                                                               -1, mp_path)
+                        properties['worldSaveData']['value'][mp_path[15:]]["custom_type"] = mp_path
+                    except Exception as e:
+                        print(f"Path = {path}")
+                        print(f"Process Path = {mp_path}")
+                        print(f"Properties = ", properties.keys())
+                        raise e
         return properties
 
     def parse_item(self, properties, skip_path):

@@ -25,6 +25,7 @@ Feature:
 
 - Delete Inactive Player on GUI
 - Batch repair all player on GUI
+- One key migrate to local feature
 
 v0.6.9
 -------
