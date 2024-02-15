@@ -62,83 +62,6 @@ except ImportError:
         EmptyObject = None
 
 
-class GvasPrettyPrint(pprint.PrettyPrinter):
-    _dispatch = pprint.PrettyPrinter._dispatch.copy()
-
-    def _pprint_dict(self, object, stream, indent, allowance, context, level):
-        write = stream.write
-        write('{')
-        if self._indent_per_level > 1:
-            write((self._indent_per_level - 1) * ' ')
-        length = len(object)
-        if length:
-            if self._sort_dicts:
-                items = sorted(object.items(), key=pprint._safe_tuple)
-            else:
-                items = object.items()
-            fmtValue = False
-            rep = ""
-            dict_type = set(object.keys())
-            if {'id', 'type', 'value'}.issubset(dict_type) and object['id'] is None:
-                dict_type -= {'id', 'type', 'value', 'custom_type', 'skip_type'}
-                if dict_type == set() and object['type'] in ["Int64Property", "NameProperty", "EnumProperty",
-                                                             "IntProperty", "BoolProperty",
-                                                             "FloatProperty", "StrProperty"]:
-                    fmtValue = True
-                    rep = object['type'][:-8]
-                elif dict_type == {'struct_id', 'struct_type'} and object['type'] == "StructProperty" and str(
-                        object['struct_id']) == '00000000-0000-0000-0000-000000000000':
-                    rep = f"Struct:{object['struct_type']}"
-                    fmtValue = True
-                elif dict_type == {'array_type'} and object['type'] == "ArrayProperty":
-                    rep = f"Array:{object['array_type']}"
-                    fmtValue = True
-                # elif dict_type == {'key_type', 'key_struct_type', 'value_type', 'value_struct_type'} and object['type'] == "MapProperty":
-                #     rep = f"Map:{object['key_type']}{{{object['key_struct_type']}}}={object['value_type']}{{{object['value_struct_type']}}}"
-                #     fmtValue = True
-            if fmtValue:
-                repr = self._repr('value', context, level)
-                if 'custom_type' in object:
-                    write(f"{tcl(92)}{rep}{tcl(0)}=")
-                else:
-                    write(f"{tcl(36)}{rep}{tcl(0)}=")
-                if rep == "Struct:Guid":
-                    write(
-                        tcl('43;31') if str(
-                            object['value']) == "00000000-0000-0000-0000-000000000000" else tcl(93))
-                    self._format(str(object['value']), stream, indent + len(repr) + 1, allowance,
-                                 context, level)
-                    write(tcl(0))
-                else:
-                    if 'skip_type' in object:
-                        write(f"{tcl(91)}**Skip Load Size: {len(object['value'])}**{tcl(0)}")
-                    elif rep == "Array:ByteProperty" and 'values' in object['value'] and isinstance(
-                            object['value']['values'], tuple):
-                        write(f"{tcl(91)}**Unparsed Size: {len(object['value']['values'])}**{tcl(0)}")
-                    else:
-                        self._format(object['value'], stream, indent + len(repr) + 1, allowance,
-                                     context, level)
-            else:
-                self._format_dict_items(items, stream, indent, allowance + 1,
-                                        context, level)
-        write('}')
-
-    def _pprint_UUID(self, object, stream, indent, allowance, context, level):
-        stream.write(
-            f"{tcl(36)}UUID:{tcl(0)}{tcl('43;31')}" if str(
-                object) == "00000000-0000-0000-0000-000000000000" else tcl(93))
-        self._format(str(object), stream, indent, allowance,
-                     context, level)
-        stream.write(tcl(0))
-
-    _dispatch[dict.__repr__] = _pprint_dict
-    _dispatch[UUID.__repr__] = _pprint_UUID
-
-
-pp = pprint.PrettyPrinter(width=80, compact=True, depth=6)
-gvas_pp = GvasPrettyPrint(width=1, compact=True, depth=6)
-gp = gvas_pp.pprint
-
 wsd: Optional[dict] = None
 output_file = None
 gvas_file = None
@@ -153,7 +76,6 @@ gui = None
 backup_path: Optional[str] = None
 delete_files = []
 loadingStatistics = {}
-
 
 class MappingCacheObject:
     __slots__ = ("_worldSaveData",
@@ -287,12 +209,6 @@ loadingTitle = ""
 def set_loadingTitle(title):
     loadingTitle = title
     print("\033]0;%s\a" % loadingTitle, end="", flush=True)
-
-
-def tcl(cl):
-    if ('TERM' in os.environ and 'color' in os.environ['TERM']) or 'WT_PROFILE_ID' in os.environ:
-        return f"\033[{cl}m"
-    return ""
 
 
 class skip_loading_progress(threading.Thread):

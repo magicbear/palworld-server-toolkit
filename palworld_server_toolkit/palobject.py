@@ -11,7 +11,90 @@ import pickle
 import msgpack
 import ctypes
 import sys
+import pprint
 
+class GvasPrettyPrint(pprint.PrettyPrinter):
+    _dispatch = pprint.PrettyPrinter._dispatch.copy()
+
+    def _pprint_dict(self, object, stream, indent, allowance, context, level):
+        write = stream.write
+        write('{')
+        if self._indent_per_level > 1:
+            write((self._indent_per_level - 1) * ' ')
+        length = len(object)
+        if length:
+            if self._sort_dicts:
+                items = sorted(object.items(), key=pprint._safe_tuple)
+            else:
+                items = object.items()
+            fmtValue = False
+            rep = ""
+            dict_type = set(object.keys())
+            if {'id', 'type', 'value'}.issubset(dict_type) and object['id'] is None:
+                dict_type -= {'id', 'type', 'value', 'custom_type', 'skip_type'}
+                if dict_type == set() and object['type'] in ["Int64Property", "NameProperty", "EnumProperty",
+                                                             "IntProperty", "BoolProperty",
+                                                             "FloatProperty", "StrProperty"]:
+                    fmtValue = True
+                    rep = object['type'][:-8]
+                elif dict_type == {'struct_id', 'struct_type'} and object['type'] == "StructProperty" and str(
+                        object['struct_id']) == '00000000-0000-0000-0000-000000000000':
+                    rep = f"Struct:{object['struct_type']}"
+                    fmtValue = True
+                elif dict_type == {'array_type'} and object['type'] == "ArrayProperty":
+                    rep = f"Array:{object['array_type']}"
+                    fmtValue = True
+                # elif dict_type == {'key_type', 'key_struct_type', 'value_type', 'value_struct_type'} and object['type'] == "MapProperty":
+                #     rep = f"Map:{object['key_type']}{{{object['key_struct_type']}}}={object['value_type']}{{{object['value_struct_type']}}}"
+                #     fmtValue = True
+            if fmtValue:
+                repr = self._repr('value', context, level)
+                if 'custom_type' in object:
+                    write(f"{tcl(92)}{rep}{tcl(0)}=")
+                else:
+                    write(f"{tcl(36)}{rep}{tcl(0)}=")
+                if rep == "Struct:Guid":
+                    write(
+                        tcl('43;31') if str(
+                            object['value']) == "00000000-0000-0000-0000-000000000000" else tcl(93))
+                    self._format(str(object['value']), stream, indent + len(repr) + 1, allowance,
+                                 context, level)
+                    write(tcl(0))
+                else:
+                    if 'skip_type' in object:
+                        write(f"{tcl(91)}**Skip Load Size: {len(object['value'])}**{tcl(0)}")
+                    elif rep == "Array:ByteProperty" and 'values' in object['value'] and isinstance(
+                            object['value']['values'], tuple):
+                        write(f"{tcl(91)}**Unparsed Size: {len(object['value']['values'])}**{tcl(0)}")
+                    else:
+                        self._format(object['value'], stream, indent + len(repr) + 1, allowance,
+                                     context, level)
+            else:
+                self._format_dict_items(items, stream, indent, allowance + 1,
+                                        context, level)
+        write('}')
+
+    def _pprint_UUID(self, object, stream, indent, allowance, context, level):
+        stream.write(
+            f"{tcl(36)}UUID:{tcl(0)}{tcl('43;31')}" if str(
+                object) == "00000000-0000-0000-0000-000000000000" else tcl(93))
+        self._format(str(object), stream, indent, allowance,
+                     context, level)
+        stream.write(tcl(0))
+
+    _dispatch[dict.__repr__] = _pprint_dict
+    _dispatch[UUID.__repr__] = _pprint_UUID
+
+
+def tcl(cl):
+    if ('TERM' in os.environ and 'color' in os.environ['TERM']) or 'WT_PROFILE_ID' in os.environ:
+        return f"\033[{cl}m"
+    return ""
+
+
+pp = pprint.PrettyPrinter(width=80, compact=True, depth=6)
+gvas_pp = GvasPrettyPrint(width=1, compact=True, depth=6)
+gp = gvas_pp.pprint
 
 def toUUID(uuid_str):
     if isinstance(uuid_str, UUID):
@@ -21,6 +104,7 @@ def toUUID(uuid_str):
 
 class PalObject:
     EmptyUUID = toUUID("00000000-0000-0000-0000-000000000000")
+    debug_wsd = None
 
     @staticmethod
     def toUUID(uuid_str):
@@ -701,11 +785,10 @@ class MPArrayPropertyProcess(multiprocessing.Process):
 
 
 class FProgressArchiveReader(FArchiveReader):
-    processlist = {}
-
     def __init__(self, *args, **kwargs):
         reduce_memory = False
         self.raise_error = False
+        self.processlist = {}
         if 'reduce_memory' in kwargs:
             reduce_memory = kwargs['reduce_memory']
             del kwargs['reduce_memory']
@@ -860,6 +943,7 @@ class FProgressArchiveReader(FArchiveReader):
             if path in self.custom_properties and (
                     path is not nested_caller_path or nested_caller_path == ""
             ):
+                print(f"proc {path} -> {self.custom_properties[path][0]}")
                 value = self.custom_properties[path][0](self, type_name, size, path)
                 value["custom_type"] = path
                 value["type"] = type_name
@@ -947,12 +1031,13 @@ class FProgressArchiveReader(FArchiveReader):
                 type_name = self.fstring()
                 size = self.u64()
                 sub_path = f"{path}.{name}"
-                if self.mp_loading and path == ".worldSaveData" and type_name == "MapProperty" and size > 1048576 and not (
-                        sub_path in self.custom_properties and self.custom_properties[sub_path][0] is skip_decode):
+                mp_loading = self.mp_loading
+                if sub_path in self.custom_properties and self.custom_properties[sub_path][0] is skip_decode:
+                    mp_loading = False
+                if mp_loading and path == ".worldSaveData" and type_name == "MapProperty" and size > 1048576:
                     properties[name] = {}
                     self.processlist[sub_path] = self.load_mp_map(properties[name], sub_path, size)
-                elif self.mp_loading and path == ".worldSaveData" and type_name == "ArrayProperty" and size > 1048576 and not (
-                        sub_path in self.custom_properties and self.custom_properties[sub_path][0] is skip_decode):
+                elif mp_loading and path == ".worldSaveData" and type_name == "ArrayProperty" and size > 1048576:
                     properties[name] = {}
                     self.processlist[sub_path] = self.load_mp_array(properties[name], sub_path, size)
                 else:
@@ -965,6 +1050,7 @@ class FProgressArchiveReader(FArchiveReader):
                 self.processlist[mp_path].join()
                 if mp_path in self.custom_properties and 'worldSaveData' in properties:
                     try:
+                        print(f"process for path {mp_path}")
                         self.fallbackData = properties['worldSaveData']['value'][mp_path[15:]]
                         properties['worldSaveData']['value'][mp_path[15:]] = \
                             self.custom_properties[mp_path][0](self,
@@ -972,10 +1058,12 @@ class FProgressArchiveReader(FArchiveReader):
                                                                -1, mp_path)
                         properties['worldSaveData']['value'][mp_path[15:]]["custom_type"] = mp_path
                     except Exception as e:
-                        print(f"Path = {path}")
-                        print(f"Process Path = {mp_path}")
-                        print(f"Properties = ", properties.keys())
-                        raise e
+                        keyList = properties.keys()
+                        if 'worldSaveData' in properties:
+                            keyList = properties['worldSaveData']['value'].keys()
+                            PalObject.debug_wsd = properties['worldSaveData']['value']
+                        raise ValueError(f"Decode failed, path={path}.{mp_path}, property={keyList}") from e
+            self.processlist = {}
         return properties
 
     def parse_item(self, properties, skip_path):
@@ -1051,7 +1139,7 @@ def group_decode(
         group_type = group["value"]["GroupType"]["value"]["value"]
         if group_type != "EPalGroupType::Guild":
             continue
-        group['value'] = reader.parse_item(group['value'], "GroupSaveDataMap.Value")
+        group['value']['RawData'] = reader.parse_item(group['value']['RawData'], "GroupSaveDataMap.Value.RawData")
         group_bytes = group["value"]["RawData"]["value"]["values"]
         group["value"]["RawData"]["value"] = palworld_save_group.decode_bytes(
             reader, group_bytes, group_type
