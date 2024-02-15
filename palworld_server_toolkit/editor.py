@@ -111,10 +111,10 @@ class GvasPrettyPrint(pprint.PrettyPrinter):
                     write(tcl(0))
                 else:
                     if 'skip_type' in object:
-                        write(f"{tcl(91)}**Skip Load**{tcl(0)}")
+                        write(f"{tcl(91)}**Skip Load Size: {len(object['value'])}**{tcl(0)}")
                     elif rep == "Array:ByteProperty" and 'values' in object['value'] and isinstance(
                             object['value']['values'], tuple):
-                        write(f"{tcl(91)}**Unparsed**{tcl(0)}")
+                        write(f"{tcl(91)}**Unparsed Size: {len(object['value']['values'])}**{tcl(0)}")
                     else:
                         self._format(object['value'], stream, indent + len(repr) + 1, allowance,
                                      context, level)
@@ -671,8 +671,6 @@ def main():
         gui_thread()
     elif args.fix_missing or args.fix_capture:
         Save()
-
-    os._exit(0)
 
 
 try:
@@ -1805,7 +1803,7 @@ class GUI():
                 Save(False)
                 messagebox.showinfo("Result", "Save to %s success" % output_path)
                 print()
-                os._exit(0)
+                sys.exit(0)
             except Exception as e:
                 traceback.print_exception(e)
                 messagebox.showerror("Save Error", "\n".join(traceback.format_exception(e)))
@@ -2058,7 +2056,9 @@ class GUI():
         self.font = tk.font.Font(family="Courier New")
         self.mono_font = tk.font.Font(family="Courier New")
         mono_font_list = ('Dejavu Sans', 'Courier New')
-        font_list = ('Apple LiGothic', 'PangMenZhengDao', 'Droid Sans Fallback', '微软雅黑', 'Courier New', 'Arial')
+        #
+        font_list = ('Apple Gothic', 'Yuanti SC', 'Nanum Gothic', 'Arial Unicode MS',
+                     'PangMenZhengDao', 'Droid Sans Fallback', '微软雅黑', 'Courier New', 'Arial')
         for font in font_list:
             if font in tkinter.font.families():
                 self.font = tk.font.Font(family=font)
@@ -2860,9 +2860,16 @@ def RepairPlayer(player_uid):
             if slot['RawData']['value']['instance_id'] != PalObject.EmptyUUID:
                 loaded_instance.add(slot['RawData']['value']['instance_id'])
 
+    rebuildPalStorageContainerId = False
+    if player_gvas['PalStorageContainerId']['value']['ID']['value'] in MappingCache.CharacterContainerSaveData:
+        container_id = player_gvas['PalStorageContainerId']['value']['ID']['value']
+        container = parse_item(MappingCache.CharacterContainerSaveData[container_id], "CharacterContainerSaveData")
+        if len(container['value']['Slots']['value']['values']) < emptySlots['PalStorageContainerId']:
+            print(f"{tcl(33)}Error: PalStorage Slots {len(container['value']['Slots']['value']['values'])} lower then default{tcl(0)}")
+            rebuildPalStorageContainerId = True
+
     standbySlots = []
     unloadedSlots = []
-    rebuildPalStorageContainerId = False
     for instanceId in MappingCache.CharacterSaveParameterMap:
         item = MappingCache.CharacterSaveParameterMap[instanceId]
         player = item['value']['RawData']['value']['object']['SaveParameter']['value']
@@ -2880,6 +2887,12 @@ def RepairPlayer(player_uid):
                 standbySlots.append(item['key']['InstanceId']['value'])
                 unloadedSlots.append(item['key']['InstanceId']['value'])
                 rebuildPalStorageContainerId = True
+
+            if 'OldOwnerPlayerUIds' in player:
+                if player_uid not in player['OldOwnerPlayerUIds']['value']['values']:
+                    print(f"Player {tcl(93)}{player_uid}{tcl(33)} Character {tcl(93)}{item['key']['InstanceId']['value']}{tcl(0)} "
+                          f"Old Owner Player invalid -> %s" % ",".join("%s" % x for x in player['OldOwnerPlayerUIds']['value']['values']))
+                player['OldOwnerPlayerUIds']['value']['values'] = [player_uid]
             # elif item['key']['InstanceId']['value'] not in loaded_instance and \
             #     item['key']['InstanceId']['value'] not in standbySlots:
 
@@ -2897,8 +2910,7 @@ def RepairPlayer(player_uid):
             print(
                 f"{tcl(33)}Error: Player {tcl(93)}{player_uid}{tcl(33)} Character Container {tcl(36)}{idx_key[:-11]}{tcl(0)} "
                 f"{tcl(32)}{container_id}{tcl(0)} Not exists")
-
-            n = PalObject.CharacterContainerSaveData_Array(container_id, emptySlots[key], list(loaded_instance) if
+            n = PalObject.CharacterContainerSaveData_Array(container_id, emptySlots[idx_key], list(loaded_instance) if
             idx_key == 'OtomoCharacterContainerId' else standbySlots)
             wsd['CharacterContainerSaveData']['value'].append(n)
             anyFix = True
@@ -2933,6 +2945,7 @@ def RepairPlayer(player_uid):
             group['individual_character_handle_ids'] = new_handle_ids
 
     if anyFix:
+        print("Reload cache")
         MappingCache.LoadCharacterSaveParameterMap()
         MappingCache.LoadCharacterContainerMaps()
         MappingCache.LoadItemContainerMaps()
@@ -3043,6 +3056,22 @@ def MigratePlayer(player_uid, new_player_uid):
             if item['admin_player_uid'] == player_uid:
                 item['admin_player_uid'] = player_gvas['PlayerUId']['value']
                 print(f"{tcl(32)}Migrate Guild Admin {tcl(0)}")
+
+    MigrateBuilding(player_uid, new_player_uid)
+
+    if new_player_sav_file in delete_files:
+        delete_files.remove(new_player_sav_file)
+    backup_file(player_sav_file)
+    delete_files.append(player_sav_file)
+    MappingCache.LoadCharacterSaveParameterMap()
+    RepairPlayer(new_player_uid)
+    print("Finish to migrate player from Save, please delete this file manually: %s" % player_sav_file)
+
+
+def MigrateBuilding(player_uid, new_player_uid):
+    player_uid = toUUID(player_uid)
+    new_player_uid = toUUID(new_player_uid)
+
     for map_data in wsd['MapObjectSaveData']['value']['values']:
         if 'owner_player_uid' in map_data['ConcreteModel']['value']['RawData']['value'] and \
                 map_data['ConcreteModel']['value']['RawData']['value']['owner_player_uid'] == player_uid:
@@ -3059,16 +3088,9 @@ def MigratePlayer(player_uid, new_player_uid):
                         print(f"{tcl(32)}Migrate ConcreteModel PasswordLock{tcl(0)}  {tcl(93)}%s{tcl(0)}" % (
                             str(map_data['MapObjectInstanceId']['value'])))
         if map_data['Model']['value']['RawData']['value']['build_player_uid'] == player_uid:
-            map_data['Model']['value']['RawData']['value']['build_player_uid'] = player_gvas['PlayerUId']['value']
+            map_data['Model']['value']['RawData']['value']['build_player_uid'] = new_player_uid
             print(f"{tcl(32)}Migrate Building{tcl(0)}  {tcl(93)}%s{tcl(0)}" % (
                 str(map_data['MapObjectInstanceId']['value'])))
-    if new_player_sav_file in delete_files:
-        delete_files.remove(new_player_sav_file)
-    backup_file(player_sav_file)
-    delete_files.append(player_sav_file)
-    MappingCache.LoadCharacterSaveParameterMap()
-    RepairPlayer(new_player_uid)
-    print("Finish to migrate player from Save, please delete this file manually: %s" % player_sav_file)
 
 
 def FindReferenceMapObject(mapObjectId, level=0, recursive_mapObjectIds=set(), srcMapping=None):
@@ -4771,7 +4793,7 @@ def Save(exit_now=True):
         except FileNotFoundError:
             pass
     if exit_now:
-        os._exit(0)
+        sys.exit(0)
 
 
 if __name__ == "__main__":
