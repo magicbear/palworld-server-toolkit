@@ -20,6 +20,7 @@ v0.6.9
 Fix:
 
 - Sub edit feature not working
+- Copy player have add error
 
 v0.6.8
 -------

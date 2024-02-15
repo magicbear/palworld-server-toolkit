@@ -2591,7 +2591,7 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
     if not dry_run:
         if id(old_wsd) != id(wsd) and player_uid not in MappingCache.PlayerIdMapping:
             backup_file(player_sav_file)
-            delete_files.add(player_sav_file)
+            delete_files.append(player_sav_file)
         if new_player_sav_file in delete_files:
             delete_files.remove(new_player_sav_file)
         backup_file(new_player_sav_file)
