@@ -20,6 +20,8 @@ v0.7.0
 Major:
 
 - Performance upgrade for DeletePlayer
+- Remove unused Fix Capture Log
+- Merge fix missing to Delete Invalid Object
 
 Feature:
 

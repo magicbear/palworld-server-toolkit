@@ -107,8 +107,6 @@ This tools is for cleanup the unreference item, rename the player name, migrate 
 `python -i -m palworld_server_toolkit.editor -o Level.sav Level.sav`
 
 	- `ShowPlayers()` - List the Players
-	- `FixMissing()` - Remove missing player instance
-	- `FixCaptureLog()` - Remove invalid caputre log in guild
 	- `FixDuplicateUser()` - Remove duplicated user data
 	- `ShowGuild()` - List the Guild and members
 	- `BindGuildInstanceId(uid,instance_id)` - Update Guild binding instance for user

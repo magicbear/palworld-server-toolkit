@@ -103,8 +103,6 @@ QQ群 139107098
 - 修改 `Level.sav` 文件 - `python -m palworld_server_toolkit.editor -i -o Level.sav Level.sav`
 
 	- `ShowPlayers()` - 列出玩家
-	- `FixMissing()` - 删除未引用玩家数据
-	- `FixCaptureLog()` - 删除多余捕捉日志
 	- `FixDuplicateUser()` - 删除多余用户数据
 	- `ShowGuild()` - 列出公会及成员列表
 	- `BindGuildInstanceId(uid,instance_id)` - 修改公会成员绑定ID

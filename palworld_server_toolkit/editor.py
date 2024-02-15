@@ -267,6 +267,17 @@ class MappingCacheObject:
             self.GuildInstanceMapping.update(
                 {ind_char['guid']: ind_char['instance_id'] for ind_char in item['individual_character_handle_ids']})
 
+    def __del__(self):
+        for key in wsd:
+            if isinstance(self._worldSaveData[key]['value'], MPMapProperty):
+                self._worldSaveData[key]['value'].close()
+                self._worldSaveData[key]['value'].release()
+            elif isinstance(self._worldSaveData[key]['value'], dict) and 'values' in self._worldSaveData[key][
+                'value'] and isinstance(
+                    self._worldSaveData[key]['value']['values'], MPArrayProperty):
+                self._worldSaveData[key]['value']['values'].close()
+                self._worldSaveData[key]['value']['values'].release()
+
 
 MappingCache: MappingCacheObject = None
 
@@ -519,11 +530,6 @@ def main():
         help="Show the statistics for all key",
     )
     parser.add_argument(
-        "--fix-capture",
-        action="store_true",
-        help="Fix the too many capture logs (not need after 1.4.0)",
-    )
-    parser.add_argument(
         "--fix-duplicate",
         action="store_true",
         help="Fix duplicate user data",
@@ -621,8 +627,6 @@ def main():
 
     print("Total load in %.3fms" % (1000 * (time.time() - t1)))
 
-    if getattr(args, "fix_capture", False):
-        FixCaptureLog()
     if getattr(args, "fix_duplicate", False):
         FixDuplicateUser()
     if getattr(args, "del_unref_item", False):
@@ -633,7 +637,6 @@ def main():
     if sys.flags.interactive:
         print("Go To Interactive Mode (no auto save), we have follow command:")
         print("  ShowPlayers()                              - List the Players")
-        print("  FixCaptureLog(dry_run=False)               - Remove unused capture log")
         print("  FixDuplicateUser(dry_run=False)            - Remove duplicate player instance")
         print("  ShowGuild()                                - List the Guild and members")
         print("  BindGuildInstanceId(uid,instance_id)       - Update Guild binding instance for user")
@@ -669,14 +672,6 @@ def main():
     elif args.fix_missing or args.fix_capture:
         Save()
 
-    for key in wsd:
-        if isinstance(wsd[key]['value'], MPMapProperty):
-            wsd[key]['value'].close()
-            wsd[key]['value'].release()
-        elif isinstance(wsd[key]['value'], dict) and 'values' in wsd[key]['value'] and isinstance(
-                wsd[key]['value']['values'], MPArrayProperty):
-            wsd[key]['value']['values'].close()
-            wsd[key]['value']['values'].release()
     os._exit(0)
 
 
@@ -1962,7 +1957,7 @@ class GUI():
             messagebox.showerror("Cleanup", self.lang_data['msg_player_folder_not_exists'])
             return
         answer = messagebox.showwarning("Cleanup", self.lang_data['msg_confirm_beta'],
-                                           type=messagebox.YESNO)
+                                        type=messagebox.YESNO)
         if answer != 'yes':
             return
 
@@ -1970,11 +1965,14 @@ class GUI():
         BrokenObjects = FindDamageRefItemContainer()
 
         answer = messagebox.showwarning("Cleanup",
-                        self.lang_data['msg_confirm_fix_mapobject']
-                            .replace("{MAP_COUNT}", "%d" % (len(BrokenObjects['MapObject']) + len(delete_objects)))
-                            .replace("{SAVE_COUNT}", "%d" % (len(BrokenObjects['Character']['SaveContainers'])))
-                            .replace("{CHARACTER_COUNT}", "%d" % (len(BrokenObjects['Character']['Owner']))),
-                        type=messagebox.YESNO)
+                                        self.lang_data['msg_confirm_fix_mapobject']
+                                        .replace("{MAP_COUNT}",
+                                                 "%d" % (len(BrokenObjects['MapObject']) + len(delete_objects)))
+                                        .replace("{SAVE_COUNT}",
+                                                 "%d" % (len(BrokenObjects['Character']['SaveContainers'])))
+                                        .replace("{CHARACTER_COUNT}",
+                                                 "%d" % (len(BrokenObjects['Character']['Owner']))),
+                                        type=messagebox.YESNO)
         if answer != 'yes':
             return
         FixBrokenObject()
@@ -2760,8 +2758,8 @@ def FindInactivePlayer(days):
         guild = MappingCache.GuildSaveDataMap[group_id]
         group_data = guild['value']['RawData']['value']
         for g_player in group_data['players']:
-            if (wsd['GameTimeSaveData']['value']['RealDateTimeTicks']['value'] - g_player['player_info'][
-                'last_online_real_time']) / 1e7 > days * 86400:
+            if (wsd['GameTimeSaveData']['value']['RealDateTimeTicks']['value'] -
+                g_player['player_info']['last_online_real_time']) / 1e7 > days * 86400:
                 player_list.append(g_player['player_uid'])
 
     return player_list
@@ -2775,7 +2773,7 @@ def FindPlayersFromInactiveGuild(days):
         players_list_guild = []  # Current guild's players list
         for g_player in group_data['players']:
             # If any member is active, skip this guild
-            if (wsd['GameTimeSaveData']['value']['RealDateTimeTicks']['value'] - \
+            if (wsd['GameTimeSaveData']['value']['RealDateTimeTicks']['value'] -
                 g_player['player_info']['last_online_real_time']) / 1e7 <= days * 86400:
                 break
             else:
@@ -2896,8 +2894,9 @@ def RepairPlayer(player_uid):
     for idx_key in ['OtomoCharacterContainerId', 'PalStorageContainerId']:
         container_id = player_gvas[idx_key]['value']['ID']['value']
         if container_id not in MappingCache.CharacterContainerSaveData:
-            print(f"{tcl(33)}Error: Player {tcl(93)}{player_uid}{tcl(33)} Character Container {tcl(36)}{idx_key[:-11]}{tcl(0)} "
-                  f"{tcl(32)}{container_id}{tcl(0)} Not exists")
+            print(
+                f"{tcl(33)}Error: Player {tcl(93)}{player_uid}{tcl(33)} Character Container {tcl(36)}{idx_key[:-11]}{tcl(0)} "
+                f"{tcl(32)}{container_id}{tcl(0)} Not exists")
 
             n = PalObject.CharacterContainerSaveData_Array(container_id, emptySlots[key], list(loaded_instance) if
             idx_key == 'OtomoCharacterContainerId' else standbySlots)
@@ -3644,8 +3643,10 @@ def FindDamageRefItemContainer():
     for character in wsd['CharacterSaveParameterMap']['value']:
         characterData = character['value']['RawData']['value']['object']['SaveParameter']['value']
         # Ignored for Boss, Boss will have empty EquipItemContainerId but work
-        if 'OwnerPlayerUId' in characterData and characterData['OwnerPlayerUId']['value'] not in MappingCache.PlayerIdMapping:
-            print(f"{tcl(31)}Invalid item on CharacterSaveParameterMap{tcl(0)}  UUID: %s  Owner: %s  CharacterID: %s" % (
+        if 'OwnerPlayerUId' in characterData and characterData['OwnerPlayerUId'][
+            'value'] not in MappingCache.PlayerIdMapping:
+            print(
+                f"{tcl(31)}Invalid item on CharacterSaveParameterMap{tcl(0)}  UUID: %s  Owner: %s  CharacterID: %s" % (
                     str(character['key']['InstanceId']['value']), str(characterData['OwnerPlayerUId']['value']),
                     characterData['CharacterID']['value']))
             InvalidObjects['Character']['Owner'].append(character['key']['InstanceId']['value'])
@@ -3690,6 +3691,7 @@ def FixBrokenDamageRefItemContainer(withInvalidEqualItemContainer=False, withInv
     MappingCache.LoadCharacterSaveParameterMap()
     MappingCache.LoadCharacterContainerMaps()
 
+
 def FixBrokenObject(dry_run=False):
     delete_map_objects = []
     for mapObjectId in MappingCache.MapObjectSaveData:
@@ -3705,6 +3707,7 @@ def FixBrokenObject(dry_run=False):
         BatchDeleteMapObject(delete_map_objects)
         MappingCache.LoadMapObjectMaps()
     return delete_map_objects
+
 
 def GetReferencedItemContainerIdsByPlayer(player_uid):
     err, player_gvas, player_sav_file, player_gvas_file = GetPlayerGvas(player_uid)
@@ -4125,28 +4128,11 @@ def ShowPlayers(data_source=None):
                     playerMeta['Level'] if 'Level' in playerMeta else -1))
 
 
-def FixCaptureLog(dry_run=False):
-    for group_data in wsd['GroupSaveDataMap']['value']:
-        if str(group_data['value']['GroupType']['value']['value']) == "EPalGroupType::Guild":
-            item = group_data['value']['RawData']['value']
-            removeItems = []
-            for ind_char in item['individual_character_handle_ids']:
-                if ind_char['instance_id'] not in MappingCache.CharacterSaveParameterMap:
-                    print(f"    {tcl(31)}Invalid Character %s{tcl(0)}" % (
-                        str(ind_char['instance_id'])))
-                    removeItems.append(ind_char)
-            print("After remove character count: %d" % (len(
-                group_data['value']['RawData']['value']['individual_character_handle_ids']) - len(removeItems)))
-            if dry_run:
-                for rm_item in removeItems:
-                    item['individual_character_handle_ids'].remove(rm_item)
-
-
 def FixDuplicateUser(dry_run=False):
     # Remove Unused in CharacterSaveParameterMap
     removeItems = []
     for item in wsd['CharacterSaveParameterMap']['value']:
-        if "00000000-0000-0000-0000-000000000000" != str(item['key']['PlayerUId']['value']):
+        if PalObject.EmptyUUID != item['key']['PlayerUId']['value']:
             player_meta = item['value']['RawData']['value']['object']['SaveParameter']['value']
             if item['key']['PlayerUId']['value'] not in MappingCache.GuildInstanceMapping:
                 print(
@@ -4164,6 +4150,8 @@ def FixDuplicateUser(dry_run=False):
     if not dry_run:
         for item in removeItems:
             wsd['CharacterSaveParameterMap']['value'].remove(item)
+        MappingCache.LoadGuildInstanceMapping()
+        MappingCache.LoadCharacterSaveParameterMap()
 
 
 def TickToHuman(tick):
@@ -4400,8 +4388,8 @@ def CopyBaseCamp(base_id, group_id, old_wsd, dry_run=False):
     if not dry_run:
         group_data['base_ids'].append(base_id)
 
-    if baseCamp['RawData']['value']['owner_map_object_instance_id'] in src_group_data[
-        'map_object_instance_ids_base_camp_points']:
+    if baseCamp['RawData']['value']['owner_map_object_instance_id'] in \
+            src_group_data['map_object_instance_ids_base_camp_points']:
         print(
             f"Copy Group UUID {baseCamp['RawData']['value']['group_id_belong_to']}  Map Instance ID {baseCamp['RawData']['value']['owner_map_object_instance_id']}")
         CopyMapObject(baseCamp['RawData']['value']['owner_map_object_instance_id'], old_wsd, dry_run)
