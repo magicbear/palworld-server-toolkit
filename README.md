@@ -277,7 +277,6 @@ options:
 ## **TODO**
 	
 - [ ] Cleanup the data on `FoliageGridSaveDataMap`
-- [ ] Cleanup more deep data on  `MapObjectSpawnerInStageSaveData`
 
 ---
 
@@ -287,3 +286,5 @@ options:
 - [PalEdit](https://github.com/EternalWraith/PalEdit) - 提供了帕鲁编辑器
 - [PalworldCharacterTransfer](https://github.com/jmkl009/PalworldCharacterTransfer) - 参考了其中的动态物品数据迁移引用概念
 - [Palworld Host Save Fix](https://github.com/xNul/palworld-host-save-fix) - 提供了最早期迁移玩家数据的概念
+
+- [https://afdian.net/a/magicbear](https://afdian.net/a/magicbear?tab=home) - 赞助我
