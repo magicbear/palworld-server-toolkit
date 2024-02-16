@@ -943,7 +943,6 @@ class FProgressArchiveReader(FArchiveReader):
             if path in self.custom_properties and (
                     path is not nested_caller_path or nested_caller_path == ""
             ):
-                print(f"proc {path} -> {self.custom_properties[path][0]}")
                 value = self.custom_properties[path][0](self, type_name, size, path)
                 value["custom_type"] = path
                 value["type"] = type_name
@@ -1192,7 +1191,6 @@ class CustomEncoder(json.JSONEncoder):
 def AutoMakeStruct(struct):
     structs = {}
     if 'type' in struct and struct['type'] == "StructProperty":
-        print(f"proc struct {struct['struct_type']}")
         if struct['struct_type'] in ["Vector"]:
             return structs
         for k in struct['value']:
