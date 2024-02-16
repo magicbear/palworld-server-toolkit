@@ -24,6 +24,12 @@ Feature:
 - Export Graphviz dot feature
 - Delete Damange Object will be delete no character container's character
 - Delete Damange Object will be delete broken map spawner
+- Edit Instance to Pals only
+
+Fix:
+
+- CopyPlayer on the same save file will be lost the working / base state, and put to PalStorage
+- Copy Instance will be check for empty slots
 
 v0.7.2
 -------
