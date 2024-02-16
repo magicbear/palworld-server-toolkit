@@ -1,4 +1,6 @@
 {
+  "font_order": ["Apple Gothic", "Yuanti SC", "Nanum Gothic", "Arial Unicode MS",
+                 "Droid Sans Fallback", "微软雅黑", "Courier New", "Arial"],
   "data_source": "复制数据来源",
   "data_source_list": ["主文件", "备份文件"],
   "open_file": "打开文件",

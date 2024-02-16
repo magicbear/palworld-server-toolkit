@@ -1251,6 +1251,8 @@ try:
             return ttk.Notebook(master=self)
 
         def load(self, tabs, player_gvas):
+            if not os.path.exists(module_dir + "/resources/item_%s.json" % self.i18n):
+                self.i18n = 'en-US'
             with open(module_dir + "/resources/item_%s.json" % self.i18n, "r", encoding='utf-8') as f:
                 item_list = json.load(f)
             for itemCodeName in item_list:
@@ -1403,9 +1405,9 @@ except NameError:
 
 class GUI():
     def __init__(self):
-        self.lang_data = None
+        self.lang_data = {}
         self.language = None
-        self.pal_i18n = None
+        self.pal_i18n = {}
         self.g_move_guild_owner = None
         try:
             if tk is None:
@@ -1969,18 +1971,10 @@ class GUI():
         self.gui.title(f'PalWorld Save Editor v{__version__} - Author by MagicBear')
         # self.gui.geometry('640x200')
         #
-        self.font = tk.font.Font(family="Courier New")
+        self.font = ("Courier New", 12)
         self.mono_font = tk.font.Font(family="Courier New")
         mono_font_list = ('Dejavu Sans', 'Courier New')
         #
-        font_list = ('Apple Gothic', 'Yuanti SC', 'Nanum Gothic', 'Arial Unicode MS',
-                     'PangMenZhengDao', 'Droid Sans Fallback', '微软雅黑', 'Courier New', 'Arial')
-        for font in font_list:
-            if font in tkinter.font.families():
-                self.font = tk.font.Font(family=font)
-                ttk.Style().configure("custom.TButton",
-                                      font=(font, 12))
-                break
         for font in mono_font_list:
             if font in tkinter.font.families():
                 self.mono_font = tk.font.Font(family=font)
@@ -2169,10 +2163,18 @@ class GUI():
     def set_i18n(self, lang):
         self.language = lang
         with open("%s/resources/gui_%s.json" % (module_dir, lang), encoding='utf-8') as f:
-            self.lang_data = json.load(f)
-        with open("%s/resources/pal_%s.json" % (module_dir, lang), encoding='utf-8') as f:
-            self.pal_i18n = json.load(f)
+            self.lang_data.update(json.load(f))
+        if os.path.exists("%s/resources/pal_%s.json"):
+            with open("%s/resources/pal_%s.json" % (module_dir, lang), encoding='utf-8') as f:
+                self.pal_i18n.update(json.load(f))
 
+        font_list = self.lang_data['font_order']
+        for font in font_list:
+            if font in tkinter.font.families():
+                self.font = tk.font.Font(family=font)
+                ttk.Style().configure("custom.TButton",
+                                      font=(font, 12))
+                break
         for item in self.i18n:
             if item in self.lang_data:
                 if isinstance(self.i18n[item], ttk.Combobox):
@@ -2181,6 +2183,9 @@ class GUI():
                     self.i18n[item].current(index)
                 else:
                     self.i18n[item].config(text=self.lang_data[item])
+
+                if isinstance(self.i18n[item], tk.Label) or isinstance(self.i18n[item], ttk.Combobox):
+                    self.i18n[item].config(font=self.font)
 
         if self.target_instance['value'] != '':
             self.load_players()
