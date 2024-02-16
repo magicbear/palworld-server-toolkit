@@ -1,3 +1,7 @@
 # other
 .idea
 .DS_Store
+build
+releases
+dist
+__pycache__

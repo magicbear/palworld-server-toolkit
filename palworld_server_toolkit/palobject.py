@@ -1049,7 +1049,6 @@ class FProgressArchiveReader(FArchiveReader):
                 self.processlist[mp_path].join()
                 if mp_path in self.custom_properties and 'worldSaveData' in properties:
                     try:
-                        print(f"process for path {mp_path}")
                         self.fallbackData = properties['worldSaveData']['value'][mp_path[15:]]
                         properties['worldSaveData']['value'][mp_path[15:]] = \
                             self.custom_properties[mp_path][0](self,

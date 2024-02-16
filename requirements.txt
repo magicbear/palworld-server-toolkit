@@ -1,0 +1,13 @@
+altgraph==0.17.4
+packaging==23.2
+pefile==2023.2.7
+pillow==10.2.0
+pyinstaller==6.3.0
+pyinstaller-hooks-contrib==2024.0
+pywin32-ctypes==0.2.2
+pyperclip~=1.8.2
+recordclass~=0.21.1
+openpyxl~=3.1.2
+fonttools~=4.48.1
+matplotlib~=3.8.2
+msgpack~=1.0.7
