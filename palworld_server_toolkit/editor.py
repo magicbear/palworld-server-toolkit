@@ -81,7 +81,8 @@ class MappingCacheObject:
     __slots__ = ("_worldSaveData",
                  "PlayerIdMapping", "CharacterSaveParameterMap", "MapObjectSaveData", "MapObjectSpawnerInStageSaveData",
                  "ItemContainerSaveData", "DynamicItemSaveData", "CharacterContainerSaveData", "GroupSaveDataMap",
-                 "WorkSaveData", "BaseCampMapping", "GuildSaveDataMap", "GuildInstanceMapping")
+                 "WorkSaveData", "BaseCampMapping", "GuildSaveDataMap", "GuildInstanceMapping",
+                 "FoliageGridSaveDataMap")
 
     _MappingCacheInstances = {
 
@@ -133,6 +134,9 @@ class MappingCacheObject:
         elif item == 'GuildInstanceMapping':
             self.LoadGuildInstanceMapping()
             return self.GuildInstanceMapping
+        elif item == 'FoliageGridSaveDataMap':
+            self.LoadMapObjectMaps()
+            return self.FoliageGridSaveDataMap
 
     def LoadWorkSaveData(self):
         load_skipped_decode(self._worldSaveData, ['WorkSaveData'], False)
@@ -150,6 +154,15 @@ class MappingCacheObject:
             self._worldSaveData['MapObjectSpawnerInStageSaveData']['value'][0]['value'][
                 'SpawnerDataMapByLevelObjectInstanceId']['value']
         }
+        self.FoliageGridSaveDataMap = {
+
+        }
+        # for foliage in self._worldSaveData['FoliageGridSaveDataMap']['value']:
+        #     modelMaps = foliage['value']['ModelMap']['value']
+        #     for model in modelMaps:
+        #         self.FoliageGridSaveDataMap.update({
+        #             inst['key']['Guid']['value']: foliage for inst in model['value']['InstanceDataMap']['value']
+        #         })
 
     def LoadCharacterSaveParameterMap(self):
         self.CharacterSaveParameterMap = {character['key']['InstanceId']['value']: character for character in
@@ -483,6 +496,12 @@ def main():
         action="store_true",
         help="Check error on the file",
     )
+    parser.add_argument(
+        "--dot",
+        "-d",
+        action="store_true",
+        help="dump graphviz dot file",
+    )
 
     if len(sys.argv) == 1:
         bk_f = filedialog.askopenfilename(filetypes=[("Level.sav file", "*.sav")], title="Open Level.sav")
@@ -497,8 +516,10 @@ def main():
     else:
         args = parser.parse_args(sys.argv[1:])
 
-    if not reduce(lambda x, b: x or getattr(args, b, False), filter(lambda x: 'del_' in x or 'fix_' in x, dir(args)),
-                  False) and not sys.flags.interactive:
+    modify_to_file = reduce(lambda x, b: x or getattr(args, b, False),
+                            filter(lambda x: 'del_' in x or 'fix_' in x, dir(args)),
+                            False)
+    if not modify_to_file and not sys.flags.interactive and not getattr(args, "dot", False):
         # Open GUI for no any edit flags
         args.gui = True
 
@@ -532,6 +553,9 @@ def main():
     else:
         output_path = args.output
 
+    if getattr(args, "dot", False):
+        buildDotImage()
+
     try:
         ShowGuild()
         playerMapping = LoadPlayers(data_source=wsd)
@@ -548,7 +572,7 @@ def main():
     if getattr(args, "del_unref_item", False):
         BatchDeleteUnreferencedItemContainers()
     if getattr(args, 'del_damage_object', False):
-        FixBrokenDamageRefItemContainer()
+        FixBrokenDamageRefContainer()
 
     if sys.flags.interactive:
         print("Go To Interactive Mode (no auto save), we have follow command:")
@@ -573,7 +597,7 @@ def main():
         print("  CopyBaseCamp(base_id,new_group_id, backup_wsd) ")
         print("                                             - Copy the basecamp base_id to new guild group id ")
         print("  BatchDeleteUnreferencedItemContainers()    - Delete Unref Item")
-        print("  FixBrokenDamageRefItemContainer()          - Delete Damage Object")
+        print("  FixBrokenDamageRefContainer()              - Delete Damage Object")
         print("  CleanupWorkerSick()                        - Cleanup WorkerSick flags for all Pals")
         print("  Statistics()                               - Counting wsd block data size")
         print("  Save()                                     - Save the file and exit")
@@ -585,7 +609,7 @@ def main():
         return
     elif args.gui:
         gui_thread()
-    elif args.fix_missing or args.fix_capture:
+    elif modify_to_file:
         Save()
 
 
@@ -729,6 +753,7 @@ try:
             self.__font = ("Courier New", 12)
             with open(f"{module_dir}/resources/enum.json", "r", encoding="utf-8") as f:
                 self.enum_options = json.load(f)
+            self.geometry("950x800")
 
         def delete_select_attribute(self, master, cmbx, attrib):
             if cmbx.current() == -1:
@@ -1856,29 +1881,43 @@ class GUI():
         if not os.path.exists(os.path.dirname(os.path.abspath(args.filename)) + "/Players/"):
             messagebox.showerror("Cleanup", self.lang_data['msg_player_folder_not_exists'])
             return
-        if 'yes' == messagebox.showwarning("Cleanup", self.lang_data['msg_confirm_beta'],
-                                           type=messagebox.YESNO):
-            BatchDeleteUnreferencedItemContainers()
+
+        answer = messagebox.showwarning("Cleanup",
+                                        self.lang_data['msg_confirm_delete_objs']
+                                        .replace("{COUNT}",
+                                                 "%d" % (len(FindAllUnreferencedItemContainerIds()))),
+                                        type=messagebox.YESNO)
+
+        if answer != 'yes':
+            return
+
+        BatchDeleteUnreferencedItemContainers()
 
     def cleanup_character(self):
         if not os.path.exists(os.path.dirname(os.path.abspath(args.filename)) + "/Players/"):
             messagebox.showerror("Cleanup", self.lang_data['msg_player_folder_not_exists'])
             return
-        if 'yes' == messagebox.showwarning("Cleanup", self.lang_data['msg_confirm_beta'],
-                                           type=messagebox.YESNO):
-            BatchDeleteUnreferencedCharacterContainers()
+
+        answer = messagebox.showwarning("Cleanup",
+                                        self.lang_data['msg_confirm_delete_objs']
+                                        .replace("{COUNT}",
+                                                 "%d" % (len(FindAllUnreferencedCharacterContainerIds()))),
+                                        type=messagebox.YESNO)
+
+        if answer != 'yes':
+            return
+        BatchDeleteUnreferencedCharacterContainers()
 
     def delete_damage_container(self):
         if not os.path.exists(os.path.dirname(os.path.abspath(args.filename)) + "/Players/"):
             messagebox.showerror("Cleanup", self.lang_data['msg_player_folder_not_exists'])
             return
-        answer = messagebox.showwarning("Cleanup", self.lang_data['msg_confirm_beta'],
-                                        type=messagebox.YESNO)
-        if answer != 'yes':
-            return
 
         delete_objects = FixBrokenObject(True)
-        BrokenObjects = FindDamageRefItemContainer()
+        BrokenObjects = FindDamageRefContainer(True)
+
+        delete_sets = set(BrokenObjects['Character']['Owner'])
+        delete_sets.update(BrokenObjects['Character']['CharacterContainer'])
 
         answer = messagebox.showwarning("Cleanup",
                                         self.lang_data['msg_confirm_fix_mapobject']
@@ -1887,12 +1926,20 @@ class GUI():
                                         .replace("{SAVE_COUNT}",
                                                  "%d" % (len(BrokenObjects['Character']['SaveContainers'])))
                                         .replace("{CHARACTER_COUNT}",
-                                                 "%d" % (len(BrokenObjects['Character']['Owner']))),
+                                                 "%d" % (len(delete_sets)))
+                                        .replace("{BASECAMP_COUNT}",
+                                                 "%d" % (len(BrokenObjects['BaseCamp'])))
+                                        .replace("{WORKDATA_COUNT}",
+                                                 "%d" % (len(BrokenObjects['WorkData'])))
+                                        .replace("{SPAWNER_COUNT}",
+                                                 "%d" % (len(BrokenObjects['MapObjectSpawnerInStage'])))
+                                        .replace("{FOLIAGE_COUNT}",
+                                                 "%d" % (len(BrokenObjects['FoliageGrid']))),
                                         type=messagebox.YESNO)
         if answer != 'yes':
             return
         FixBrokenObject()
-        FixBrokenDamageRefItemContainer()
+        FixBrokenDamageRefContainer()
         self.load_players()
 
     def delete_old_player(self):
@@ -2224,11 +2271,15 @@ def LoadFile(filename):
 
 def Statistics():
     for key in wsd:
+        val_type = "Bytes" if isinstance(wsd[key]['value'], bytes) else "Keys "
+        vals = len(wsd[key]['value'])
+        if 'type' in wsd[key] and wsd[key]['type'] == 'ArrayProperty' and isinstance(wsd[key]['value'], dict):
+            vals = len(wsd[key]['value']['values'])
+            val_type = "Items"
         print("%40s\t%.3f MB\t%20s\t%s: %d" % (key, len(str(wsd[key])) / 1048576,
                                                wsd[key]['type'] if 'type' in wsd[key] else "",
-                                               "Bytes" if isinstance(wsd[key]['value'],
-                                                                     bytes) else "Key",
-                                               len(wsd[key]['value'])))
+                                               val_type,
+                                               vals))
 
 
 def GetPlayerGvas(player_uid):
@@ -2415,7 +2466,7 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
             containerSlots = container['value']['Slots']['value']['values']
             for slotItem in containerSlots:
                 dynamicItemId = slotItem['ItemId']['value']['DynamicId']['value']['LocalIdInCreatedWorld']['value']
-                if str(dynamicItemId) == '00000000-0000-0000-0000-000000000000':
+                if dynamicItemId == PalObject.EmptyUUID:
                     continue
                 if dynamicItemId not in srcMappingCache.DynamicItemSaveData:
                     print(
@@ -2427,7 +2478,7 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
                     if not dry_run:
                         wsd['DynamicItemSaveData']['value']['values'].append(
                             srcMappingCache.DynamicItemSaveData[dynamicItemId])
-            dynamicItemIds = list(filter(lambda x: str(x) != '00000000-0000-0000-0000-000000000000',
+            dynamicItemIds = list(filter(lambda x: str(x) != PalObject.EmptyUUID,
                                          [x['ItemId']['value']['DynamicId']['value']['LocalIdInCreatedWorld'][
                                               'value'] for x in
                                           containerSlots]))
@@ -2501,7 +2552,7 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
             if not dry_run:
                 wsd['CharacterSaveParameterMap']['value'].append(new_item)
             instances.append(
-                {'guid': toUUID("00000000-0000-0000-0000-000000000000"),
+                {'guid': PalObject.EmptyUUID,
                  'instance_id': new_item['key']['InstanceId']['value']})
     # Copy Item from GroupSaveDataMap
     player_group = None
@@ -2614,7 +2665,7 @@ def MoveToGuild(player_uid, group_id):
             remove_instance_ids.append(item['key']['InstanceId']['value'])
         elif 'OwnerPlayerUId' in player and player['OwnerPlayerUId']['value'] == player_uid:
             instances.append({
-                'guid': toUUID(uuid.UUID("00000000-0000-0000-0000-000000000000")),
+                'guid': PalObject.EmptyUUID,
                 'instance_id': item['key']['InstanceId']['value']
             })
             remove_instance_ids.append(item['key']['InstanceId']['value'])
@@ -3072,7 +3123,7 @@ def FindReferenceMapObject(mapObjectId, level=0, recursive_mapObjectIds=set(), s
     mapObjectId = toUUID(mapObjectId)
     if mapObjectId not in srcMapping.MapObjectSaveData:
         print(f"Invalid {mapObjectId}")
-        return False
+        return []
     mapObject = srcMapping.MapObjectSaveData[mapObjectId]
     connector = mapObject['Model']['value']['Connector']['value']['RawData']
     reference_ids = []
@@ -3151,10 +3202,10 @@ def BatchDeleteMapObject(map_object_ids):
 
         if 'repair_work_id' in mapObject['Model']['value']['RawData']['value'] and \
                 mapObject['Model']['value']['RawData']['value'][
-                    'repair_work_id'] != "00000000-0000-0000-0000-000000000000":
+                    'repair_work_id'] != PalObject.EmptyUUID:
             _DeleteWorkSaveData(mapObject['Model']['value']['RawData']['value']['repair_work_id'])
 
-        if 'BuildProcess' in mapObject['Model']['value'] and "00000000-0000-0000-0000-000000000000" != \
+        if 'BuildProcess' in mapObject['Model']['value'] and PalObject.EmptyUUID != \
                 mapObject['Model']['value']['BuildProcess']['value']['RawData']['value']['id']:
             _DeleteWorkSaveData(mapObject['Model']['value']['BuildProcess']['value']['RawData']['value']['id'])
 
@@ -3210,7 +3261,7 @@ def CopyMapObject(map_object_id, src_wsd, dry_run=False):
                 _CopyWorkSaveData(concrete['value']['RawData']['value']['target_work_id'], src_wsd)
     if 'repair_work_id' in mapObject['Model']['value']['RawData']['value'] and \
             mapObject['Model']['value']['RawData']['value'][
-                'repair_work_id'] != "00000000-0000-0000-0000-000000000000":
+                'repair_work_id'] != PalObject.EmptyUUID:
         print(
             f"Clone MapObject {map_object_id} -> repair WorkSaveSata {mapObject['Model']['value']['RawData']['value']['repair_work_id']}")
         if not dry_run:
@@ -3255,7 +3306,7 @@ def DeleteMapObject(map_object_id):
             _DeleteWorkSaveData(concrete['value']['RawData']['value']['target_work_id'])
     if 'repair_work_id' in mapObject['Model']['value']['RawData']['value'] and \
             mapObject['Model']['value']['RawData']['value'][
-                'repair_work_id'] != "00000000-0000-0000-0000-000000000000":
+                'repair_work_id'] != PalObject.EmptyUUID:
         _DeleteWorkSaveData(mapObject['Model']['value']['RawData']['value']['repair_work_id'])
     owner_spawner_level_object_instance_id = mapObject['Model']['value']['RawData']['value'][
         'owner_spawner_level_object_instance_id']
@@ -3316,14 +3367,14 @@ def CopyCharacter(characterId, src_wsd, target_container=None, dry_run=False):
             group = MappingCache.GroupSaveDataMap[character['value']['RawData']['value']['group_id']]
             if not dry_run:
                 group['value']['RawData']['value']['individual_character_handle_ids'].append({
-                    'guid': toUUID("00000000-0000-0000-0000-000000000000"),
+                    'guid': PalObject.EmptyUUID,
                     "instance_id": characterId
                 })
         except KeyError:
             pass
 
-    slotSaveData = PalObject.PalCharacterSlotSaveData_Array('00000000-0000-0000-0000-000000000000',
-                                                            '00000000-0000-0000-0000-000000000000',
+    slotSaveData = PalObject.PalCharacterSlotSaveData_Array(PalObject.EmptyUUID,
+                                                            PalObject.EmptyUUID,
                                                             character['key']['InstanceId']['value'])
     if target_container is not None:
         characterContainerId = target_container
@@ -3462,17 +3513,18 @@ def GetReferencedCharacterContainerIdsByPlayer(player_uid):
     return player_container_ids
 
 
-def FindReferenceCharacterContainerIds():
+def FindReferenceCharacterContainerIds(with_character=True):
     reference_ids = set()
     for basecamp_id in MappingCache.BaseCampMapping:
         basecamp = MappingCache.BaseCampMapping[basecamp_id]['value']
         if 'WorkerDirector' in basecamp:
             reference_ids.add(basecamp['WorkerDirector']['value']['RawData']['value']['container_id'])
 
-    for character in wsd['CharacterSaveParameterMap']['value']:
-        characterData = character['value']['RawData']['value']['object']['SaveParameter']['value']
-        if 'SlotID' in characterData:
-            reference_ids.add(characterData['SlotID']['value']['ContainerId']['value']['ID']['value'])
+    if with_character:
+        for character in wsd['CharacterSaveParameterMap']['value']:
+            characterData = character['value']['RawData']['value']['object']['SaveParameter']['value']
+            if 'SlotID' in characterData:
+                reference_ids.add(characterData['SlotID']['value']['ContainerId']['value']['ID']['value'])
 
     for playerUId in MappingCache.PlayerIdMapping:
         reference_ids.update(GetReferencedCharacterContainerIdsByPlayer(playerUId))
@@ -3532,11 +3584,10 @@ def FindReferenceItemContainerIds():
     # CharacterContainerId
     # for baseCamp in wsd['BaseCampSaveData']['value']:
     #     reference_ids.append(baseCamp['value']['WorkerDirector']['value']['RawData']['value']['container_id'])
-    empty_uuid = toUUID("00000000-0000-0000-0000-000000000000")
     for uuid in MappingCache.ItemContainerSaveData:
         containers = MappingCache.ItemContainerSaveData[uuid]
         belongInfo = parse_item(containers['value']['BelongInfo'], "ItemContainerSaveData.Value.BelongInfo")
-        if 'GroupID' in belongInfo['value'] and belongInfo['value']['GroupID']['value'] != empty_uuid and \
+        if 'GroupID' in belongInfo['value'] and belongInfo['value']['GroupID']['value'] != PalObject.EmptyUUID and \
                 belongInfo['value']['GroupID']['value'] in MappingCache.GroupSaveDataMap:
             reference_ids.add(uuid)
 
@@ -3575,16 +3626,15 @@ def CleanupCharacterContainer(container_id):
     container = parse_item(MappingCache.CharacterContainerSaveData[container_id], "CharacterContainerSaveData")
     new_containerSlots = []
     characterSlotIndexMapping = {}
-    emptyUUID = toUUID("00000000-0000-0000-0000-000000000000")
     containerSlots = container['value']['Slots']['value']['values']
     for slot in containerSlots:
-        if slot['IndividualId']['value']['InstanceId']['value'] == emptyUUID and \
-                slot['IndividualId']['value']['PlayerUId']['value'] == emptyUUID and \
+        if slot['IndividualId']['value']['InstanceId']['value'] == PalObject.EmptyUUID and \
+                slot['IndividualId']['value']['PlayerUId']['value'] == PalObject.EmptyUUID and \
                 slot['PermissionTribeID']['value']['value'] in ["None", "EPalTribeID::None",
                                                                 "EPalTribeID::FireKirin"] and \
-                slot['RawData']['value']['instance_id'] == emptyUUID:
+                slot['RawData']['value']['instance_id'] == PalObject.EmptyUUID:
             continue
-        if slot['RawData']['value']['instance_id'] != emptyUUID:
+        if slot['RawData']['value']['instance_id'] != PalObject.EmptyUUID:
             if slot['RawData']['value']['instance_id'] not in MappingCache.CharacterSaveParameterMap:
                 print(
                     f"{tcl(31)}Error: character container {tcl(32)}{container_id}{tcl(31)} -> invalid character {tcl(32)}{slot['RawData']['value']['instance_id']}{tcl(0)}")
@@ -3609,12 +3659,23 @@ def CleanupAllCharacterContainer():
         CleanupCharacterContainer(container_id)
 
 
-def FindDamageRefItemContainer():
+def DeleteFoliageGridItem(map_id):
+    foliage = MappingCache.FoliageGridSaveDataMap[map_id]
+
+
+def FindDamageRefContainer(dry_run=False):
+    load_skipped_decode(wsd, ['ItemContainerSaveData', 'CharacterContainerSaveData', 'MapObjectSaveData',
+                              'WorkSaveData', 'MapObjectSpawnerInStageSaveData'], False)
     InvalidObjects = {
-        "MapObject": [],
+        "MapObject": set(),
+        "BaseCamp": set(),
+        "WorkData": set(),
+        "MapObjectSpawnerInStage": set(),
+        "FoliageGrid": set(),
         'Character': {
             "SaveContainers": [],
             "Owner": [],
+            "CharacterContainer": [],
             "EquipItemContainerId": [],
             "ItemContainerId": []
         }
@@ -3635,6 +3696,79 @@ def FindDamageRefItemContainer():
                     MappingCache.PlayerIdMapping[playerId]))
                 break
 
+    for basecamp_id in MappingCache.BaseCampMapping:
+        baseCamp = MappingCache.BaseCampMapping[basecamp_id]
+        group_id = baseCamp['value']['RawData']['value']['group_id_belong_to']
+        if group_id not in MappingCache.GuildSaveDataMap:
+            print(
+                f"BaseCamp {tcl(33)}{basecamp_id}{tcl(0)} {tcl(32)}%s{tcl(0)} -> {tcl(33)}{group_id}{tcl(0)} invalid" %
+                baseCamp['value']['RawData']['value']['name'])
+            InvalidObjects['BaseCamp'].add(basecamp_id)
+        remove_work_ids = set()
+        for work_id in baseCamp['value']['WorkCollection']['value']['RawData']['value']['work_ids']:
+            if work_id not in MappingCache.WorkSaveData:
+                remove_work_ids.add(work_id)
+                print(
+                    f"BaseCamp {tcl(33)}{basecamp_id}{tcl(0)} {tcl(32)}%s{tcl(0)} -> Work {tcl(33)}{work_id}{tcl(0)} invalid" %
+                    baseCamp['value']['RawData']['value']['name'])
+        if not dry_run:
+            for work_id in remove_work_ids:
+                baseCamp['value']['WorkCollection']['value']['RawData']['value']['work_ids'].remove(work_id)
+
+    for work_id in MappingCache.WorkSaveData:
+        work = MappingCache.WorkSaveData[work_id]
+        basecamp_id = work["RawData"]["value"]["base_camp_id_belong_to"]
+        if basecamp_id == PalObject.EmptyUUID:
+            continue
+        if basecamp_id not in MappingCache.BaseCampMapping:
+            print(f"Work {tcl(33)}{work_id}{tcl(0)}  -> Basecamp {tcl(33)}{basecamp_id}{tcl(0)} invalid")
+            InvalidObjects['WorkData'].add(work_id)
+
+    # for map_id in MappingCache.FoliageGridSaveDataMap:
+    #     if map_id not in MappingCache.MapObjectSaveData:
+    #         foliage_item = MappingCache.FoliageGridSaveDataMap[map_id]
+    #     InvalidObjects['FoliageGrid'].add(map_id)
+
+    for map_id in MappingCache.MapObjectSaveData:
+        mapObject = MappingCache.MapObjectSaveData[map_id]
+        basecamp_id = mapObject['Model']['value']['RawData']['value']['base_camp_id_belong_to']
+        build_player_uid = mapObject['Model']['value']['RawData']['value']['build_player_uid']
+        group_id = mapObject['Model']['value']['RawData']['value']['group_id_belong_to']
+        repair_work_id = mapObject['Model']['value']['RawData']['value']['repair_work_id']
+
+        for concrete in mapObject['ConcreteModel']['value']['ModuleMap']['value']:
+            if concrete['key'] == "EPalMapObjectConcreteModelModuleType::ItemContainer":
+                if concrete['value']['RawData']['value']['target_container_id'] \
+                        not in MappingCache.ItemContainerSaveData:
+                    InvalidObjects['MapObject'].add(mapObject['MapObjectInstanceId']['value'])
+                    print(f"MapObject {mapObject['MapObjectInstanceId']['value']} -> ItemContainer "
+                          f"{concrete['value']['RawData']['value']['target_container_id']} Invalid")
+            if concrete['key'] == "EPalMapObjectConcreteModelModuleType::Workee":
+                work_id = concrete['value']['RawData']['value']['target_work_id']
+                if work_id != PalObject.EmptyUUID and work_id not in MappingCache.WorkSaveData:
+                    print(f"MapObject {tcl(33)}{map_id}{tcl(0)}  -> Workee {tcl(33)}{work_id}{tcl(0)} invalid")
+                    InvalidObjects['MapObject'].add(map_id)
+        if basecamp_id != PalObject.EmptyUUID and basecamp_id not in MappingCache.BaseCampMapping:
+            print(f"MapObject {tcl(33)}{map_id}{tcl(0)}  -> Basecamp {tcl(33)}{basecamp_id}{tcl(0)} invalid")
+            InvalidObjects['MapObject'].add(map_id)
+        if build_player_uid != PalObject.EmptyUUID and build_player_uid not in MappingCache.PlayerIdMapping:
+            print(f"MapObject {tcl(33)}{map_id}{tcl(0)}  -> Build Player {tcl(33)}{build_player_uid}{tcl(0)} invalid")
+            InvalidObjects['MapObject'].add(map_id)
+        if group_id != PalObject.EmptyUUID and group_id not in MappingCache.GuildSaveDataMap:
+            print(f"MapObject {tcl(33)}{map_id}{tcl(0)}  -> Group {tcl(33)}{group_id}{tcl(0)} invalid")
+            InvalidObjects['MapObject'].add(map_id)
+        if repair_work_id != PalObject.EmptyUUID and repair_work_id not in MappingCache.WorkSaveData:
+            print(f"MapObject {tcl(33)}{map_id}{tcl(0)}  -> Repair Work {tcl(33)}{repair_work_id}{tcl(0)} invalid")
+            InvalidObjects['MapObject'].add(map_id)
+
+    for spawn_id in MappingCache.MapObjectSpawnerInStageSaveData:
+        spawn_obj = MappingCache.MapObjectSpawnerInStageSaveData[spawn_id]
+        for spawn_item in spawn_obj['value']['ItemMap']['value']:
+            map_id = spawn_item['value']['MapObjectInstanceId']['value']
+            if map_id != PalObject.EmptyUUID and map_id not in MappingCache.MapObjectSaveData:
+                print(f"MapObjectSpawnerInStage {tcl(33)}{spawn_id}{tcl(0)}  -> Map {tcl(33)}{map_id}{tcl(0)} invalid")
+                InvalidObjects['MapObjectSpawnerInStage'].add(spawn_id)
+
     for character in wsd['CharacterSaveParameterMap']['value']:
         characterData = character['value']['RawData']['value']['object']['SaveParameter']['value']
         # Ignored for Boss, Boss will have empty EquipItemContainerId but work
@@ -3645,7 +3779,12 @@ def FindDamageRefItemContainer():
                     str(character['key']['InstanceId']['value']), str(characterData['OwnerPlayerUId']['value']),
                     characterData['CharacterID']['value']))
             InvalidObjects['Character']['Owner'].append(character['key']['InstanceId']['value'])
-
+        if 'SlotID' in characterData and not characterData['SlotID']['value']['ContainerId']['value']['ID']['value'] in MappingCache.CharacterContainerSaveData:
+            print(
+                f"{tcl(31)}Invalid Character Container{tcl(0)} {characterData['SlotID']['value']['ContainerId']['value']['ID']['value']}  UUID: %s  Owner: %s  CharacterID: %s" % (
+                    str(character['key']['InstanceId']['value']), str(characterData['OwnerPlayerUId']['value']),
+                    characterData['CharacterID']['value']))
+            InvalidObjects['Character']['CharacterContainer'].append(character['key']['InstanceId']['value'])
         if 'EquipItemContainerId' in characterData:
             if characterData['EquipItemContainerId']['value']['ID']['value'] not in MappingCache.ItemContainerSaveData:
                 InvalidObjects['Character']['EquipItemContainerId'].append(character['key']['InstanceId']['value'])
@@ -3659,32 +3798,35 @@ def FindDamageRefItemContainer():
                     f"%-60s {character['key']['InstanceId']['value']} -> ItemContainerId {characterData['ItemContainerId']['value']['ID']['value']} Invalid" % CharacterDescription(
                         character))
 
-    for mapObject in parse_item(wsd['MapObjectSaveData'], 'MapObjectSaveData')['value']['values']:
-        for concrete in mapObject['ConcreteModel']['value']['ModuleMap']['value']:
-            if concrete['key'] == "EPalMapObjectConcreteModelModuleType::ItemContainer":
-                if concrete['value']['RawData']['value']['target_container_id'] \
-                        not in MappingCache.ItemContainerSaveData:
-                    InvalidObjects['MapObject'].append(mapObject['MapObjectInstanceId']['value'])
-                    print(f"MapObject {mapObject['MapObjectInstanceId']['value']} -> ItemContainer "
-                          f"{concrete['value']['RawData']['value']['target_container_id']} Invalid")
     return InvalidObjects
 
 
-def FixBrokenDamageRefItemContainer(withInvalidEqualItemContainer=False, withInvalidItemContainer=False):
-    BrokenObjects = FindDamageRefItemContainer()
-    BatchDeleteMapObject(BrokenObjects['MapObject'])
+def FixBrokenDamageRefContainer(withInvalidEqualItemContainer=False, withInvalidItemContainer=False):
+    BrokenObjects = FindDamageRefContainer()
+    for basecamp_id in BrokenObjects['BaseCamp']:
+        DeleteBaseCamp(basecamp_id)
+    _BatchDeleteWorkSaveData(BrokenObjects['WorkData'])
     if withInvalidEqualItemContainer:
         BatchDeleteCharacter(BrokenObjects['Character']['EquipItemContainerId'])
     if withInvalidItemContainer:
         BatchDeleteCharacter(BrokenObjects['Character']['ItemContainerId'])
     for characterId in BrokenObjects['Character']['SaveContainers']:
         DeletePlayer(characterId)
-    BatchDeleteCharacter(BrokenObjects['Character']['Owner'])
+    delete_sets = set(BrokenObjects['Character']['Owner'])
+    delete_sets.update(BrokenObjects['Character']['CharacterContainer'])
+    BatchDeleteCharacter(delete_sets)
 
+    for objId in BrokenObjects['MapObjectSpawnerInStage']:
+        del MappingCache.MapObjectSpawnerInStageSaveData[objId]
+    wsd['MapObjectSpawnerInStageSaveData']['value'][0]['value']['SpawnerDataMapByLevelObjectInstanceId']['value'] = \
+        [MappingCache.MapObjectSpawnerInStageSaveData[x] for x in MappingCache.MapObjectSpawnerInStageSaveData]
+
+    BatchDeleteMapObject(BrokenObjects['MapObject'])
     MappingCache.LoadItemContainerMaps()
     MappingCache.LoadGroupSaveDataMap()
     MappingCache.LoadCharacterSaveParameterMap()
     MappingCache.LoadCharacterContainerMaps()
+    MappingCache.LoadMapObjectMaps()
 
 
 def FixBrokenObject(dry_run=False):
@@ -3742,7 +3884,28 @@ def DoubleCheckForUnreferenceItemContainers():
 
         DoubleCheckForDeleteItemContainers(itemContainerId)
 
-    guid_mapping = search_guid(wsd, printout=False)
+    LoadAllUUID()
+    for id in unreferencedContainerIds:
+        if id in guid_mapping and len(guid_mapping[id]) > 1:
+            print("Error: ID %s:" % id)
+            gp(guid_mapping[id])
+            print()
+
+
+def DoubleCheckForUnreferenceCharacterContainers():
+    load_skipped_decode(wsd, ['MapObjectSaveData', 'FoliageGridSaveDataMap', 'MapObjectSpawnerInStageSaveData',
+                              'ItemContainerSaveData', 'DynamicItemSaveData', 'CharacterContainerSaveData'])
+    unreferencedContainerIds = FindAllUnreferencedCharacterContainerIds()
+    for nRunning, characterContainerId in enumerate(unreferencedContainerIds):
+        if nRunning % 1000 == 0:
+            print(f"Checking {nRunning} / {len(unreferencedContainerIds)}")
+        if characterContainerId not in MappingCache.CharacterContainerSaveData:
+            print(f"Error: Item Container {characterContainerId} not found")
+            continue
+
+        DoubleCheckForDeleteCharacterContainers(characterContainerId)
+
+    LoadAllUUID()
     for id in unreferencedContainerIds:
         if id in guid_mapping and len(guid_mapping[id]) > 1:
             print("Error: ID %s:" % id)
@@ -3772,7 +3935,7 @@ def BatchDeleteItemContainer(itemContainerIds):
         containerSlots = container['value']['Slots']['value']['values']
         for slotItem in containerSlots:
             dynamicItemId = slotItem['ItemId']['value']['DynamicId']['value']['LocalIdInCreatedWorld']['value']
-            if dynamicItemId == '00000000-0000-0000-0000-000000000000':
+            if dynamicItemId == PalObject.EmptyUUID:
                 continue
             if dynamicItemId not in MappingCache.DynamicItemSaveData:
                 print(
@@ -3804,7 +3967,7 @@ def DeleteItemContainer(itemContainerId, isBatch=False):
     containerSlots = container['value']['Slots']['value']['values']
     for slotItem in containerSlots:
         dynamicItemId = slotItem['ItemId']['value']['DynamicId']['value']['LocalIdInCreatedWorld']['value']
-        if dynamicItemId == '00000000-0000-0000-0000-000000000000':
+        if dynamicItemId == PalObject.EmptyUUID:
             continue
         if dynamicItemId not in MappingCache.DynamicItemSaveData:
             print(
@@ -3945,12 +4108,11 @@ def search_keys(dicts, key, level=""):
 
 def search_guid(dicts, level="", printout=True):
     isFound = {}
-    empty_uuid = toUUID("00000000-0000-0000-0000-000000000000")
     if isinstance(dicts, dict):
         for k in dicts:
             if level == "" and len(list(dicts.keys())) < 100 and printout:
                 set_loadingTitle("Searching %s" % k)
-            if isinstance(dicts[k], UUID) and dicts[k] != empty_uuid:
+            if isinstance(dicts[k], UUID) and dicts[k] != PalObject.EmptyUUID:
                 if dicts[k] not in isFound:
                     isFound[dicts[k]] = []
                 isFound[dicts[k]].append(f"{level}['{k}']")
@@ -3966,7 +4128,7 @@ def search_guid(dicts, level="", printout=True):
         for idx, l in enumerate(dicts):
             if level == "" and len(dicts) < 100 and printout:
                 set_loadingTitle("Searching %s" % l)
-            if isinstance(l, UUID) and l != empty_uuid:
+            if isinstance(l, UUID) and l != PalObject.EmptyUUID:
                 if l not in isFound:
                     isFound[l] = []
                 isFound[l].append(f"{level}[{idx}]")
@@ -4209,9 +4371,9 @@ def CopyCharacterContainer(containerId, src_wsd, dry_run=False, container_only=F
     if not container_only:
         copyItemList = set()
         for slotItem in containerSlots:
-            if slotItem['IndividualId']['value']['InstanceId']['value'] != "00000000-0000-0000-0000-000000000000":
+            if slotItem['IndividualId']['value']['InstanceId']['value'] != PalObject.EmptyUUID:
                 copyItemList.add(slotItem['RawData']['value']['instance_id'])
-            if slotItem['RawData']['value']['instance_id'] != "00000000-0000-0000-0000-000000000000":
+            if slotItem['RawData']['value']['instance_id'] != PalObject.EmptyUUID:
                 copyItemList.add(slotItem['RawData']['value']['instance_id'])
         for characterId in copyItemList:
             CopyCharacter(characterId, src_wsd, dry_run)
@@ -4258,14 +4420,13 @@ def LoadAllUUID():
 
 
 def DoubleCheckForDeleteItemContainers(itemContainerId, printout=True):
-    empty_uuid = toUUID("00000000-0000-0000-0000-000000000000")
     container = parse_item(MappingCache.ItemContainerSaveData[itemContainerId], "ItemContainerSaveData")
     guids = set(search_guid(container, printout=False).keys())
     guids.remove(itemContainerId)
     containerSlots = container['value']['Slots']['value']['values']
     for slotItem in containerSlots:
         dynamicItemId = slotItem['ItemId']['value']['DynamicId']['value']['LocalIdInCreatedWorld']['value']
-        if dynamicItemId == '00000000-0000-0000-0000-000000000000':
+        if dynamicItemId == PalObject.EmptyUUID:
             continue
         guids.remove(dynamicItemId)
         if dynamicItemId not in MappingCache.DynamicItemSaveData:
@@ -4279,7 +4440,7 @@ def DoubleCheckForDeleteItemContainers(itemContainerId, printout=True):
             gp(guid_mapping[dynamicItemId])
 
     belongInfo = parse_item(container['value']['BelongInfo'], "ItemContainerSaveData.Value.BelongInfo")
-    if 'GroupID' in belongInfo['value'] and belongInfo['value']['GroupID']['value'] != empty_uuid and \
+    if 'GroupID' in belongInfo['value'] and belongInfo['value']['GroupID']['value'] != PalObject.EmptyUUID and \
             belongInfo['value']['GroupID']['value'] in MappingCache.GroupSaveDataMap:
         guids.remove(belongInfo['value']['GroupID']['value'])
     if len(guids) > 0 and printout:
@@ -4293,9 +4454,9 @@ def DoubleCheckForDeleteCharacterContainers(container_ids, printout=True):
     container_guids.remove(container_ids)
     containerSlots = MappingCache.CharacterContainerSaveData[container_ids]['value']['Slots']['value']['values']
     for slotItem in containerSlots:
-        if slotItem['IndividualId']['value']['InstanceId']['value'] != "00000000-0000-0000-0000-000000000000":
+        if slotItem['IndividualId']['value']['InstanceId']['value'] != PalObject.EmptyUUID:
             container_guids.remove(slotItem['IndividualId']['value']['InstanceId']['value'])
-        if slotItem['RawData']['value']['instance_id'] != "00000000-0000-0000-0000-000000000000":
+        if slotItem['RawData']['value']['instance_id'] != PalObject.EmptyUUID:
             container_guids.remove(slotItem['RawData']['value']['instance_id'])
     if len(container_guids) > 0 and printout:
         print(f"Get Unknow Referer UUID on CharacterContainer {container_ids}")
@@ -4320,11 +4481,11 @@ def _DoubleCheckForDeleteModel(modelId):
             model_guids.remove(concrete['value']['RawData']['value']['target_work_id'])
     if 'repair_work_id' in model['Model']['value']['RawData']['value'] and \
             model['Model']['value']['RawData']['value'][
-                'repair_work_id'] != "00000000-0000-0000-0000-000000000000":
+                'repair_work_id'] != PalObject.EmptyUUID:
         model_guids.remove(model['Model']['value']['RawData']['value']['repair_work_id'])
     if 'BuildProcess' in model['Model']['value'] and \
             model['Model']['value']['BuildProcess']['value']['RawData']['value'][
-                'id'] != "00000000-0000-0000-0000-000000000000":
+                'id'] != PalObject.EmptyUUIDPalObject.EmptyUUID:
         model_guids.remove(model['Model']['value']['BuildProcess']['value']['RawData']['value']['id'])
     return model_guids
 
@@ -4336,6 +4497,16 @@ def _DeleteWorkSaveData(wrk_id):
             wsd['WorkSaveData']['value']['values'].remove(MappingCache.WorkSaveData[wrk_id])
     except ValueError:
         print(f"Failed to Delete WorkSave Data {wrk_id}")
+
+
+def _BatchDeleteWorkSaveData(wrk_ids):
+    for wrk_id in wrk_ids:
+        try:
+            del MappingCache.WorkSaveData[wrk_id]
+        except KeyError:
+            pass
+    wsd['WorkSaveData']['value']['values'] = [MappingCache.WorkSaveData[x] for x in MappingCache.WorkSaveData]
+    MappingCache.LoadWorkSaveData()
 
 
 def _CopyWorkSaveData(wrk_id, old_wsd):
@@ -4464,9 +4635,10 @@ def DeleteBaseCamp(base_id, group_id=None):
             modelId = MappingCache.WorkSaveData[wrk_id]['RawData']['value']['owner_map_object_model_id']
             DeleteMapObject(modelId)
             print(f"  Delete Base Camp Work Collection {wrk_id}")
-            _DeleteWorkSaveData(wrk_id)
-        # else:
-        #     print(f"  Ignore Base Camp Work Collection {wrk_id}")
+    _BatchDeleteWorkSaveData(baseCamp['WorkCollection']['value']['RawData']['value']['work_ids'])
+    # _DeleteWorkSaveData(wrk_id)
+    # else:
+    #     print(f"  Ignore Base Camp Work Collection {wrk_id}")
     instanceIds = DeleteCharacterContainer(baseCamp['WorkerDirector']['value']['RawData']['value']['container_id'])
     if not group_data is None:
         instance_lists = \
@@ -4769,6 +4941,180 @@ def Save(exit_now=True):
             pass
     if exit_now:
         sys.exit(0)
+
+
+def dot_itemcontainer(f, container_id, name):
+    f.write(f'  "{container_id}" [shape="octagon" fillcolor="lightgreen" style="filled" dir=back label="{name}"]\n')
+
+
+def dot_charactercontainer(f, container_id, name):
+    f.write(f'  "{container_id}" [shape="octagon" fillcolor="lightblue" style="filled" label="{name}"]\n')
+
+
+def dot_guild(f, group_id):
+    guild = MappingCache.GuildSaveDataMap[group_id]
+    f.write(
+        f'  "{group_id}" [shape="diamond" fillcolor="orange" label="Guild %s" style="filled" weight="60"]\n' %
+        guild['value']['RawData']['value']['guild_name'])
+
+    for base_idx, base_id in enumerate(guild['value']['RawData']['value']['base_ids']):
+        f.write(f'  "{group_id}" -> "{base_id}"\n')
+
+
+def dot_mapspawner(f, spawner_id):
+    if spawner_id not in MappingCache.MapObjectSpawnerInStageSaveData:
+        return
+    spawnerObject = MappingCache.MapObjectSpawnerInStageSaveData[spawner_id]
+    f.write(
+        f'  "{spawner_id}" [shape="invhouse" fillcolor="darkgreen" label="Spawner {str(spawner_id)[:8]}" style="filled" weight="10"]\n')
+
+
+def dot_mapobject(f, map_id):
+    if map_id not in MappingCache.MapObjectSaveData:
+        return
+    mapObject = MappingCache.MapObjectSaveData[map_id]
+
+    # f.write(f'  "{map_id}" [shape="house" fillcolor="darkgreen" label="Map " style="invis" weight="10"]\n')
+    f.write(f'  "{map_id}" [shape="point" fillcolor="darkgreen" label="" style="invis" weight="10"]\n')
+
+    basecamp_id = mapObject['Model']['value']['RawData']['value']['base_camp_id_belong_to']
+    # if basecamp_id != PalObject.EmptyUUID:
+    #     f.write(f'  "{basecamp_id}" -> "{map_id}"\n')
+    build_player_uid = mapObject['Model']['value']['RawData']['value']['build_player_uid']
+    # if build_player_uid != PalObject.EmptyUUID:
+    #     f.write(f'  "{build_player_uid}" -> "{map_id}"\n')
+    group_id = mapObject['Model']['value']['RawData']['value']['group_id_belong_to']
+    # if group_id != PalObject.EmptyUUID:
+    #     f.write(f'  "{group_id}" -> "{map_id}"\n')
+    repair_work_id = mapObject['Model']['value']['RawData']['value']['repair_work_id']
+    # if repair_work_id != PalObject.EmptyUUID:
+    #     f.write(f'  "{repair_work_id}" -> "{map_id}"\n')
+
+    for concrete in mapObject['ConcreteModel']['value']['ModuleMap']['value']:
+        if concrete['key'] == "EPalMapObjectConcreteModelModuleType::ItemContainer":
+            container_id = concrete['value']['RawData']['value']['target_container_id']
+            f.write(f'  "{map_id}" -> "{container_id}"\n')
+            dot_itemcontainer(f, container_id, "Map Container")
+        if concrete['key'] == "EPalMapObjectConcreteModelModuleType::Workee":
+            work_id = concrete['value']['RawData']['value']['target_work_id']
+            f.write(f'  "{work_id}" -> "{map_id}"\n')
+    owner_spawner_level_object_instance_id = mapObject['Model']['value']['RawData']['value'][
+        'owner_spawner_level_object_instance_id']
+    if owner_spawner_level_object_instance_id != PalObject.EmptyUUID:
+        f.write(f'  "{map_id}" -> "{owner_spawner_level_object_instance_id}"\n')
+        dot_mapspawner(f, owner_spawner_level_object_instance_id)
+
+
+def dot_work(f, work_id):
+    if work_id not in MappingCache.WorkSaveData:
+        f.write(
+            f'  "{work_id}" [shape="parallelogram" fillcolor="red" label="Invalid Work {str(work_id)[:8]}" style="filled" weight="10"]\n')
+        return
+    work = MappingCache.WorkSaveData[work_id]
+    # f.write(
+    #     f'  "{work_id}" [shape="parallelogram" fillcolor="lightpink" label="Work %s: %s" style="filled" weight="10"]\n' %
+    #     (work['WorkableType']['value']['value'], work['RawData']['value']['assign_define_data_id']))
+    f.write(f'  "{work_id}" [shape="point" label="Work" style="filled" weight="10"]\n')
+    f.write(f'  "{work_id}" -> "{work["RawData"]["value"]["base_camp_id_belong_to"]}"\n')
+    if work["RawData"]["value"]["owner_map_object_model_id"] != PalObject.EmptyUUID:
+        dot_mapobject(f, work["RawData"]["value"]["owner_map_object_model_id"])
+        f.write(f'  "{work_id}" -> "{work["RawData"]["value"]["owner_map_object_model_id"]}"\n')
+    # f.write(f'  "{work_id}" -> "{work["RawData"]["value"]["owner_map_object_concrete_model_id"]}"\n')
+
+
+def dot_character(f, character_id):
+    character = MappingCache.CharacterSaveParameterMap[character_id]
+    characterData = character['value']['RawData']['value']['object']['SaveParameter']['value']
+    if 'IsPlayer' in characterData:
+        return
+    if 'NickName' in characterData:
+        f.write(f'  "%s" [shape="rect" fillcolor="lightyellow" label="Pal %s" style="filled"]\n' %
+                (character['key']['InstanceId']['value'], characterData['NickName']['value']))
+    elif 'CharacterID' in characterData:
+        f.write(f'  "%s" [shape="rect" fillcolor="lightyellow" label="Pal %s" style="filled"]\n' %
+                (character['key']['InstanceId']['value'], characterData['CharacterID']['value']))
+    if 'SlotID' in characterData:
+        f.write(f'  "%s" -> "%s"\n' % (characterData['SlotID']['value']['ContainerId']['value']['ID']['value'],
+                                       character['key']['InstanceId']['value']))
+    elif 'OwnerPlayerUId' in characterData:
+        f.write(
+            f'  "%s" -> "%s"\n' % (characterData['OwnerPlayerUId']['value'], character['key']['InstanceId']['value']))
+
+    if 'EquipItemContainerId' in characterData:
+        container_id = characterData['EquipItemContainerId']['value']['ID']['value']
+        f.write(f'  "%s" -> "%s"\n' % (character['key']['InstanceId']['value'], container_id))
+        dot_itemcontainer(f, container_id, "EqualItem")
+    if 'ItemContainerId' in characterData:
+        container_id = characterData['ItemContainerId']['value']['ID']['value']
+        f.write(f'  "%s" -> "%s"\n' % (character['key']['InstanceId']['value'], container_id))
+        dot_itemcontainer(f, container_id, "Item")
+
+
+def dot_basecamp(f, basecamp_id):
+    basecamp = MappingCache.BaseCampMapping[basecamp_id]
+    f.write(
+        f'  "{basecamp_id}" [shape="septagon" fillcolor="#ff9900" label="Basecamp %s" style="filled" weight="40"]\n' %
+        basecamp['value']['RawData']['value']['name'])
+    f.write(f'  "{basecamp_id}" -> "%s"\n' % basecamp['value']['RawData']['value']['group_id_belong_to'])
+
+    f.write(f'  "{basecamp_id}" -> "%s"\n' % basecamp['value']['WorkerDirector']['value']['RawData']['value'][
+        'container_id'])
+    container_id = basecamp['value']['WorkerDirector']['value']['RawData']['value']['container_id']
+    dot_charactercontainer(f, container_id, "WorkerDirector")
+    for work_id in basecamp['value']['WorkCollection']['value']['RawData']['value']['work_ids']:
+        dot_work(f, work_id)
+        f.write(f'  "{basecamp_id}" -> "%s"\n' % work_id)
+
+
+def buildDotImage():
+    load_skipped_decode(wsd, ['ItemContainerSaveData', 'CharacterContainerSaveData', 'MapObjectSaveData',
+                              'WorkSaveData', 'MapObjectSpawnerInStageSaveData'], False)
+
+    with open("level.dot", "w") as f:
+        f.write("digraph {\n")
+        f.write("    rankdir=LR\n")
+        # container_ids = FindAllUnreferencedItemContainerIds()
+        # for container_id in container_ids:
+        #     dot_itemcontainer(f, container_id, f"Unknow {str(container_id)[:8]}")
+
+        for group_id in MappingCache.GuildSaveDataMap:
+            dot_guild(f, group_id)
+        for player_id in MappingCache.PlayerIdMapping:
+            character = MappingCache.PlayerIdMapping[player_id]
+            f.write(f'  "{character["value"]["RawData"]["value"]["group_id"]}" -> "{str(player_id)}"\n')
+            characterData = character['value']['RawData']['value']['object']['SaveParameter']['value']
+            f.write(
+                f'  "{str(player_id)}" [shape="rect" fillcolor="orange" label="Player %s" style="filled" weight="20"]\n' %
+                characterData['NickName']['value'])
+            err, player_gvas, player_sav_file, player_gvas_file = GetPlayerGvas(player_id)
+            if err:
+                continue
+            for idx_key in ['CommonContainerId', 'DropSlotContainerId', 'EssentialContainerId', 'FoodEquipContainerId',
+                            'PlayerEquipArmorContainerId', 'WeaponLoadOutContainerId']:
+                container_id = player_gvas['inventoryInfo']['value'][idx_key]['value']['ID']['value']
+                if container_id in MappingCache.ItemContainerSaveData:
+                    dot_itemcontainer(f, container_id, idx_key[:-11])
+                    f.write(f'  "{str(player_id)}" -> "{container_id}"\n')
+                else:
+                    dot_itemcontainer(f, container_id, "Player %s" % characterData['NickName']['value'])
+
+            for idx_key in ['OtomoCharacterContainerId', 'PalStorageContainerId']:
+                container_id = player_gvas[idx_key]['value']['ID']['value']
+                if container_id in MappingCache.CharacterContainerSaveData:
+                    dot_charactercontainer(f, container_id, idx_key[:-11])
+                    f.write(f'  "{str(player_id)}" -> "{container_id}"\n')
+                else:
+                    dot_charactercontainer(f, container_id, "Player %s" % characterData['NickName']['value'])
+        for character_id in MappingCache.CharacterSaveParameterMap:
+            dot_character(f, character_id)
+
+        for basecamp_id in MappingCache.BaseCampMapping:
+            dot_basecamp(f, basecamp_id)
+
+        # for map_id in MappingCache.MapObjectSaveData:
+        #     dot_mapobject(f, map_id)
+
+        f.write("}\n")
 
 
 if __name__ == "__main__":

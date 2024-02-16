@@ -20,6 +20,10 @@ v0.7.3
 Feature:
 
 - i18n support half translate of language
+- Delete Damange Object will be delete broken BaseCamp, WorkData
+- Export Graphviz dot feature
+- Delete Damange Object will be delete no character container's character
+- Delete Damange Object will be delete broken map spawner
 
 v0.7.2
 -------

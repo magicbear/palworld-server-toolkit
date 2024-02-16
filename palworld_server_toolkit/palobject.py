@@ -447,11 +447,26 @@ class MPMapObject(dict):
             yield 'value'
 
 
+class MMapProperty(ctypes.Structure):
+    _fields_ = [("current", ctypes.c_ulong),
+                ("last", ctypes.c_ulong),
+                ("count", ctypes.c_ulong),
+                ("parsed_count", ctypes.c_ulong),
+                ("size", ctypes.c_ulong),
+                ("datasize", ctypes.c_ulong)]
+
 class MPMapProperty(list):
+    WithKeys = True
+
     def __init__(self, *args, **kwargs):
         super().__init__()
         count = kwargs.get("count", 0)
-        size = kwargs.get("size", 0)
+        data = kwargs.get("data", None)
+        self.data = None
+        if data is None:
+            size = kwargs.get("size", 0)
+        else:
+            size = len(data) * 3
         intsize = ctypes.sizeof(ctypes.c_ulong)
         self.closed = False
         self.loaded = False
@@ -462,29 +477,35 @@ class MPMapProperty(list):
         # int_buf = self.shm.buf.cast("L")
         # int_objects = np.frombuffer(self.shm.buf.obj, dtype=np.uint64)
         self.memaddr = ctypes.addressof(ctypes.c_void_p.from_buffer(self.shm.buf.obj))
-        self.current = ctypes.c_ulong.from_buffer(self.shm.buf.obj)
-        self.last = ctypes.c_ulong.from_address(self.memaddr + intsize)
-        self.count = ctypes.c_ulong.from_address(self.memaddr + intsize * 2)
+        self.prop = MMapProperty.from_address(self.memaddr)
+        struct_head_size = ctypes.sizeof(MMapProperty)
+        struct_content_size = intsize * count * (3 if self.__class__.WithKeys else 2)
         if kwargs.get("name", None) is None:
-            ctypes.memset(self.memaddr, 0, intsize * (count * 3 + 4))
-            self.count.value = count
-            self.last.value = intsize * 4 + intsize * count * 3
-        self.parsed_count = ctypes.c_ulong.from_address(self.memaddr + intsize * 3)
-        self.index = (ctypes.c_ulong * self.count.value).from_address(self.memaddr + intsize * 4)
-        self.key_size = (ctypes.c_ulong * self.count.value).from_address(
-            self.memaddr + intsize * 4 + intsize * self.count.value)
-        self.value_size = (ctypes.c_ulong * self.count.value).from_address(
-            self.memaddr + intsize * 4 + intsize * self.count.value * 2)
-        super().extend([None] * self.count.value)
+            ctypes.memset(self.memaddr, 0, struct_head_size + struct_content_size)
+            self.prop.count = count
+            self.prop.size = size
+            self.prop.datasize = len(kwargs.get("data", ()))
+            self.prop.last = struct_head_size + struct_content_size
+        self.index = (ctypes.c_ulong * self.prop.count).from_address(self.memaddr + struct_head_size)
+        self.value_size = (ctypes.c_ulong * self.prop.count).from_address(self.memaddr + struct_head_size + intsize * self.prop.count)
+        if self.__class__.WithKeys:
+            self.key_size = (ctypes.c_ulong * self.prop.count).from_address(self.memaddr + struct_head_size + intsize * self.prop.count * 2)
+        else:
+            self.key_size = None
+        if kwargs.get("name", None) is None and not data is None:
+            ctypes.memmove(self.memaddr + self.prop.size - self.prop.datasize, data, self.prop.datasize)
+            self.data = ((ctypes.c_byte * self.prop.datasize).
+                         from_address(self.memaddr + self.prop.size - self.prop.datasize))
+        elif kwargs.get("name", None) is not None:
+            self.data = ((ctypes.c_byte * self.prop.datasize).
+                         from_address(self.memaddr + self.prop.size - self.prop.datasize))
+        super().extend([None] * self.prop.count)
 
     def close(self):
         if self.closed:
             return
         self.closed = True
-        del self.current
-        del self.last
-        del self.count
-        del self.parsed_count
+        del self.prop
         del self.index
         del self.key_size
         del self.value_size
@@ -497,16 +518,20 @@ class MPMapProperty(list):
     def append(self, obj):
         if self.closed and not self.loaded:
             raise ValueError("Share Memory closed")
-        if not self.closed and self.current.value < self.count.value:
-            key = msgpack.packb(obj['key'], default=encode_uuid, use_bin_type=True)
-            val = msgpack.packb(obj['value'], default=encode_uuid, use_bin_type=True)
-            self.index[self.current.value] = self.last.value
-            self.key_size[self.current.value] = len(key)
-            self.value_size[self.current.value] = len(val)
-            ctypes.memmove(self.memaddr + self.last.value, key, len(key))
-            ctypes.memmove(self.memaddr + self.last.value + len(key), val, len(val))
-            self.last.value += len(key) + len(val)
-            self.current.value += 1
+        if not self.closed and self.prop.current < self.prop.count:
+            self.index[self.prop.current] = self.prop.last
+            if self.__class__.WithKeys:
+                key = msgpack.packb(obj['key'], default=encode_uuid, use_bin_type=True)
+                val = msgpack.packb(obj['value'], default=encode_uuid, use_bin_type=True)
+                self.key_size[self.prop.current] = len(key)
+                ctypes.memmove(self.memaddr + self.prop.last, key, len(key))
+            else:
+                key = ()
+                val = msgpack.packb(obj, default=encode_uuid, use_bin_type=True)
+            self.value_size[self.prop.current] = len(val)
+            ctypes.memmove(self.memaddr + self.prop.last + len(key), val, len(val))
+            self.prop.last += len(key) + len(val)
+            self.prop.current += 1
         else:
             super().append(obj)
 
@@ -519,11 +544,16 @@ class MPMapProperty(list):
             if self.closed:
                 raise ValueError("Share Memory closed")
             k_s = self.index[item]
-            v_s = self.index[item] + self.key_size[item]
-            self[item] = MPMapObject(bytes(self.shm.buf[k_s:v_s]),
-                                     bytes(self.shm.buf[v_s:v_s + self.value_size[item]]))
-            self.parsed_count.value += 1
-            if self.parsed_count.value == self.count.value:
+            if self.__class__.WithKeys:
+                v_s = self.index[item] + self.key_size[item]
+                self[item] = MPMapObject(bytes(self.shm.buf[k_s:v_s]),
+                                         bytes(self.shm.buf[v_s:v_s + self.value_size[item]]))
+            else:
+                v_s = self.index[item]
+                v_e = self.index[item] + self.value_size[item]
+                self[item] = msgpack.unpackb(bytes(self.shm.buf[v_s:v_e]), object_hook=decode_uuid, raw=False)
+            self.prop.parsed_count += 1
+            if self.prop.parsed_count == self.prop.count:
                 self.loaded = True
                 self.close()
         return super().__getitem__(item)
@@ -533,103 +563,17 @@ class MPMapProperty(list):
             return
         if self.closed:
             raise ValueError("Share Memory closed")
-        for i in range(self.current.value):
+        for i in range(self.prop.current):
             self.__getitem__(i)
 
     def __delitem__(self, item):
         self.load_all_items()
         if not self.loaded:
-            self.current.value -= 1
+            self.prop.current -= 1
         return super().__delitem__(item)
 
-
-class MPArrayProperty(list):
-    def __init__(self, *args, **kwargs):
-        super().__init__()
-        count = kwargs.get("count", 0)
-        size = kwargs.get("size", 0)
-        self.closed = False
-        self.loaded = False
-        intsize = ctypes.sizeof(ctypes.c_ulong)
-        if kwargs.get("name", None) is not None:
-            self.shm = shared_memory.SharedMemory(name=kwargs.get("name", None))
-        else:
-            self.shm = shared_memory.SharedMemory(create=True, size=size)
-        # int_buf = self.shm.buf.cast("L")
-        # int_objects = np.frombuffer(self.shm.buf.obj, dtype=np.uint64)
-        self.memaddr = ctypes.addressof(ctypes.c_void_p.from_buffer(self.shm.buf.obj))
-        self.current = ctypes.c_ulong.from_buffer(self.shm.buf.obj)
-        self.last = ctypes.c_ulong.from_address(self.memaddr + intsize)
-        self.count = ctypes.c_ulong.from_address(self.memaddr + intsize * 2)
-        if kwargs.get("name", None) is None:
-            ctypes.memset(self.memaddr, 0, intsize * (count * 3 + 4))
-            self.count.value = count
-            self.last.value = intsize * 4 + intsize * count * 2
-        self.parsed_count = ctypes.c_ulong.from_address(self.memaddr + intsize * 3)
-        self.index = (ctypes.c_ulong * self.count.value).from_address(self.memaddr + intsize * 4)
-        self.value_size = (ctypes.c_ulong * self.count.value).from_address(
-            self.memaddr + intsize * 4 + intsize * self.count.value)
-        self += [None] * self.count.value
-
-    def close(self):
-        if self.closed:
-            return
-        self.closed = True
-        del self.current
-        del self.last
-        del self.count
-        del self.parsed_count
-        del self.index
-        del self.value_size
-        self.shm.buf.release()
-        self.shm.close()
-
-    def release(self):
-        self.shm.unlink()
-
-    def append(self, obj):
-        if self.closed and not self.loaded:
-            raise ValueError("Share Memory closed")
-        if not self.closed and self.current.value < self.count.value:
-            val = msgpack.packb(obj, default=encode_uuid, use_bin_type=True)
-            self.index[self.current.value] = self.last.value
-            self.value_size[self.current.value] = len(val)
-            ctypes.memmove(self.memaddr + self.last.value, val, len(val))
-            self.last.value += len(val)
-            self.current.value += 1
-        else:
-            super().append(obj)
-
-    def __getitem__(self, item):
-        if super().__getitem__(item) is None:
-            if self.closed:
-                raise ValueError("Share Memory closed")
-            v_s = self.index[item]
-            v_e = self.index[item] + self.value_size[item]
-            self[item] = msgpack.unpackb(bytes(self.shm.buf[v_s:v_e]), object_hook=decode_uuid, raw=False)
-            self.parsed_count.value += 1
-            if self.parsed_count.value == self.count.value:
-                self.loaded = True
-                self.close()
-        return super().__getitem__(item)
-
-    def __iter__(self):
-        for i in range(len(self)):
-            yield self.__getitem__(i)
-
-    def load_all_items(self):
-        if self.loaded:
-            return
-        if self.closed:
-            raise ValueError("Share Memory closed")
-        for i in range(self.current.value):
-            self.__getitem__(i)
-
-    def __delitem__(self, item):
-        self.load_all_items()
-        if not self.loaded:
-            self.current.value -= 1
-        return super().__delitem__(item)
+class MPArrayProperty(MPMapProperty):
+    WithKeys = False
 
 
 def skip_decode(
@@ -711,14 +655,13 @@ def skip_encode(
 
 
 class MPMapPropertyProcess(multiprocessing.Process):
-    def __init__(self, reader, properties, count, path, data):
+    def __init__(self, reader, properties, count, path):
         super().__init__()
         self.type_hints = reader.type_hints
         self.custom_properties = reader.custom_properties
         self.allow_nan = reader.allow_nan
         self.properties = properties
         self.count = count
-        self.data = data
         self.path = path
 
     def run(self) -> None:
@@ -731,7 +674,7 @@ class MPMapPropertyProcess(multiprocessing.Process):
         key_path = self.path + ".Key"
         value_path = self.path + ".Value"
         with FArchiveReader(
-                self.data,
+                bytes(prop_val.data),
                 type_hints=self.type_hints,
                 custom_properties=self.custom_properties,
                 allow_nan=self.allow_nan,
@@ -748,7 +691,7 @@ class MPMapPropertyProcess(multiprocessing.Process):
 
 
 class MPArrayPropertyProcess(multiprocessing.Process):
-    def __init__(self, reader, properties, count, size, path, data):
+    def __init__(self, reader, properties, count, size, path):
         super().__init__()
         self.type_hints = reader.type_hints
         self.custom_properties = reader.custom_properties
@@ -756,14 +699,13 @@ class MPArrayPropertyProcess(multiprocessing.Process):
         self.properties = properties
         self.count = count
         self.size = size
-        self.data = data
         self.path = path
 
     def run(self) -> None:
         setproctitle(f"{self.__class__.__name__}:{self.path}")
         prop_values = MPArrayProperty(name=self.properties['value']['values'])
         with FArchiveReader(
-                self.data,
+                bytes(prop_values.data),
                 type_hints=self.type_hints,
                 custom_properties=self.custom_properties,
                 allow_nan=self.allow_nan,
@@ -891,7 +833,9 @@ class FProgressArchiveReader(FArchiveReader):
         else:
             value_struct_type = None
 
-        share_mp = MPMapProperty(size=size * 4, count=count)
+        data = self.read(size - (self.data.tell() - ext_data_offset))
+        share_mp = MPMapProperty(data=data, count=count)
+        # share_mp = MPMapProperty(size=len(data) * 4, count=count)
         properties.update({
             "type": "MapProperty",
             "key_type": key_type,
@@ -901,7 +845,7 @@ class FProgressArchiveReader(FArchiveReader):
             "id": _id,
             "value": share_mp.shm.name
         })
-        p = MPMapPropertyProcess(self, properties, count, path, self.read(size - (self.data.tell() - ext_data_offset)))
+        p = MPMapPropertyProcess(self, properties, count, path)
         p.start()
         properties.update({
             'value': share_mp
@@ -915,13 +859,12 @@ class FProgressArchiveReader(FArchiveReader):
         ext_data_offset = self.data.tell()
         count = self.u32()
 
-        mp_ctx = MPArrayProperty(size=size * 4, count=count)
         properties.update({
             "type": "ArrayProperty",
             "array_type": array_type,
             "id": _id,
             "value": {
-                "values": mp_ctx.shm.name
+                "values": None
             }
         })
 
@@ -938,8 +881,10 @@ class FProgressArchiveReader(FArchiveReader):
                 "type_name": type_name,
                 "id": _id
             })
-        p = MPArrayPropertyProcess(self, properties, count, size, path,
-                                   self.read(size - (self.data.tell() - ext_data_offset)))
+        data = self.read(size - (self.data.tell() - ext_data_offset))
+        mp_ctx = MPArrayProperty(data=data, count=count)
+        properties['value']['values'] = mp_ctx.shm.name
+        p = MPArrayPropertyProcess(self, properties, count, size, path)
         p.start()
         properties['value'].update({
             'values': mp_ctx
