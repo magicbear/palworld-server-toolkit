@@ -1,4 +1,5 @@
 import re
+import traceback
 
 from palworld_save_tools.archive import *
 from palworld_save_tools.paltypes import *
@@ -12,6 +13,11 @@ import msgpack
 import ctypes
 import sys
 import pprint
+try:
+    from setproctitle import setproctitle
+except ImportError:
+    def setproctitle(name):
+        pass
 
 class GvasPrettyPrint(pprint.PrettyPrinter):
     _dispatch = pprint.PrettyPrinter._dispatch.copy()
@@ -707,13 +713,16 @@ def skip_encode(
 class MPMapPropertyProcess(multiprocessing.Process):
     def __init__(self, reader, properties, count, path, data):
         super().__init__()
-        self.reader = reader
+        self.type_hints = reader.type_hints
+        self.custom_properties = reader.custom_properties
+        self.allow_nan = reader.allow_nan
         self.properties = properties
         self.count = count
         self.data = data
         self.path = path
 
     def run(self) -> None:
+        setproctitle(f"{self.__class__.__name__}:{self.path}")
         prop_val = MPMapProperty(name=self.properties['value'])
         key_type = self.properties['key_type']
         key_struct_type = self.properties['key_struct_type']
@@ -723,9 +732,9 @@ class MPMapPropertyProcess(multiprocessing.Process):
         value_path = self.path + ".Value"
         with FArchiveReader(
                 self.data,
-                type_hints=self.reader.type_hints,
-                custom_properties=self.reader.custom_properties,
-                allow_nan=self.reader.allow_nan,
+                type_hints=self.type_hints,
+                custom_properties=self.custom_properties,
+                allow_nan=self.allow_nan,
         ) as reader:
             for _ in range(self.count):
                 key = reader.prop_value(key_type, key_struct_type, key_path)
@@ -741,7 +750,9 @@ class MPMapPropertyProcess(multiprocessing.Process):
 class MPArrayPropertyProcess(multiprocessing.Process):
     def __init__(self, reader, properties, count, size, path, data):
         super().__init__()
-        self.reader = reader
+        self.type_hints = reader.type_hints
+        self.custom_properties = reader.custom_properties
+        self.allow_nan = reader.allow_nan
         self.properties = properties
         self.count = count
         self.size = size
@@ -749,12 +760,13 @@ class MPArrayPropertyProcess(multiprocessing.Process):
         self.path = path
 
     def run(self) -> None:
+        setproctitle(f"{self.__class__.__name__}:{self.path}")
         prop_values = MPArrayProperty(name=self.properties['value']['values'])
         with FArchiveReader(
                 self.data,
-                type_hints=self.reader.type_hints,
-                custom_properties=self.reader.custom_properties,
-                allow_nan=self.reader.allow_nan,
+                type_hints=self.type_hints,
+                custom_properties=self.custom_properties,
+                allow_nan=self.allow_nan,
         ) as reader:
             array_type = self.properties['array_type']
             if array_type == "StructProperty":
@@ -1041,8 +1053,11 @@ class FProgressArchiveReader(FArchiveReader):
                     self.processlist[sub_path] = self.load_mp_array(properties[name], sub_path, size)
                 else:
                     properties[name] = self.property(type_name, size, f"{path}.{name}")
+            except struct.error as e:
+                raise e
             except Exception as e:
                 print(f"\033[31mDecodeing Failed on Decodeing Path {path} -> {type(e)}: {str(e)}\033[0m")
+                traceback.print_exception(e)
                 raise e
         if path == "":
             for mp_path in self.processlist:
