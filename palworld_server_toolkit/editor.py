@@ -235,8 +235,9 @@ class skip_loading_progress(threading.Thread):
     def run(self) -> None:
         try:
             while not self.reader.eof():
-                print("\033]0;%s - %3.1f%%\a" % (loadingTitle, 100 * self.reader.progress() / self.size), end="",
-                      flush=True)
+                if sys.platform in ['linux', 'darwin']:
+                    print("\033]0;%s - %3.1f%%\a" % (loadingTitle, 100 * self.reader.progress() / self.size), end="",
+                          flush=True)
                 print("%3.0f%%" % (100 * self.reader.progress() / self.size), end="\b\b\b\b", flush=True)
                 try:
                     if gui is not None:
@@ -774,7 +775,6 @@ try:
         def build_delete_attrib_gui(self, master, attrib):
             g_frame = tk.Frame(master=master)
             g_frame.pack(anchor=tk.constants.W, fill=tk.constants.X, expand=True)
-            gp(self)
             tk.Label(master=g_frame, text="Attribute", font=self.__font).pack(side="left")
             cmb_box = AutocompleteCombobox(master=g_frame, font=self.__font, width=30, values=list(attrib.keys()))
             cmb_box.pack(side=tk.RIGHT)
@@ -1054,7 +1054,6 @@ try:
                     elif attrib['type'] == "StructProperty":
                         if attrib_var[attribute_key] is None:
                             continue
-                        gp(attrib)
                         for key in storage_object[storage_key]:
                             self.save({key: storage_object[storage_key][key]}, attrib_var[attribute_key],
                                       "%s[\"%s\"]." % (attribute_key, key))
@@ -1361,7 +1360,6 @@ try:
                 playerMapping[player_uid]['InstanceId'] if instanceId is None else toUUID(instanceId)]['value'][
                 'RawData'][
                 'value']['object']['SaveParameter']['value']
-            gp(self.player)
             self.gui.title(
                 "Player Edit - %s" % player_uid if player_uid is not None else "Character Edit - %s" % instanceId)
             self.gui_attribute = {}
@@ -2894,7 +2892,8 @@ def RepairPlayer(player_uid):
                                 slotItem = _slot
                                 break
 
-                    if slotItem['PermissionTribeID']['value']['value'] in ["EPalTribeID::GrassMammoth", "EPalTribeID::RobinHood"]:
+                    if slotItem['PermissionTribeID']['value']['value'] in ["EPalTribeID::GrassMammoth",
+                                                                           "EPalTribeID::RobinHood"]:
                         workerSlots.add(item['key']['InstanceId']['value'])
                         baseWorkerContainers.add(slot_id)
                     else:
@@ -4975,7 +4974,7 @@ def dot_charactercontainer(f, container_id, name):
 def dot_guild(f, group_id):
     guild = MappingCache.GuildSaveDataMap[group_id]
     f.write(
-        f'  "{group_id}" [shape="diamond" fillcolor="orange" label="Guild %s" style="filled" weight="60"]\n' %
+        f'  "{group_id}" [shape="diamond" fillcolor="orange" label="Guild %s" style="filled" weight="100"]\n' %
         guild['value']['RawData']['value']['guild_name'])
 
     for base_idx, base_id in enumerate(guild['value']['RawData']['value']['base_ids']):
@@ -5017,7 +5016,6 @@ def dot_mapobject(f, map_id, with_child=False):
 
     if with_child:
         connector = mapObject['Model']['value']['Connector']['value']['RawData']
-        gp(connector)
         reference_ids = []
         if 'value' in connector:
             # Parent of this object
@@ -5095,7 +5093,7 @@ def dot_character(f, character_id):
 def dot_basecamp(f, basecamp_id):
     basecamp = MappingCache.BaseCampMapping[basecamp_id]
     f.write(
-        f'  "{basecamp_id}" [shape="septagon" fillcolor="#ff9900" label="Basecamp %s" style="filled" weight="40"]\n' %
+        f'  "{basecamp_id}" [shape="septagon" fillcolor="#ff9900" label="Basecamp %s" style="filled" weight="60"]\n' %
         basecamp['value']['RawData']['value']['name'])
     f.write(f'  "{basecamp_id}" -> "%s"\n' % basecamp['value']['RawData']['value']['group_id_belong_to'])
 
@@ -5123,13 +5121,13 @@ def buildDotImage():
             dot_mapobject(f, map_id, True)
         f.write("}\n")
 
-    print("Convert map to svg")
-    cmd = subprocess.run(['dot', '-Tsvg', f"{base_path}/map.dot"], capture_output=True)
-    if cmd.returncode == 0:
-        with open(f"{base_path}/map.svg", "wb") as f:
-            f.write(cmd.stdout)
-    else:
-        sys.stderr.write(cmd.stderr)
+    # print("Convert map to svg")
+    # cmd = subprocess.run(['dot', '-Tsvg', f"{base_path}/map.dot"], capture_output=True)
+    # if cmd.returncode == 0:
+    #     with open(f"{base_path}/map.svg", "wb") as f:
+    #         f.write(cmd.stdout)
+    # else:
+    #     sys.stderr.write(cmd.stderr)
 
     with open(f"{base_path}/level.dot", "w") as f:
         f.write("digraph {\n")
@@ -5145,7 +5143,7 @@ def buildDotImage():
             f.write(f'  "{character["value"]["RawData"]["value"]["group_id"]}" -> "{str(player_id)}"\n')
             characterData = character['value']['RawData']['value']['object']['SaveParameter']['value']
             f.write(
-                f'  "{str(player_id)}" [shape="rect" fillcolor="orange" label="Player %s" style="filled" weight="20"]\n' %
+                f'  "{str(player_id)}" [shape="rect" fillcolor="orange" label="Player %s" style="filled" weight="40"]\n' %
                 characterData['NickName']['value'])
             err, player_gvas, player_sav_file, player_gvas_file = GetPlayerGvas(player_id)
             if err:
