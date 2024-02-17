@@ -13,11 +13,13 @@ import msgpack
 import ctypes
 import sys
 import pprint
+
 try:
     from setproctitle import setproctitle
 except ImportError:
     def setproctitle(name):
         pass
+
 
 class GvasPrettyPrint(pprint.PrettyPrinter):
     _dispatch = pprint.PrettyPrinter._dispatch.copy()
@@ -101,6 +103,7 @@ def tcl(cl):
 pp = pprint.PrettyPrinter(width=80, compact=True, depth=6)
 gvas_pp = GvasPrettyPrint(width=1, compact=True, depth=6)
 gp = gvas_pp.pprint
+
 
 def toUUID(uuid_str):
     if isinstance(uuid_str, UUID):
@@ -364,6 +367,41 @@ class PalObject:
             }
         }
 
+    @staticmethod
+    def GroupSaveData(group_id, group_name, admin_player_uid, admin_nickname):
+        return {
+            'key': toUUID(group_id),
+            'value': {
+                "GroupType": {
+                    "id": None,
+                    "value": {
+                        "type": "EPalGroupType",
+                        "value": "EPalGroupType::Guild"
+                    },
+                    "type": "EnumProperty"
+                },
+                "RawData": PalObject.ArrayProperty('ByteProperty', {
+                    'admin_player_uid': toUUID(admin_player_uid),
+                    "base_camp_level": 1,
+                    "base_ids": [],
+                    "group_id": toUUID(group_id),
+                    "group_name": "",
+                    'group_type': 'EPalGroupType::Guild',
+                    "guild_name": group_name,
+                    "individual_character_handle_ids": [],
+                    "map_object_instance_ids_base_camp_points": [],
+                    "org_type": 0,
+                    "players": [
+                        {
+                            'player_uid': toUUID(admin_player_uid),
+                            'player_info': {'last_online_real_time': 0,
+                                            'player_name': admin_nickname}
+                        }
+                    ]
+                })
+            }
+        }
+
 
 class MPMapValue(dict):
     def __init__(self, obj):
@@ -455,6 +493,7 @@ class MMapProperty(ctypes.Structure):
                 ("size", ctypes.c_ulong),
                 ("datasize", ctypes.c_ulong)]
 
+
 class MPMapProperty(list):
     WithKeys = True
 
@@ -487,9 +526,11 @@ class MPMapProperty(list):
             self.prop.datasize = len(kwargs.get("data", ()))
             self.prop.last = struct_head_size + struct_content_size
         self.index = (ctypes.c_ulong * self.prop.count).from_address(self.memaddr + struct_head_size)
-        self.value_size = (ctypes.c_ulong * self.prop.count).from_address(self.memaddr + struct_head_size + intsize * self.prop.count)
+        self.value_size = (ctypes.c_ulong * self.prop.count).from_address(
+            self.memaddr + struct_head_size + intsize * self.prop.count)
         if self.__class__.WithKeys:
-            self.key_size = (ctypes.c_ulong * self.prop.count).from_address(self.memaddr + struct_head_size + intsize * self.prop.count * 2)
+            self.key_size = (ctypes.c_ulong * self.prop.count).from_address(
+                self.memaddr + struct_head_size + intsize * self.prop.count * 2)
         else:
             self.key_size = None
         if kwargs.get("name", None) is None and not data is None:
@@ -571,6 +612,7 @@ class MPMapProperty(list):
         if not self.loaded:
             self.prop.current -= 1
         return super().__delitem__(item)
+
 
 class MPArrayProperty(MPMapProperty):
     WithKeys = False
@@ -1012,7 +1054,8 @@ class FProgressArchiveReader(FArchiveReader):
                         self.fallbackData = properties['worldSaveData']['value'][mp_path[15:]]
                         properties['worldSaveData']['value'][mp_path[15:]] = \
                             self.custom_properties[mp_path][0](self,
-                                                               properties['worldSaveData']['value'][mp_path[15:]]['type'],
+                                                               properties['worldSaveData']['value'][mp_path[15:]][
+                                                                   'type'],
                                                                -1, mp_path)
                         properties['worldSaveData']['value'][mp_path[15:]]["custom_type"] = mp_path
                     except Exception as e:
@@ -1175,11 +1218,13 @@ def AutoMakeStruct(struct):
                                                                                                                "\n        "))
     return structs
 
+
 # print("\n\n".join(AutoMakeStruct(copy.deepcopy(MappingCache.CharacterSaveParameterMap[toUUID('1dd8d2a0-4dd7-4b05-f3c0-7ab60ebd95e4')]['value']['RawData']['value']['object']['SaveParameter'])).values()))
 
 # struct = parse_item(MappingCache.CharacterContainerSaveData[toUUID("e795ef48-966c-4ce9-9394-f48553ef3f69")],"CharacterContainerSaveData")
+# struct = MappingCache.GuildSaveDataMap[toUUID("d24d76fc-4312-446a-8168-d4baf9694725")]
 # print("".join(AutoMakeStruct({
 #     "type": "StructProperty",
-#     "struct_type": "CharacterContainerSaveData",
-#     "value": struct['key']
+#     "struct_type": "GroupSaveData",
+#     "value": struct['value']
 # }).values()))
