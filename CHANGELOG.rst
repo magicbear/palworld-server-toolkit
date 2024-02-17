@@ -14,12 +14,11 @@ Changelog
     Note that they these tags will not actually close the issue/PR until they
     are merged into the "default" branch.
 
-v0.7.3
+v0.7.4
 -------
 
 Feature:
 
-- i18n support half translate of language
 - Delete Damange Object will be delete broken BaseCamp, WorkData
 - Export Graphviz dot feature
 - Delete Damange Object will be delete no character container's character
@@ -32,6 +31,13 @@ Fix:
 - CopyPlayer on the same save file will be lost the working / base state, and put to PalStorage
 - CopyPlayer multiple times on same target UUID will be no pals on character
 - Copy Instance will be check for empty slots
+
+v0.7.3
+-------
+
+Feature:
+
+- i18n support half translate of language
 
 v0.7.2
 -------
