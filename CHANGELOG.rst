@@ -21,6 +21,9 @@ Fix:
 
 - CopyPlayer not change OldOwnerPlayerUIds
 - CopyPlayer will be repair the player after copy
+- BatchDeleteCharacter will be failed to build structure
+- BatchDeleteItemContainer will be failed to build structure
+- BatchDeleteCharacterContainer will be failed to build structure
 
 Feature:
 

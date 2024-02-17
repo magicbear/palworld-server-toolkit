@@ -3112,7 +3112,7 @@ def MigratePlayer(player_uid, new_player_uid):
     backup_file(player_sav_file, True)
     delete_files.append(player_sav_file)
     MappingCache.LoadCharacterSaveParameterMap()
-    RepairPlayer(new_player_uid)
+    # RepairPlayer(new_player_uid)
     print("Finish to migrate player from Save, please delete this file manually: %s" % player_sav_file)
 
 
@@ -3590,9 +3590,7 @@ def BatchDeleteCharacterContainer(characterContainerIds):
                                "CharacterContainerSaveData")
         del MappingCache.CharacterContainerSaveData[characterContainerId]
 
-    wsd['CharacterContainerSaveData']['value'] = []
-    for container_id in MappingCache.CharacterContainerSaveData:
-        wsd['CharacterContainerSaveData']['value'].append(MappingCache.CharacterContainerSaveData[container_id])
+    wsd['CharacterContainerSaveData']['value'] = [MappingCache.CharacterContainerSaveData[container_id] for container_id in MappingCache.CharacterContainerSaveData]
     print(f"Delete Character Containers: {len(deleteCharacterContainerIds)} / {len(characterContainerIds)}")
     MappingCache.LoadCharacterContainerMaps()
 
@@ -3981,12 +3979,10 @@ def BatchDeleteItemContainer(itemContainerIds):
 
         del MappingCache.ItemContainerSaveData[itemContainerId]
 
-    wsd['ItemContainerSaveData']['value'] = []
-    for container_id in MappingCache.ItemContainerSaveData:
-        wsd['ItemContainerSaveData']['value'].append(MappingCache.ItemContainerSaveData[container_id])
-    wsd['DynamicItemSaveData']['value']['values'] = []
-    for dynamicItemId in MappingCache.DynamicItemSaveData:
-        wsd['DynamicItemSaveData']['value']['values'].append(MappingCache.DynamicItemSaveData[dynamicItemId])
+    # print("batch delete itemc onta")
+    # print(len(MappingCache.ItemContainerSaveData.keys()))
+    wsd['ItemContainerSaveData']['value'] = [MappingCache.ItemContainerSaveData[container_id] for container_id in MappingCache.ItemContainerSaveData]
+    wsd['DynamicItemSaveData']['value']['values'] = [MappingCache.DynamicItemSaveData[dynamicItemId] for dynamicItemId in MappingCache.DynamicItemSaveData]
     print(f"Delete Dynamic Containers: {len(deleteDynamicIds)}")
     print(f"Delete Item Containers: {len(deleteItemContainerIds)} / {len(itemContainerIds)}")
     MappingCache.LoadItemContainerMaps()
@@ -4978,7 +4974,8 @@ def Save(exit_now=True):
 
 
 def dot_itemcontainer(f, container_id, name):
-    f.write(f'  "{container_id}" [shape="octagon" fillcolor="lightgreen" style="filled" dir=back label="{name}"]\n')
+    f.write(f'  "{container_id}" [shape="octagon" fillcolor="%s" style="filled" dir=back label="{name}"]\n' %
+            ("lightgreen" if container_id in MappingCache.ItemContainerSaveData else "#ea9898"))
 
 
 def dot_charactercontainer(f, container_id, name):
