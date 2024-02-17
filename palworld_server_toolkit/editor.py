@@ -874,15 +874,17 @@ try:
                 return [tk.StringVar(master), tk.StringVar(master), tk.StringVar(master), tk.StringVar(master)]
             elif attrib['type'] == "BoolProperty":
                 return tk.BooleanVar(master=master)
-            elif attrib['type'] == "ArrayProperty" and attrib['array_type'] == "StructProperty":
+            elif attrib['type'] == "ArrayProperty" and attrib['array_type'] in ["StructProperty"]:
                 attrib_var = []
                 for x in range(len(attrib['value']['values'])):
                     attrib_var.append({})
                 return attrib_var
-            elif attrib['type'] == "ArrayProperty" and attrib['array_type'] == "NameProperty":
+            elif attrib['type'] == "ArrayProperty" and attrib['array_type'] in ["NameProperty", "EnumProperty"]:
                 attrib_var = []
                 for x in range(len(attrib['value']['values'])):
-                    attrib_var.append({})
+                    attrib_var.append({
+                        attrib['array_type'][:-8]: tk.StringVar(master)
+                    })
                 return attrib_var
 
         def assign_attrib_var(self, var, attrib):
@@ -915,6 +917,9 @@ try:
                 var.set(attrib['value'])
             elif attrib['type'] == "EnumProperty":
                 var.set(attrib['value']['value'])
+            elif attrib['type'] == "ArrayProperty" and attrib['array_type'] in ["NameProperty", "EnumProperty"]:
+                for x in range(len(attrib['value']['values'])):
+                    var[x][attrib['array_type'][:-8]].set(attrib['value']['values'][x])
 
         def save(self, attribs, attrib_var, path=""):
             for attribute_key in attribs:
@@ -1032,18 +1037,27 @@ try:
                                                            storage_object[storage_key]['value'],
                                                            attrib_var[attribute_key].get()))
                         storage_object[storage_key]['value'] = attrib_var[attribute_key].get()
-                    elif attrib['type'] == "ArrayProperty" and attrib['array_type'] == "NameProperty":
+                    elif attrib['type'] == "ArrayProperty" and attrib['array_type'] in "NameProperty":
                         for idx, item in enumerate(attrib['value']['values']):
-                            print("%s%s [%s] = " % (path, attribute_key, attrib['type']))
+                            print("%s%s[%d] [%s] = " % (path, attribute_key, idx, attrib['type']))
                             self.save({
                                 'Name': {
                                     'type': attrib['array_type'],
                                     'values': attrib['value']['values'],
                                     'value_idx': idx
                                 }}, attrib_var[attribute_key][idx], "%s[%d]." % (attribute_key, idx))
-                    elif attrib['type'] == "ArrayProperty" and attrib['array_type'] == "StructProperty":
+                    elif attrib['type'] == "ArrayProperty" and attrib['array_type'] == "EnumProperty":
                         for idx, item in enumerate(attrib['value']['values']):
-                            print("%s%s [%s] = " % (path, attribute_key, attrib['type']))
+                            print("%s%s[%d] [%s] = " % (path, attribute_key, idx, attrib['type']))
+                            self.save({
+                                attrib['array_type'][:-8]: {
+                                    'type': "StrProperty",
+                                    'values': attrib['value']['values'],
+                                    'value_idx': idx
+                                }}, attrib_var[attribute_key][idx], "%s[%d]." % (attribute_key, idx))
+                    elif attrib['type'] == "ArrayProperty" and attrib['array_type'] in ["StructProperty"]:
+                        for idx, item in enumerate(attrib['value']['values']):
+                            print("%s%s[%d] [%s] = " % (path, attribute_key, idx, attrib['type']))
                             self.save({
                                 attrib['value']['prop_name']: {
                                     'type': attrib['value']['prop_type'],
@@ -1073,7 +1087,8 @@ try:
                     else:
                         g_frame = parent
 
-                    attrib_var[attribute_key] = self.make_attrib_var(master=parent, attrib=attrib)
+                    if attribute_key not in attrib_var:
+                        attrib_var[attribute_key] = self.make_attrib_var(master=parent, attrib=attrib)
                     if attrib['type'] == "BoolProperty":
                         tk.Checkbutton(master=g_frame, text="Enabled", variable=attrib_var[attribute_key],
                                        width=40).pack(
@@ -1087,7 +1102,9 @@ try:
                                              values=self.enum_options[attrib['value']['type']]).pack(side="right")
                         self.assign_attrib_var(attrib_var[attribute_key], attrib)
                     elif attrib['type'] == "ArrayProperty" and attrib['array_type'] in ["StructProperty",
+                                                                                        "EnumProperty",
                                                                                         "NameProperty"]:
+                        self.assign_attrib_var(attrib_var[attribute_key], attrib)
                         self.build_subgui(g_frame, attribute_key, attrib_var[attribute_key], attrib)
                     elif attrib['type'] == "StructProperty" and attrib['struct_type'] in ["Guid", "PalContainerId"]:
                         tk.Entry(font=self.__font, master=g_frame, width=50,
@@ -1168,10 +1185,16 @@ try:
             for item in g_frame.winfo_children():
                 item.destroy()
             print("Binding to %s[%d]" % (attribute_key, evt.widget.current()))
-            if attrib['type'] == 'ArrayProperty' and attrib['array_type'] == 'NameProperty':
+            if attrib['type'] == 'ArrayProperty' and attrib['array_type'] in ['NameProperty']:
                 self.build_variable_gui(g_frame, attrib_var[evt.widget.current()], {
-                    'Name': {
+                    attrib['array_type'][:-8]: {
                         'type': attrib['array_type'],
+                        'value': attrib['value']['values'][evt.widget.current()]
+                    }}, with_labelframe=False)
+            elif attrib['type'] == 'ArrayProperty' and attrib['array_type'] == 'EnumProperty':
+                self.build_variable_gui(g_frame, attrib_var[evt.widget.current()], {
+                    attrib['array_type'][:-8]: {
+                        'type': "StrProperty",
                         'value': attrib['value']['values'][evt.widget.current()]
                     }}, with_labelframe=False)
             else:
@@ -3507,6 +3530,7 @@ def GetReferencedCharacterContainerIdsByPlayer(player_uid):
 
 def FindReferenceCharacterContainerIds(with_character=True):
     reference_ids = set()
+    dynamic_ids = set()
     for basecamp_id in MappingCache.BaseCampMapping:
         basecamp = MappingCache.BaseCampMapping[basecamp_id]['value']
         if 'WorkerDirector' in basecamp:
@@ -3521,7 +3545,10 @@ def FindReferenceCharacterContainerIds(with_character=True):
     for basecamp in wsd['BaseCampSaveData']['value']:
         for BaseCampModule in basecamp['value']['ModuleMap']['value']:
             if BaseCampModule['key'] == "EPalBaseCampModuleType::TransportItemDirector":
-                reference_ids.update(BaseCampModule['value']['RawData']['value']['transport_item_character_infos'])
+                for transport_item in BaseCampModule['value']['RawData']['value']['transport_item_character_infos']:
+                    for item_info in transport_item['item_infos']:
+                        if item_info['item_id']['dynamic_id']['local_id_in_created_world'] != PalObject.EmptyUUID:
+                            dynamic_ids.add(item_info['item_id']['dynamic_id']['local_id_in_created_world'])
 
     for playerUId in MappingCache.PlayerIdMapping:
         reference_ids.update(GetReferencedCharacterContainerIdsByPlayer(playerUId))
@@ -4666,6 +4693,20 @@ def DeleteBaseCamp(base_id, group_id=None):
             print(
                 f"  Remove Character Instance {instance['guid']}  {instance['instance_id']} from Group individual_character_handle_ids")
             group_data['individual_character_handle_ids'].remove(instance)
+
+    IsDynamicItemDeleted = False
+    for BaseCampModule in baseCamp['value']['ModuleMap']['value']:
+        if BaseCampModule['key'] == "EPalBaseCampModuleType::TransportItemDirector":
+            for transport_item in BaseCampModule['value']['RawData']['value']['transport_item_character_infos']:
+                for item_info in transport_item['item_infos']:
+                    if item_info['item_id']['dynamic_id']['local_id_in_created_world'] != PalObject.EmptyUUID:
+                        IsDynamicItemDeleted = True
+                        del MappingCache.DynamicItemSaveData[item_info['item_id']['dynamic_id']['local_id_in_created_world']]
+
+    if IsDynamicItemDeleted:
+        wsd['DynamicItemSaveData']['value']['values'] = [MappingCache.DynamicItemSaveData[dynamicItemId] for
+                                                         dynamicItemId in MappingCache.DynamicItemSaveData]
+        MappingCache.LoadItemContainerMaps()
 
     delete_map_objs = []
     for model in wsd['MapObjectSaveData']['value']['values']:

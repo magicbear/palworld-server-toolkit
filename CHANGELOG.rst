@@ -17,9 +17,15 @@ Changelog
 v0.7.6
 -------
 
+Feature:
+
+- Edit EquipWaza for Pals
+- Edit MasteredWaza for Pals
+
 Fix:
 
 - Bug for DeleteMapObject
+- Attrib transport_item_character_infos for BaseCamp will cause delete character container not work
 
 Major:
 
