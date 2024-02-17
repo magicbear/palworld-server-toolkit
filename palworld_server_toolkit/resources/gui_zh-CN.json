@@ -7,6 +7,7 @@
   "src_player":  "源角色",
   "target_player": "目标角色",
   "target_guild": "目标公会",
+  "edit_guild": "✏️ 修改公会",
   "set_guild_owner": "\uD83D\uDD75️ 设置公会主人",
   "target_base": "目标营地 ⛺️",
   "delete_base": "❌️ 删除营地 ⛺️",

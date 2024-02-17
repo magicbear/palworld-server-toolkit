@@ -6,6 +6,7 @@
   "src_player":  "キャラクター",
   "target_player": "ターゲットキャラクター",
   "target_guild": "ターゲットギルド",
+  "edit_guild": "✏️ ギルドを変更",
   "set_guild_owner": "\uD83D\uDD75️ ギルドオーナーを設定",
   "target_base": "ターゲットキャンプ ⛺️",
   "delete_base": "❌️ キャンプを削除 ⛺️",

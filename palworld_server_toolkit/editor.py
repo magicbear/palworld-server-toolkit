@@ -1400,24 +1400,53 @@ try:
     class GuildEditGUI(ParamEditor):
         def __init__(self, group_id):
             super().__init__()
-            self.group_id = group_id
-            groupMapping = {str(group['key']): group for group in wsd['GroupSaveDataMap']['value']}
-            if group_id not in groupMapping:
+            try:
+                self.group_id = toUUID(group_id)
+            except Exception:
+                messagebox.showerror("Guild Edit", "Guild ID Invalid")
+                self.destroy()
+                return
+            if self.group_id not in MappingCache.GuildSaveDataMap:
                 messagebox.showerror("Guild Edit", "Guild not exists")
                 self.destroy()
                 return
-            self.group_data = groupMapping[group_id]['value']['RawData']
+            group_data = MappingCache.GuildSaveDataMap[self.group_id]['value']['RawData']['value']
+            self.group_data = {
+                'admin_player_uid': {
+                    'type': 'StructProperty',
+                    'struct_type': "Guid",
+                    'value': group_data['admin_player_uid']
+                },
+                'base_camp_level': {
+                    'type': 'IntProperty',
+                    'value': group_data['base_camp_level']
+                },
+                'group_name': {
+                    'type': 'StrProperty',
+                    'value': group_data['group_name']
+                },
+                'guild_name': {
+                    'type': 'StrProperty',
+                    'value': group_data['guild_name']
+                },
+                'org_type': {
+                    'type': 'IntProperty',
+                    'value': group_data['org_type']
+                }
+            }
             self.gui.title("Guild Edit - %s" % group_id)
             self.gui_attribute = {}
             self.build_variable_gui(self.create_base_frame(), self.gui_attribute, self.group_data)
             ttk.Button(master=self.gui, style="custom.TButton", text="Save", command=self.savedata).pack(
                 fill=tk.constants.X)
+            self.geometry("950x350")
 
         def savedata(self):
             self.save(self.group_data, self.gui_attribute)
+            group_data = MappingCache.GuildSaveDataMap[self.group_id]['value']['RawData']['value']
+            for attr in self.group_data:
+                group_data[attr] = self.group_data[attr]['value']
             self.destroy()
-
-    # g = GuildEditGUI("5cbf2999-92db-40e7-be6d-f96faf810453")
 
 except NameError:
     pass
@@ -1900,6 +1929,12 @@ class GUI():
             self.target_base['value'] = [str(x) for x in
                                          groupMapping[target_guild_uuid]['value']['RawData']['value']['base_ids']]
 
+    def edit_guild(self):
+        target_uuid = self.target_guild.get()[:36]
+        if target_uuid is None:
+            return
+        GuildEditGUI(target_uuid)
+
     def cleanup_item(self):
         if not os.path.exists(os.path.dirname(os.path.abspath(args.filename)) + "/Players/"):
             messagebox.showerror("Cleanup", self.lang_data['msg_player_folder_not_exists'])
@@ -2108,6 +2143,9 @@ class GUI():
         self.target_guild = AutocompleteCombobox(master=f_target_guild, font=self.mono_font, width=80)
         self.target_guild.pack(side="left", fill=tk.constants.X)
         self.target_guild.bind("<<ComboboxSelected>>", self.select_guild)
+        self.i18n['edit_guild'] = ttk.Button(master=f_target_guild, text="Edit", style="custom.TButton",
+                                                command=self.edit_guild)
+        self.i18n['edit_guild'].pack(side="left")
 
         f_target_guildbase = tk.Frame()
         self.i18n['target_base'] = tk.Label(master=f_target_guildbase, text="Target Base", font=self.font)

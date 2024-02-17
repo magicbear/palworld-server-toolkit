@@ -21,6 +21,7 @@ Feature:
 
 - Edit EquipWaza for Pals
 - Edit MasteredWaza for Pals
+- Edit Guild Info
 
 Fix:
 
