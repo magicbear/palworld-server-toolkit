@@ -14,6 +14,18 @@ Changelog
     Note that they these tags will not actually close the issue/PR until they
     are merged into the "default" branch.
 
+v0.7.5
+-------
+
+Fix:
+
+- CopyPlayer not change OldOwnerPlayerUIds
+- CopyPlayer will be repair the player after copy
+
+Feature:
+
+- Repair Player would be move duplicated pal storage container with same uid to new pal storage container
+
 v0.7.4
 -------
 
