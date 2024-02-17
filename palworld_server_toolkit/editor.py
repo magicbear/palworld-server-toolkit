@@ -2393,7 +2393,6 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
     load_skipped_decode(wsd, ['DynamicItemSaveData', 'CharacterSaveParameterMap', 'GroupSaveDataMap'], False)
     # load_skiped_decode(old_wsd, ['DynamicItemSaveData', 'CharacterSaveParameterMap', 'GroupSaveDataMap'], False)
     srcMappingCache = MappingCacheObject.get(old_wsd)
-    print("Loading mapping from backup file")
     MappingCache.LoadItemContainerMaps()
 
     print("Loading for player file")
@@ -2414,7 +2413,6 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
                      InstanceId=MappingCache.PlayerIdMapping[new_player_uid]['key']['InstanceId']['value'])
         MappingCache.LoadCharacterSaveParameterMap()
 
-    print("Checking for backup file")
     player_uid = player_gvas['PlayerUId']['value']
     if player_uid not in srcMappingCache.PlayerIdMapping:
         print(f"{tcl(31)}Error, player {tcl(32)} {str(player_uid)} %s {tcl(31)} not exists {tcl(0)}")
@@ -2447,7 +2445,6 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
                     idx_key, str(container['key']['ID']['value'])))
 
     MappingCache.LoadCharacterContainerMaps()
-    gp(container_id_mapping)
 
     cloneDynamicItemIds = []
     for idx_key in ['CommonContainerId', 'DropSlotContainerId', 'EssentialContainerId', 'FoodEquipContainerId',
