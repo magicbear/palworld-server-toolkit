@@ -15,6 +15,7 @@ import traceback
 from functools import reduce
 import multiprocessing
 import tarfile
+import subprocess
 
 module_dir = os.path.dirname(os.path.realpath(__file__))
 if not os.path.exists("%s/resources/gui.json" % module_dir) and getattr(sys, 'frozen', False):
@@ -1892,7 +1893,10 @@ class GUI():
         if answer != 'yes':
             return
 
-        BatchDeleteUnreferencedItemContainers()
+        unreferencedContainerIds = FindAllUnreferencedItemContainerIds()
+        print(f"Delete Non-Referenced Item Containers: {len(unreferencedContainerIds)}")
+        BatchDeleteItemContainer(unreferencedContainerIds, self.update_progress)
+        self.progressbar['value'] = 100
 
     def cleanup_character(self):
         if not os.path.exists(os.path.dirname(os.path.abspath(args.filename)) + "/Players/"):
@@ -1907,7 +1911,14 @@ class GUI():
 
         if answer != 'yes':
             return
-        BatchDeleteUnreferencedCharacterContainers()
+        unreferencedContainerIds = FindAllUnreferencedCharacterContainerIds()
+        BatchDeleteCharacterContainer(unreferencedContainerIds, self.update_progress)
+        self.progressbar['value'] = 100
+
+    def update_progress(self, x, y):
+        if x % 1000 == 0:
+            self.progressbar['value'] = 100 * x / y
+            self.gui.update()
 
     def delete_damage_container(self):
         if not os.path.exists(os.path.dirname(os.path.abspath(args.filename)) + "/Players/"):
@@ -2883,7 +2894,7 @@ def RepairPlayer(player_uid):
                                 slotItem = _slot
                                 break
 
-                    if slotItem['PermissionTribeID']['value']['value'] == "EPalTribeID::GrassMammoth":
+                    if slotItem['PermissionTribeID']['value']['value'] in ["EPalTribeID::GrassMammoth", "EPalTribeID::RobinHood"]:
                         workerSlots.add(item['key']['InstanceId']['value'])
                         baseWorkerContainers.add(slot_id)
                     else:
@@ -3141,207 +3152,163 @@ def MigrateBuilding(player_uid, new_player_uid):
                 str(map_data['MapObjectInstanceId']['value'])))
 
 
-def FindReferenceMapObject(mapObjectId, level=0, recursive_mapObjectIds=set(), srcMapping=None):
+def FindReferenceMapObject(mapObjectId, level=0, reference_ids=None, srcMapping=None):
+    mapObjectId = toUUID(mapObjectId)
     if srcMapping is None:
         srcMapping = MappingCache
-    mapObjectId = toUUID(mapObjectId)
     if mapObjectId not in srcMapping.MapObjectSaveData:
         print(f"Invalid {mapObjectId}")
         return []
+    if reference_ids is None:
+        reference_ids = {
+            "MapObject": set(),
+            "ItemContainer": set(),
+            "WorkData": set(),
+            "Spawner": set()
+        }
+    reference_ids['MapObject'].add(mapObjectId)
     mapObject = srcMapping.MapObjectSaveData[mapObjectId]
     connector = mapObject['Model']['value']['Connector']['value']['RawData']
-    reference_ids = []
     if 'value' in connector:
-        # Parent of this object
         if 'connect' in connector['value']:
             if 'any_place' in connector['value']['connect']:
                 for connection_item in connector['value']['connect']['any_place']:
-                    recursive_mapObjectIds.add(mapObjectId)
-                    # reference_ids['sub_id'].append(connection_item['connect_to_model_instance_id'])
-                    if connection_item['connect_to_model_instance_id'] in recursive_mapObjectIds:
+                    if connection_item['connect_to_model_instance_id'] == mapObjectId:
                         continue
-                    # print("%sAny_Place: %s -> %s" % ("  " * level, mapObjectId, connection_item['connect_to_model_instance_id']))
-                    reference_ids.append(connection_item['connect_to_model_instance_id'])
-                    reference_ids += FindReferenceMapObject(connection_item['connect_to_model_instance_id'], level + 1,
-                                                            recursive_mapObjectIds, srcMapping)
+                    connect_id = connection_item['connect_to_model_instance_id']
+                    if connect_id not in reference_ids['MapObject']:
+                        reference_ids['MapObject'].add(connect_id)
+                        FindReferenceMapObject(connect_id, level + 1, reference_ids, srcMapping)
         if 'other_connectors' in connector['value']:
             for other_connection_list in connector['value']['other_connectors']:
                 for connection_item in other_connection_list['connect']:
-                    recursive_mapObjectIds.add(mapObjectId)
-                    # reference_ids['sub_id'].append(connection_item['connect_to_model_instance_id'])
-                    # print("%sOther: %s -> %s" % ("  " * level, mapObjectId, connection_item['connect_to_model_instance_id']))
-                    if connection_item['connect_to_model_instance_id'] in recursive_mapObjectIds:
+                    if connection_item['connect_to_model_instance_id'] == mapObjectId:
                         continue
-                    # recursive_mapObjectIds.append(connection_item['connect_to_model_instance_id'])
-                    reference_ids.append(connection_item['connect_to_model_instance_id'])
-                    reference_ids += FindReferenceMapObject(connection_item['connect_to_model_instance_id'], level + 1,
-                                                            recursive_mapObjectIds, srcMapping)
+                    connect_id = connection_item['connect_to_model_instance_id']
+                    if connect_id not in reference_ids['MapObject']:
+                        reference_ids['MapObject'].add(connect_id)
+                        FindReferenceMapObject(connect_id, level + 1, reference_ids, srcMapping)
+
+    for concrete in mapObject['ConcreteModel']['value']['ModuleMap']['value']:
+        if concrete['key'] == "EPalMapObjectConcreteModelModuleType::ItemContainer":
+            reference_ids['ItemContainer'].add(concrete['value']['RawData']['value']['target_container_id'])
+        if concrete['key'] == "EPalMapObjectConcreteModelModuleType::Workee":
+            reference_ids['WorkData'].add(concrete['value']['RawData']['value']['target_work_id'])
+    mapObjectRawData = mapObject['Model']['value']['RawData']['value']
+    if 'repair_work_id' in mapObjectRawData and mapObjectRawData['repair_work_id'] != PalObject.EmptyUUID:
+        reference_ids['WorkData'].add(mapObjectRawData['repair_work_id'])
+    owner_spawner_level_object_instance_id = mapObjectRawData['owner_spawner_level_object_instance_id']
+    if owner_spawner_level_object_instance_id in MappingCache.MapObjectSpawnerInStageSaveData:
+        reference_ids['Spawner'].add(owner_spawner_level_object_instance_id)
+
+    if 'BuildProcess' in mapObject['Model']['value'] and PalObject.EmptyUUID != \
+            mapObject['Model']['value']['BuildProcess']['value']['RawData']['value']['id']:
+        reference_ids['WorkData'].add(mapObject['Model']['value']['BuildProcess']['value']['RawData']['value']['id'])
 
     return reference_ids
 
 
-def PrintReferenceMapObjects():
-    for mapObjectId in MappingCache.MapObjectSaveData:
-        x = FindReferenceMapObject(mapObjectId, 0, set())
-        # print("G -> %d" % len(x.keys()))
-        if len(x.keys()) == 0:
-            continue
-        print(x)
-
-
-# NON FINISHED
 def BatchDeleteMapObject(map_object_ids):
     load_skipped_decode(wsd, ['MapObjectSpawnerInStageSaveData', 'MapObjectSaveData'], False)
 
     delete_map_object_ids = set()
-    delete_item_container_ids = []
-    delete_owners = {}
 
-    map_object_ids = set(map_object_ids)
+    reference_ids = {
+        "MapObject": set(),
+        "ItemContainer": set(),
+        "WorkData": set(),
+        "Spawner": set()
+    }
     for map_object_id in list(map_object_ids):
-        sub_ids = FindReferenceMapObject(map_object_id)
-        for sub_id in sub_ids:
-            map_object_ids.add(sub_id)
-
-    for map_object_id in map_object_ids:
         map_object_id = toUUID(map_object_id)
-        if map_object_id not in MappingCache.MapObjectSaveData:
-            continue
-        delete_map_object_ids.add(map_object_id)
-        mapObject = MappingCache.MapObjectSaveData[map_object_id]
-        for concrete in mapObject['ConcreteModel']['value']['ModuleMap']['value']:
-            if concrete['key'] == "EPalMapObjectConcreteModelModuleType::ItemContainer":
-                delete_item_container_ids.append(concrete['value']['RawData']['value']['target_container_id'])
-            if concrete['key'] == "EPalMapObjectConcreteModelModuleType::StatusObserver":
-                pass
-            if concrete['key'] == "EPalMapObjectConcreteModelModuleType::Workee":
-                _DeleteWorkSaveData(concrete['value']['RawData']['value']['target_work_id'])
-            # if concrete['RawData']['value']['concrete_model_type'] == "PalMapObjectItemDropOnDamagModel":
-        # Connected MapObject
-        connected_mapObjects = []
+        if map_object_id in MappingCache.MapObjectSaveData:
+            delete_map_object_ids.add(map_object_id)
+            reference_ids = FindReferenceMapObject(map_object_id, 0, reference_ids)
 
-        owner_spawner_level_object_instance_id = mapObject['Model']['value']['RawData']['value'][
-            'owner_spawner_level_object_instance_id']
-        delete_owners[owner_spawner_level_object_instance_id] = None
+    _BatchDeleteMapObject(list(reference_ids['MapObject']))
+    _BatchDeleteWorkSaveData(list(reference_ids['WorkData']))
+    BatchDeleteItemContainer(list(reference_ids['ItemContainer']))
+    _BatchDeleteMapObjectSpawner(list(reference_ids['Spawner']))
 
-        if 'repair_work_id' in mapObject['Model']['value']['RawData']['value'] and \
-                mapObject['Model']['value']['RawData']['value'][
-                    'repair_work_id'] != PalObject.EmptyUUID:
-            _DeleteWorkSaveData(mapObject['Model']['value']['RawData']['value']['repair_work_id'])
-
-        if 'BuildProcess' in mapObject['Model']['value'] and PalObject.EmptyUUID != \
-                mapObject['Model']['value']['BuildProcess']['value']['RawData']['value']['id']:
-            _DeleteWorkSaveData(mapObject['Model']['value']['BuildProcess']['value']['RawData']['value']['id'])
-
-    new_mapobjects = []
-    for mapObject in wsd['MapObjectSaveData']['value']['values']:
-        if mapObject['MapObjectInstanceId']['value'] not in delete_map_object_ids:
-            new_mapobjects.append(mapObject)
-    wsd['MapObjectSaveData']['value']['values'] = new_mapobjects
-
-    new_spawner_objects = []
-    spawnInStage = parse_item(wsd['MapObjectSpawnerInStageSaveData']['value'][0]['value'],
-                              "MapObjectSpawnerInStageSaveData.Value")
-    for mapObj in spawnInStage['SpawnerDataMapByLevelObjectInstanceId']['value']:
-        if mapObj['key'] not in delete_owners:
-            new_spawner_objects.append(mapObj)
-
-    wsd['MapObjectSpawnerInStageSaveData']['value'][0]['value']['SpawnerDataMapByLevelObjectInstanceId'][
-        'value'] = new_spawner_objects
-    BatchDeleteItemContainer(delete_item_container_ids)
-    print(f"Delete MapObjectSaveData: {len(delete_map_object_ids)} / {len(map_object_ids)}")
+    MappingCache.LoadItemContainerMaps()
+    MappingCache.LoadWorkSaveData()
     MappingCache.LoadMapObjectMaps()
 
+    print(f"Delete MapObject: {len(delete_map_object_ids)} / {len(map_object_ids)}")
+    print(f"Delete MapObject With Ref: {len(reference_ids['MapObject'])}")
+    print(f"Delete MapObjectSpawner: {len(reference_ids['Spawner'])}")
+    print(f"Delete WorkSaveData: {len(reference_ids['WorkData'])}")
+    return reference_ids
+
+
+def DeleteMapObject(map_object_id):
+    if toUUID(map_object_id) not in MappingCache.MapObjectSaveData:
+        print(f"Error: Map Object {map_object_id} not found")
+        return False
+    reference_ids = BatchDeleteMapObject([map_object_id])
+
+    print(f"{tcl(31)}Delete Map Object: {map_object_id}{tcl(0)}")
+    for s_map_object_id in reference_ids['MapObject']:
+        if s_map_object_id == map_object_id:
+            continue
+        print(f"  {tcl(31)}Delete Reference Map Object: {tcl(33)}{s_map_object_id}{tcl(0)}")
+    for del_id in reference_ids['Spawner']:
+        print(f"  {tcl(31)}Delete Spawner Object: {tcl(33)}{del_id}{tcl(0)}")
+    for del_id in reference_ids['ItemContainer']:
+        print(f"  {tcl(31)}Delete ItemContainer: {tcl(33)}{del_id}{tcl(0)}")
+    for del_id in reference_ids['WorkData']:
+        print(f"  {tcl(31)}Delete WorkData: {tcl(33)}{del_id}{tcl(0)}")
+
+    # MapObjectConcreteModelInstanceId = mapObject['MapObjectConcreteModelInstanceId']['value']
+    # concrete_model_instance_id = mapObject['Model']['value']['RawValue']['value']['concrete_model_instance_id']   > = Referer To mapObject['ConcreteModel']
+    return True
 
 def CopyMapObject(map_object_id, src_wsd, dry_run=False):
     srcMappingObject = MappingCacheObject.get(src_wsd)
     if toUUID(map_object_id) not in srcMappingObject.MapObjectSaveData:
         print(f"Error: Map Object {map_object_id} not found")
         return False
-    mapObject = copy.deepcopy(srcMappingObject.MapObjectSaveData[toUUID(map_object_id)])
-    print(f"Clone MapObject {map_object_id}")
+
     if not dry_run:
         wsd['MapObjectSaveData']['value']['values'].append(mapObject)
-    sub_ids = FindReferenceMapObject(map_object_id, srcMapping=srcMappingObject)
-    for sub_id in sub_ids:
-        if sub_id == map_object_id:
+
+    reference_ids = FindReferenceMapObject(map_object_id, srcMapping=srcMappingObject)
+    for map_object_id in reference_ids['MapObject']:
+        if map_object_id in MappingCache.MapObjectSaveData:
             continue
-        CopyMapObject(sub_id, src_wsd, dry_run)
-    # MapObjectConcreteModelInstanceId = mapObject['MapObjectConcreteModelInstanceId']['value']
-    # concrete_model_instance_id = mapObject['Model']['value']['RawValue']['value']['concrete_model_instance_id']   > = Referer To mapObject['ConcreteModel']
-    for concrete in mapObject['ConcreteModel']['value']['ModuleMap']['value']:
-        if concrete['key'] == "EPalMapObjectConcreteModelModuleType::ItemContainer":
-            print(
-                f"Clone MapObject {map_object_id} -> ItemContainer {concrete['value']['RawData']['value']['target_container_id']}")
-            if not dry_run:
-                CopyItemContainers(parse_item(srcMappingObject.ItemContainerSaveData[
-                                                  concrete['value']['RawData']['value']['target_container_id']],
-                                              "ItemContainerSaveData"),
-                                   concrete['value']['RawData']['value']['target_container_id'])
-        if concrete['key'] == "EPalMapObjectConcreteModelModuleType::Workee":
-            print(
-                f"Clone MapObject {map_object_id} -> WorkSaveSata {concrete['value']['RawData']['value']['target_work_id']}")
-            if not dry_run:
-                _CopyWorkSaveData(concrete['value']['RawData']['value']['target_work_id'], src_wsd)
-    if 'repair_work_id' in mapObject['Model']['value']['RawData']['value'] and \
-            mapObject['Model']['value']['RawData']['value'][
-                'repair_work_id'] != PalObject.EmptyUUID:
-        print(
-            f"Clone MapObject {map_object_id} -> repair WorkSaveSata {mapObject['Model']['value']['RawData']['value']['repair_work_id']}")
+        print(f"Clone MapObject {map_object_id}")
+        mapObject = copy.deepcopy(srcMappingObject.MapObjectSaveData[toUUID(map_object_id)])
+        wsd['MapObjectSaveData']['value'].append(mapObject)
+    for item_container_id in reference_ids['ItemContainer']:
+        if item_container_id in MappingCache.ItemContainerSaveData:
+            continue
+        print(f"Clone MapObject {map_object_id} -> ItemContainer {item_container_id}")
         if not dry_run:
-            _CopyWorkSaveData(mapObject['Model']['value']['RawData']['value']['repair_work_id'], src_wsd)
-    owner_spawner_level_object_instance_id = mapObject['Model']['value']['RawData']['value'][
-        'owner_spawner_level_object_instance_id']
-    if owner_spawner_level_object_instance_id in srcMappingObject.MapObjectSpawnerInStageSaveData:
+            CopyItemContainers(parse_item(srcMappingObject.ItemContainerSaveData[item_container_id],
+                                      "ItemContainerSaveData"), item_container_id)
+    for work_id in reference_ids['WorkData']:
+        if work_id in MappingCache.WorkSaveData:
+            continue
+        print(
+            f"Clone MapObject {map_object_id} -> WorkSaveSata {work_id}")
+        if not dry_run:
+            _CopyWorkSaveData(work_id, src_wsd)
+
+    for spawner in reference_ids['Spawner']:
+        if spawner in MappingCache.MapObjectSpawnerInStageSaveData:
+            continue
         mapObjSpawner = copy.deepcopy(
-            parse_item(srcMappingObject.MapObjectSpawnerInStageSaveData[owner_spawner_level_object_instance_id],
+            parse_item(srcMappingObject.MapObjectSpawnerInStageSaveData[spawner],
                        "MapObjectSpawnerInStageSaveData.Value"))
         print(
-            f"Clone MapObjectSpawnerInStageSaveData {owner_spawner_level_object_instance_id}  Map Object {map_object_id}")
+            f"Clone MapObjectSpawnerInStageSaveData {spawner}  Map Object {map_object_id}")
         if not dry_run:
             wsd['MapObjectSpawnerInStageSaveData']['value'][0]['value']['SpawnerDataMapByLevelObjectInstanceId'][
                 'value'].append(mapObjSpawner)
 
-    return True
-
-
-def DeleteMapObject(map_object_id):
-    load_skipped_decode(wsd, ['MapObjectSpawnerInStageSaveData'], False)
-    if toUUID(map_object_id) not in MappingCache.MapObjectSaveData:
-        print(f"Error: Map Object {map_object_id} not found")
-        return False
-    mapObject = MappingCache.MapObjectSaveData[toUUID(map_object_id)]
-    try:
-        print(f"Delete MapObjectSaveData {map_object_id}")
-        wsd['MapObjectSaveData']['value']['values'].remove(mapObject)
-    except ValueError:
-        return False
-    sub_ids = FindReferenceMapObject(map_object_id)
-    for sub_id in sub_ids:
-        if sub_id == map_object_id:
-            continue
-        DeleteMapObject(sub_id)
-    # MapObjectConcreteModelInstanceId = mapObject['MapObjectConcreteModelInstanceId']['value']
-    # concrete_model_instance_id = mapObject['Model']['value']['RawValue']['value']['concrete_model_instance_id']   > = Referer To mapObject['ConcreteModel']
-    for concrete in mapObject['ConcreteModel']['value']['ModuleMap']['value']:
-        if concrete['key'] == "EPalMapObjectConcreteModelModuleType::ItemContainer":
-            DeleteItemContainer(concrete['value']['RawData']['value']['target_container_id'])
-        if concrete['key'] == "EPalMapObjectConcreteModelModuleType::Workee":
-            _DeleteWorkSaveData(concrete['value']['RawData']['value']['target_work_id'])
-    if 'repair_work_id' in mapObject['Model']['value']['RawData']['value'] and \
-            mapObject['Model']['value']['RawData']['value'][
-                'repair_work_id'] != PalObject.EmptyUUID:
-        _DeleteWorkSaveData(mapObject['Model']['value']['RawData']['value']['repair_work_id'])
-    owner_spawner_level_object_instance_id = mapObject['Model']['value']['RawData']['value'][
-        'owner_spawner_level_object_instance_id']
-    if owner_spawner_level_object_instance_id in MappingCache.MapObjectSpawnerInStageSaveData:
-        mapObjSpawner = parse_item(MappingCache.MapObjectSpawnerInStageSaveData[owner_spawner_level_object_instance_id],
-                                   "MapObjectSpawnerInStageSaveData.Value")
-        print(
-            f"  Delete MapObjectSpawnerInStageSaveData {owner_spawner_level_object_instance_id}  Map Object {map_object_id}")
-        wsd['MapObjectSpawnerInStageSaveData']['value'][0]['value']['SpawnerDataMapByLevelObjectInstanceId'][
-            'value'].remove(mapObjSpawner)
-
+    MappingCache.LoadWorkSaveData()
+    MappingCache.LoadItemContainerMaps()
+    MappingCache.LoadMapObjectMaps()
     return True
 
 
@@ -3575,7 +3542,7 @@ def BatchDeleteUnreferencedCharacterContainers():
     BatchDeleteCharacterContainer(unreferencedContainerIds)
 
 
-def BatchDeleteCharacterContainer(characterContainerIds):
+def BatchDeleteCharacterContainer(characterContainerIds, progressCallback: Optional[Callable]=None):
     deleteCharacterContainerIds = []
     for characterContainerId in characterContainerIds:
         characterContainerId = toUUID(characterContainerId)
@@ -3584,6 +3551,8 @@ def BatchDeleteCharacterContainer(characterContainerIds):
             continue
 
         deleteCharacterContainerIds.append(characterContainerId)
+        if progressCallback is not None:
+            progressCallback(len(deleteCharacterContainerIds), len(characterContainerIds))
         if len(deleteCharacterContainerIds) % 10000 == 0:
             print(f"Deleting Character Containers: {len(deleteCharacterContainerIds)} / {len(characterContainerIds)}")
         container = parse_item(MappingCache.CharacterContainerSaveData[characterContainerId],
@@ -3952,7 +3921,7 @@ def BatchDeleteUnreferencedItemContainers():
     BatchDeleteItemContainer(unreferencedContainerIds)
 
 
-def BatchDeleteItemContainer(itemContainerIds):
+def BatchDeleteItemContainer(itemContainerIds, progressCallback: Optional[Callable]=None):
     deleteDynamicIds = []
     deleteItemContainerIds = []
     for itemContainerId in itemContainerIds:
@@ -3964,6 +3933,8 @@ def BatchDeleteItemContainer(itemContainerIds):
         deleteItemContainerIds.append(itemContainerId)
         if len(deleteItemContainerIds) % 10000 == 0:
             print(f"Deleting Item Containers: {len(deleteItemContainerIds)} / {len(itemContainerIds)}")
+        if progressCallback is not None:
+            progressCallback(len(deleteItemContainerIds), len(itemContainerIds))
         container = parse_item(MappingCache.ItemContainerSaveData[itemContainerId], "ItemContainerSaveData")
         containerSlots = container['value']['Slots']['value']['values']
         for slotItem in containerSlots:
@@ -4539,6 +4510,25 @@ def _BatchDeleteWorkSaveData(wrk_ids):
     MappingCache.LoadWorkSaveData()
 
 
+def _BatchDeleteMapObject(map_ids):
+    for map_id in map_ids:
+        try:
+            del MappingCache.MapObjectSaveData[map_id]
+        except KeyError:
+            pass
+    wsd['MapObjectSaveData']['value']['values'] = [MappingCache.MapObjectSaveData[x] for x in MappingCache.MapObjectSaveData]
+
+
+def _BatchDeleteMapObjectSpawner(spawner_ids):
+    for spawner_id in spawner_ids:
+        try:
+            del MappingCache.MapObjectSpawnerInStageSaveData[spawner_id]
+        except KeyError:
+            pass
+    wsd['MapObjectSpawnerInStageSaveData']['value'][0]['value']['SpawnerDataMapByLevelObjectInstanceId']['value'] = \
+        [MappingCache.MapObjectSpawnerInStageSaveData[x] for x in MappingCache.MapObjectSpawnerInStageSaveData]
+
+
 def _CopyWorkSaveData(wrk_id, old_wsd):
     OldMappingCache = MappingCacheObject.get(old_wsd)
     try:
@@ -5000,13 +4990,17 @@ def dot_mapspawner(f, spawner_id):
         f'  "{spawner_id}" [shape="invhouse" fillcolor="darkgreen" label="Spawner {str(spawner_id)[:8]}" style="filled" weight="10"]\n')
 
 
-def dot_mapobject(f, map_id):
+def dot_mapobject(f, map_id, with_child=False):
     if map_id not in MappingCache.MapObjectSaveData:
         return
     mapObject = MappingCache.MapObjectSaveData[map_id]
 
-    # f.write(f'  "{map_id}" [shape="house" fillcolor="darkgreen" label="Map " style="invis" weight="10"]\n')
-    f.write(f'  "{map_id}" [shape="point" fillcolor="darkgreen" label="" style="invis" weight="10"]\n')
+    if with_child:
+        f.write(f'  "{map_id}" [shape="house" fillcolor="lightpink" label="Map %s" style="filled" weight="10"]\n' % (
+            str(map_id)[:8]
+        ))
+    else:
+        f.write(f'  "{map_id}" [shape="point" fillcolor="darkgreen" label="" style="invis" weight="10"]\n')
 
     basecamp_id = mapObject['Model']['value']['RawData']['value']['base_camp_id_belong_to']
     # if basecamp_id != PalObject.EmptyUUID:
@@ -5021,19 +5015,36 @@ def dot_mapobject(f, map_id):
     # if repair_work_id != PalObject.EmptyUUID:
     #     f.write(f'  "{repair_work_id}" -> "{map_id}"\n')
 
-    for concrete in mapObject['ConcreteModel']['value']['ModuleMap']['value']:
-        if concrete['key'] == "EPalMapObjectConcreteModelModuleType::ItemContainer":
-            container_id = concrete['value']['RawData']['value']['target_container_id']
-            f.write(f'  "{map_id}" -> "{container_id}"\n')
-            dot_itemcontainer(f, container_id, "Map Container")
-        if concrete['key'] == "EPalMapObjectConcreteModelModuleType::Workee":
-            work_id = concrete['value']['RawData']['value']['target_work_id']
-            f.write(f'  "{work_id}" -> "{map_id}"\n')
-    owner_spawner_level_object_instance_id = mapObject['Model']['value']['RawData']['value'][
-        'owner_spawner_level_object_instance_id']
-    if owner_spawner_level_object_instance_id != PalObject.EmptyUUID:
-        f.write(f'  "{map_id}" -> "{owner_spawner_level_object_instance_id}"\n')
-        dot_mapspawner(f, owner_spawner_level_object_instance_id)
+    if with_child:
+        connector = mapObject['Model']['value']['Connector']['value']['RawData']
+        gp(connector)
+        reference_ids = []
+        if 'value' in connector:
+            # Parent of this object
+            if 'connect' in connector['value']:
+                if 'any_place' in connector['value']['connect']:
+                    for connection_item in connector['value']['connect']['any_place']:
+                        f.write(f'  "{map_id}" -> "{connection_item["connect_to_model_instance_id"]}" [color = red]\n')
+        if 'other_connectors' in connector['value']:
+            for other_connection_list in connector['value']['other_connectors']:
+                for connection_item in other_connection_list['connect']:
+                        f.write(f'  "{map_id}" -> "{connection_item["connect_to_model_instance_id"]}" [color = darkgreen]\n')
+
+    else:
+        for concrete in mapObject['ConcreteModel']['value']['ModuleMap']['value']:
+            if concrete['key'] == "EPalMapObjectConcreteModelModuleType::ItemContainer":
+                container_id = concrete['value']['RawData']['value']['target_container_id']
+                f.write(f'  "{map_id}" -> "{container_id}"\n')
+                dot_itemcontainer(f, container_id, "Map Container")
+            if concrete['key'] == "EPalMapObjectConcreteModelModuleType::Workee":
+                work_id = concrete['value']['RawData']['value']['target_work_id']
+                f.write(f'  "{work_id}" -> "{map_id}"\n')
+        owner_spawner_level_object_instance_id = mapObject['Model']['value']['RawData']['value'][
+            'owner_spawner_level_object_instance_id']
+        if owner_spawner_level_object_instance_id != PalObject.EmptyUUID:
+            f.write(f'  "{map_id}" -> "{owner_spawner_level_object_instance_id}"\n')
+            dot_mapspawner(f, owner_spawner_level_object_instance_id)
+
 
 
 def dot_work(f, work_id):
@@ -5101,7 +5112,26 @@ def buildDotImage():
     load_skipped_decode(wsd, ['ItemContainerSaveData', 'CharacterContainerSaveData', 'MapObjectSaveData',
                               'WorkSaveData', 'MapObjectSpawnerInStageSaveData'], False)
 
-    with open("level.dot", "w") as f:
+    base_path = os.path.dirname(os.path.abspath(args.filename)) + "/dot/"
+    if not os.path.exists(base_path):
+        os.mkdir(base_path)
+
+    with open(f"{base_path}/map.dot", "w") as f:
+        f.write("digraph {\n")
+        f.write("    rankdir=LR\n")
+        for map_id in MappingCache.MapObjectSaveData:
+            dot_mapobject(f, map_id, True)
+        f.write("}\n")
+
+    print("Convert map to svg")
+    cmd = subprocess.run(['dot', '-Tsvg', f"{base_path}/map.dot"], capture_output=True)
+    if cmd.returncode == 0:
+        with open(f"{base_path}/map.svg", "wb") as f:
+            f.write(cmd.stdout)
+    else:
+        sys.stderr.write(cmd.stderr)
+
+    with open(f"{base_path}/level.dot", "w") as f:
         f.write("digraph {\n")
         f.write("    rankdir=LR\n")
         # container_ids = FindAllUnreferencedItemContainerIds()
@@ -5146,6 +5176,14 @@ def buildDotImage():
         #     dot_mapobject(f, map_id)
 
         f.write("}\n")
+
+    print("Convert level to svg")
+    cmd = subprocess.run(['dot', '-Tsvg', f"{base_path}/level.dot"], capture_output=True)
+    if cmd.returncode == 0:
+        with open(f"{base_path}/level.svg", "wb") as f:
+            f.write(cmd.stdout)
+    else:
+        sys.stderr.write(cmd.stderr)
 
 
 if __name__ == "__main__":

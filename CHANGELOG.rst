@@ -14,6 +14,20 @@ Changelog
     Note that they these tags will not actually close the issue/PR until they
     are merged into the "default" branch.
 
+v0.7.6
+-------
+
+Fix:
+
+- Bug for DeleteMapObject
+
+Major:
+
+- Improve performace for DeleteMapObject
+- implementation for CopyMapObject
+- Progress bar for Cleanup Item
+- Progress bar for Cleanup Character
+
 v0.7.5
 -------
 

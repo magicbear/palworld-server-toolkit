@@ -52,7 +52,8 @@
     ],
     "EPalTribeID": [
         "EPalTribeID::None",
-        "EPalTribeID::GrassMammoth"
+        "EPalTribeID::GrassMammoth",
+        "EPalTribeID::RobinHood"
     ],
     "EPalGroupType": [
         "EPalGroupType::Organization",
