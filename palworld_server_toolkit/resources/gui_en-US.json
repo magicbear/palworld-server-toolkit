@@ -1,5 +1,5 @@
 {
-  "font_order": ["Apple Gothic", "Yuanti SC", "Nanum Gothic", "Arial Unicode MS", "Droid Sans Fallback", "Courier New", "Arial"],
+  "font_order": ["Apple GoSthic", "Nanum Gothic", "Arial Unicode MS", "Droid Sans Fallback", "Courier New", "Arial", "MS Sans Serif"],
   "data_source": "Source Player Data Source",
   "data_source_list": ["Main File", "Backup File"],
   "open_file": "Open File",

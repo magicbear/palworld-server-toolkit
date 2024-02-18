@@ -96,8 +96,6 @@ QQ群 139107098
 > 使用源码版本 以下命令 ` -m palworld_server_toolkit.editor` 部份 修改为 `palworld_server_toolkit/editor.py` 运行即可
 
 
-- 清理捕捉日志及不存在玩家数据 - `python -m palworld_server_toolkit.editor --fix-missing --fix-capture Level.sav`
-
 - 使用GUI修改 `Level.sav` 文件 - `python -i -m palworld_server_toolkit.editor -g -o Level.sav Level.sav`
 
 - 修改 `Level.sav` 文件 - `python -m palworld_server_toolkit.editor -i -o Level.sav Level.sav`

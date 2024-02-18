@@ -99,8 +99,6 @@ This tools is for cleanup the unreference item, rename the player name, migrate 
 > 
 > Use source code version just replace below command ` -m palworld_server_toolkit.editor` to `palworld_server_toolkit/editor.py`
 
-- For cleaning the capture log in guild, use the follow command `python -m palworld_server_toolkit.editor --fix-missing --fix-capture Level.sav`
-
 - For GUI to modify `Level.sav` file - `python -i -m palworld_server_toolkit.editor -g -o Level.sav Level.sav`
 
 - For modify the `Level.sav` file, use the follow command

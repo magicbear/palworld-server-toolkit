@@ -2310,6 +2310,7 @@ class GUI():
             with open("%s/resources/pal_%s.json" % (module_dir, lang), encoding='utf-8') as f:
                 self.pal_i18n.update(json.load(f))
 
+        self.font = tk.font.Font(family="Courier New")
         font_list = self.lang_data['font_order']
         for font in font_list:
             if font in tkinter.font.families():

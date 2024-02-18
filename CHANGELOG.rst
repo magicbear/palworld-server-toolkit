@@ -24,6 +24,7 @@ Feature:
 - Edit Guild Info
 - PalEdit: Moveset on pals.json  Name -> CodeName
 - PalEdit: Pal skill show only available skills on Equipped Skills
+- Add no select src/target player prompt
 
 Fix:
 
