@@ -1972,9 +1972,12 @@ class GUI():
         self.progressbar['value'] = 100
 
     def update_progress(self, x, y):
-        if x % 1000 == 0:
-            self.progressbar['value'] = 100 * x / y
-            self.gui.update()
+        try:
+            if x % 1000 == 0:
+                self.progressbar['value'] = 100 * x / y
+                self.gui.update()
+        except Exception as e:
+            pass
 
     def delete_damage_container(self):
         if not os.path.exists(os.path.dirname(os.path.abspath(args.filename)) + "/Players/"):
@@ -3004,6 +3007,9 @@ def RepairPlayer(player_uid):
         emptySlotForPlayerIdle = 0
         moveToPalSlots = []
         for container_id in load_containers:
+            if container_id not in MappingCache.CharacterContainerSaveData:
+                print(f"Container ID f{container_id} Not exists, ignored")
+                continue
             container = parse_item(MappingCache.CharacterContainerSaveData[container_id], "CharacterContainerSaveData")
             container_type = f"{tcl(31)}Unknow Container"
             idle_slots = list(filter(lambda slot: slot['RawData']['value']['instance_id'] == PalObject.EmptyUUID,
@@ -3218,14 +3224,17 @@ def FindReferenceMapObject(mapObjectId, level=0, reference_ids=None, srcMapping=
         srcMapping = MappingCache
     if mapObjectId not in srcMapping.MapObjectSaveData:
         print(f"Invalid {mapObjectId}")
-        return []
+        return reference_ids
     if reference_ids is None:
         reference_ids = {
             "MapObject": set(),
             "ItemContainer": set(),
             "WorkData": set(),
-            "Spawner": set()
+            "Spawner": set(),
+            "PendingScan": []
         }
+    if mapObjectId in reference_ids['MapObject']:
+        return reference_ids
     reference_ids['MapObject'].add(mapObjectId)
     mapObject = srcMapping.MapObjectSaveData[mapObjectId]
     connector = mapObject['Model']['value']['Connector']['value']['RawData']
@@ -3237,7 +3246,11 @@ def FindReferenceMapObject(mapObjectId, level=0, reference_ids=None, srcMapping=
                         continue
                     connect_id = connection_item['connect_to_model_instance_id']
                     if connect_id not in reference_ids['MapObject']:
-                        reference_ids['MapObject'].add(connect_id)
+                        # if level > 100:
+                        #     print("Anyplace: ", level, mapObjectId, connect_id)
+                        if level > 500:
+                            reference_ids['PendingScan'].append(connect_id)
+                            continue
                         FindReferenceMapObject(connect_id, level + 1, reference_ids, srcMapping)
         if 'other_connectors' in connector['value']:
             for other_connection_list in connector['value']['other_connectors']:
@@ -3246,8 +3259,13 @@ def FindReferenceMapObject(mapObjectId, level=0, reference_ids=None, srcMapping=
                         continue
                     connect_id = connection_item['connect_to_model_instance_id']
                     if connect_id not in reference_ids['MapObject']:
-                        reference_ids['MapObject'].add(connect_id)
+                        if level > 500:
+                            reference_ids['PendingScan'].append(connect_id)
+                            continue
                         FindReferenceMapObject(connect_id, level + 1, reference_ids, srcMapping)
+    if level == 0:
+        while len(reference_ids['PendingScan']) > 0:
+            FindReferenceMapObject(reference_ids['PendingScan'].pop(), 1, reference_ids)
 
     for concrete in mapObject['ConcreteModel']['value']['ModuleMap']['value']:
         if concrete['key'] == "EPalMapObjectConcreteModelModuleType::ItemContainer":
@@ -3273,17 +3291,20 @@ def BatchDeleteMapObject(map_object_ids):
 
     delete_map_object_ids = set()
 
-    reference_ids = {
-        "MapObject": set(),
-        "ItemContainer": set(),
-        "WorkData": set(),
-        "Spawner": set()
-    }
+    reference_ids = None
     for map_object_id in list(map_object_ids):
         map_object_id = toUUID(map_object_id)
         if map_object_id in MappingCache.MapObjectSaveData:
             delete_map_object_ids.add(map_object_id)
-            reference_ids = FindReferenceMapObject(map_object_id, 0, reference_ids)
+            try:
+                reference_ids = FindReferenceMapObject(map_object_id, 0, reference_ids)
+            except RecursionError:
+                print(f"{tcl(31)}Fatal Error: maximum recursion depth exceeded in comparison on {tcl(36)}{map_object_id}{tcl(0)}")
+                print(f"Found Reference MapObject: {len(reference_ids['MapObject'])}")
+                return
+
+    if reference_ids is None:
+        return None
 
     _BatchDeleteMapObject(list(reference_ids['MapObject']))
     _BatchDeleteWorkSaveData(list(reference_ids['WorkData']))
@@ -5203,13 +5224,13 @@ def buildDotImage():
             dot_mapobject(f, map_id, True)
         f.write("}\n")
 
-    # print("Convert map to svg")
-    # cmd = subprocess.run(['dot', '-Tsvg', f"{base_path}/map.dot"], capture_output=True)
-    # if cmd.returncode == 0:
-    #     with open(f"{base_path}/map.svg", "wb") as f:
-    #         f.write(cmd.stdout)
-    # else:
-    #     sys.stderr.write(cmd.stderr)
+    print("Convert map to svg")
+    cmd = subprocess.run(['dot', '-Tsvg', f"{base_path}/map.dot"], capture_output=True)
+    if cmd.returncode == 0:
+        with open(f"{base_path}/map.svg", "wb") as f:
+            f.write(cmd.stdout)
+    else:
+        sys.stderr.write(cmd.stderr)
 
     with open(f"{base_path}/level.dot", "w") as f:
         f.write("digraph {\n")
