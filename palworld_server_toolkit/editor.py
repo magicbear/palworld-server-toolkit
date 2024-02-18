@@ -4859,8 +4859,11 @@ def ShowGuild(data_src=None):
         # ['GroupSaveDataMap']['value'][223]['value']['RawData']['value']['base_ids'][1]
         for base_idx, base_id in enumerate(item['base_ids']):
             basecamp = srcMapping.BaseCampMapping[toUUID(base_id)]
+            offset = basecamp['value']['RawData']['value']['transform']['translation']
             print(
-                f"    Base ID {tcl(32)} {base_id} {tcl(0)} -> {tcl(33)} {basecamp['value']['RawData']['value']['name']} {tcl(0)}    Map ID {tcl(32)} {item['map_object_instance_ids_base_camp_points'][base_idx]} {tcl(0)}")
+                f"    Base ID {tcl(32)} {base_id} {tcl(0)} -> {tcl(33)} {basecamp['value']['RawData']['value']['name']} {tcl(0)} " +
+                f" %6.0f, %6.0f, %6.0f" % (offset['x'], offset['y'], offset['z']) +
+                f" Map ID {tcl(32)} {item['map_object_instance_ids_base_camp_points'][base_idx]} {tcl(0)}")
         print()
         for player in mapObjectMeta['players']:
             try:
