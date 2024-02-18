@@ -22,6 +22,8 @@ Feature:
 - Edit EquipWaza for Pals
 - Edit MasteredWaza for Pals
 - Edit Guild Info
+- PalEdit: Moveset on pals.json  Name -> CodeName
+- PalEdit: Pal skill show only available skills on Equipped Skills
 
 Fix:
 
@@ -29,10 +31,12 @@ Fix:
 - Attrib transport_item_character_infos for BaseCamp will cause delete character container not work
 - FindReferenceMapObject will be raise RecursionError on very deep MapObject
 - RepairPlayer will be fail on unavailable Character Container
+- PalEdit: Pal skills EPalWazaID::None, None will be failed on loading
+- PalEdit: change skills from Name -> CodeName save to skills for i18n
 
 Major:
 
-- Improve performace for DeleteMapObject
+- Improve performance for DeleteMapObject
 - implementation for CopyMapObject
 - Progress bar for Cleanup Item
 - Progress bar for Cleanup Character

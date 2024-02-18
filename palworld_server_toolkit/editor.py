@@ -1511,6 +1511,13 @@ class GUI():
             src_uuid += "-0000-0000-0000-000000000000"
         if len(target_uuid) == 8:
             target_uuid += "-0000-0000-0000-000000000000"
+
+        if src_uuid == "":
+            messagebox.showerror("Src Player Error", self.lang_data['prompt_no_src_player'])
+            return None, None
+        if target_uuid == "":
+            messagebox.showerror("Target Player Error", self.lang_data['prompt_no_target_player'])
+            return None, None
         try:
             uuid.UUID(src_uuid)
         except Exception as e:
@@ -1688,6 +1695,9 @@ class GUI():
         target_uuid = self.src_player.get().split(" - ")[0]
         if len(target_uuid) == 8:
             target_uuid += "-0000-0000-0000-000000000000"
+        if target_uuid == "":
+            messagebox.showerror("Target Player Error", self.lang_data['prompt_no_target_player'])
+            return None, None
         try:
             uuid.UUID(target_uuid)
         except Exception as e:
@@ -1707,6 +1717,9 @@ class GUI():
 
     def parse_target_uuid(self, checkExists=True, showmessage=True):
         target_uuid = self.target_player.get().split(" - ")[0]
+        if target_uuid == "":
+            messagebox.showerror("Target Player Error", self.lang_data['prompt_no_target_player'])
+            return
         if len(target_uuid) == 8:
             target_uuid += "-0000-0000-0000-000000000000"
         try:

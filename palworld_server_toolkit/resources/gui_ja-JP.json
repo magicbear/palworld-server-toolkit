@@ -33,6 +33,8 @@
   "del_old_player": "\uD83D\uDDD1️ 古いキャラクターを削除",
   "repair_all_user": "\uD83C\uDD98 すべてのキャラクターを修復",
   "prompt_howlong_day": "何日間オンラインになっていませんか？",
+  "prompt_no_src_player": "キャラクターをありません",
+  "prompt_no_target_player": "ターゲットキャラクターをありません",
   "msg_confirm_fix_mapobject": "{MAP_COUNT} 個のマップ オブジェクトが破損しています。{SAVE_COUNT} 個のキャラクター アーカイブが破損しています。{CHARACTER_COUNT} 個の Pallu が破損しています\n続行しますか?",
   "msg_confirm_delete_objs": "{COUNT} を削除しますか?\n注: これはテスト機能です。ファイルがバックアップされていることを確認してください\n完了後、ゲームを開いて正常にプレイできるかどうかを確認してください\n確認してください続く？",
   "msg_confirm_delete": "{COUNT} 名キャラクターを削除しますか?\n注: これはテスト機能です。ファイルがバックアップされていることを確認してください\n完了後、ゲームを開いて正常にプレイできるかどうかを確認してください\n確認してください続く？",
