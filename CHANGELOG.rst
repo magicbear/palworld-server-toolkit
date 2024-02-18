@@ -27,6 +27,8 @@ Fix:
 
 - Bug for DeleteMapObject
 - Attrib transport_item_character_infos for BaseCamp will cause delete character container not work
+- FindReferenceMapObject will be raise RecursionError on very deep MapObject
+- RepairPlayer will be fail on unavailable Character Container
 
 Major:
 
@@ -34,6 +36,7 @@ Major:
 - implementation for CopyMapObject
 - Progress bar for Cleanup Item
 - Progress bar for Cleanup Character
+- Repair All Player will be throw Exception when can not repair a player
 
 v0.7.5
 -------

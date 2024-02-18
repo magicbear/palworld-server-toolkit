@@ -1953,6 +1953,7 @@ class GUI():
         print(f"Delete Non-Referenced Item Containers: {len(unreferencedContainerIds)}")
         BatchDeleteItemContainer(unreferencedContainerIds, self.update_progress)
         self.progressbar['value'] = 100
+        messagebox.showinfo("Result", "Delete Success")
 
     def cleanup_character(self):
         if not os.path.exists(os.path.dirname(os.path.abspath(args.filename)) + "/Players/"):
@@ -1970,6 +1971,7 @@ class GUI():
         unreferencedContainerIds = FindAllUnreferencedCharacterContainerIds()
         BatchDeleteCharacterContainer(unreferencedContainerIds, self.update_progress)
         self.progressbar['value'] = 100
+        messagebox.showinfo("Result", "Delete Success")
 
     def update_progress(self, x, y):
         try:
@@ -2035,7 +2037,13 @@ class GUI():
 
     def repair_all_player(self):
         for playerid in MappingCache.PlayerIdMapping:
-            RepairPlayer(playerid)
+            try:
+                RepairPlayer(playerid)
+            except Exception as e:
+                traceback.print_exception(e)
+                messagebox.showerror("Repair Error",
+                                     f"Repair Player {playerid} Failed\n{e.__class__.__name__}: {str(e)}")
+                return
         messagebox.showinfo("Result", "Repair success")
 
     def getPalTranslatedName(self, saveParameter):
@@ -2833,15 +2841,19 @@ def RepairPlayer(player_uid):
     if player_uid != player_gvas['IndividualId']['value']['PlayerUId']['value']:
         print(f"{tcl(31)}Error: Player {tcl(93)}{player_uid}{tcl(31)} not matched with save file "
               f"{tcl(93)}{player_gvas['IndividualId']['value']['PlayerUId']['value']}{tcl(31)}, failed to repair{tcl(0)}")
+        raise ValueError(f"Player UID {player_uid} not matched with the save file "
+                         f"{player_gvas['IndividualId']['value']['PlayerUId']['value']}")
         return
 
     if player_uid not in MappingCache.PlayerIdMapping:
         print(f"{tcl(31)}Error: Player {tcl(93)}{player_uid}{tcl(31)} not exists, failed to repair{tcl(0)}")
+        raise KeyError(f"Player UID {player_uid} not exists")
         return
 
     player_instance_id = MappingCache.PlayerIdMapping[player_uid]['key']['InstanceId']['value']
     if not MappingCache.PlayerIdMapping[player_uid] is MappingCache.CharacterSaveParameterMap[player_instance_id]:
         print(f"{tcl(31)}Error: Player {tcl(93)}{player_uid}{tcl(31)} duplicated, please delete first{tcl(0)}")
+        raise ValueError(f"Player UID {player_uid} duplicated")
         return
 
     if MappingCache.PlayerIdMapping[player_uid]['key']['InstanceId']['value'] != \
@@ -2855,6 +2867,7 @@ def RepairPlayer(player_uid):
                 print(f"{tcl(31)}Error: Save file for {tcl(93)}{player_uid}{tcl(31)} "
                       f"Instance ID {tcl(93)}{player_instance_id}{tcl(31)} is ref to player "
                       f"{tcl(93)}{sav_instance['key']['PlayerUId']['value']}{tcl(31)}, fail to repair {tcl(0)}")
+                raise ValueError(f"Player UID {player_uid} duplicated")
                 return
             else:
                 print(f"{tcl(31)}Duplicate Instance, delete the instance "
@@ -2978,7 +2991,7 @@ def RepairPlayer(player_uid):
     if rebuildPalStorageContainerId and \
             player_gvas['PalStorageContainerId']['value']['ID']['value'] in MappingCache.CharacterContainerSaveData:
         print(f"{tcl(33)}Rebuild Player {tcl(93)}{player_uid}{tcl(33)} Character Container "
-              f"{player_gvas['PalStorageContainerId']['value']['ID']['value']}f{0}")
+              f"{player_gvas['PalStorageContainerId']['value']['ID']['value']}{0}")
         wsd['CharacterContainerSaveData']['value'].remove(
             MappingCache.CharacterContainerSaveData[player_gvas['PalStorageContainerId']['value']['ID']['value']])
         del MappingCache.CharacterContainerSaveData[player_gvas['PalStorageContainerId']['value']['ID']['value']]
@@ -3008,8 +3021,8 @@ def RepairPlayer(player_uid):
         moveToPalSlots = []
         for container_id in load_containers:
             if container_id not in MappingCache.CharacterContainerSaveData:
-                print(f"Container ID f{container_id} Not exists, ignored")
-                continue
+                raise KeyError(f"Container ID {container_id} Not exists")
+                # continue
             container = parse_item(MappingCache.CharacterContainerSaveData[container_id], "CharacterContainerSaveData")
             container_type = f"{tcl(31)}Unknow Container"
             idle_slots = list(filter(lambda slot: slot['RawData']['value']['instance_id'] == PalObject.EmptyUUID,
