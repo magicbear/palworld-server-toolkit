@@ -1588,6 +1588,26 @@ class GUI():
         except Exception as e:
             messagebox.showerror("Migrate Error", str(e))
 
+    def migrate_to_nosteam(self):
+        src_uuid = self.parse_source_uuid(True, True)
+        if src_uuid is None:
+            return
+
+        new_uuid = toUUID(PlayerUid2NoSteam(int.from_bytes(toUUID(src_uuid).raw_bytes[0:4], byteorder='little')) + "-0000-0000-0000-000000000000")
+        answer = messagebox.showwarning("Migrate",
+                                        self.lang_data['msg_confirm_new_uuid']
+                                        .replace("{UUID}", src_uuid)
+                                        .replace("{NEW_UUID}", str(new_uuid)),
+                                        type=messagebox.YESNO)
+        if answer != 'yes':
+            return
+        try:
+            MigratePlayer(src_uuid, new_uuid)
+            messagebox.showinfo("Result", "Migrate to no steam success")
+            self.load_players()
+        except Exception as e:
+            messagebox.showerror("Migrate Error", str(e))
+
     def migrate(self):
         src_uuid, target_uuid = self.gui_parse_uuid()
         if src_uuid is None:
@@ -2256,6 +2276,12 @@ class GUI():
                                             command=self.migrate_to_local)
         self.i18n['migrate_to_local'] = self.btn_migrate_local
         self.btn_migrate_local.pack(side="left")
+
+        self.btn_migrate_nosteam = ttk.Button(master=g_multi_button_frame, text="Migrate To NoSteam",
+                                            style="custom.TButton",
+                                            command=self.migrate_to_nosteam)
+        self.i18n['migrate_to_nosteam'] = self.btn_migrate_nosteam
+        self.btn_migrate_nosteam.pack(side="left")
 
         self.btn_migrate = ttk.Button(master=g_multi_button_frame, text="⬆️ Migrate Player ⬇️", style="custom.TButton",
                                       command=self.migrate)
@@ -3183,7 +3209,7 @@ def MigratePlayer(player_uid, new_player_uid):
     #     return
 
     new_player_sav_file = os.path.dirname(
-        os.path.abspath(args.filename)) + "/Players/" + new_player_uid.upper().replace("-", "") + ".sav"
+        os.path.abspath(args.filename)) + "/Players/" + str(new_player_uid).upper().replace("-", "") + ".sav"
     new_player_uid = toUUID(new_player_uid)
 
     player_uid = player_gvas['PlayerUId']['value']

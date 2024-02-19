@@ -24,6 +24,7 @@ Fix:
 Feature:
 
 - Show error msg on corrupted save file
+- Have login to steam save convert to no login to steam save (have app_id to no app_id)
 
 v0.7.7
 -------

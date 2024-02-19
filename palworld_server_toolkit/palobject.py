@@ -110,6 +110,22 @@ def toUUID(uuid_str):
         return uuid_str
     return UUID.from_str(str(uuid_str))
 
+def u32(value):
+    return int.from_bytes((value & 0xffffffff).to_bytes(8, 'little', signed=True), byteorder='little',
+                          signed=False)
+
+def PlayerUid2NoSteam(unrealHashType):
+    a = u32(u32(unrealHashType << 8) ^ u32(2654435769 - unrealHashType))
+    b = u32((a >> 13) ^ u32(-(unrealHashType + a)))
+    c = u32((b >> 12) ^ u32(unrealHashType - a - b))
+    d = u32(u32(c << 16) ^ u32(a - c - b))
+    e = u32((d >> 5) ^ (b - d - c))
+    f = u32((e >> 3) ^ (c - d - e))
+    result = u32(
+        (u32(u32(f << 10) ^ u32(d - f - e)) >> 15) ^ (e - (u32(f << 10) ^ u32(d - f - e)) - f)
+      )
+    return "%08X" % result
+
 
 class PalObject:
     EmptyUUID = toUUID("00000000-0000-0000-0000-000000000000")
