@@ -21,6 +21,10 @@ Fix:
 
 - Bug on RepairPlayer
 
+Feature:
+
+- Show error msg on corrupted save file
+
 v0.7.7
 -------
 

@@ -571,7 +571,13 @@ def main():
         exit(1)
 
     t1 = time.time()
-    LoadFile(args.filename)
+    try:
+        LoadFile(args.filename)
+    except Exception as e:
+        log.fatal("Corrupted Save File", exc_info=True)
+        if args.gui:
+            messagebox.showerror("Error Save File", "Corrupted Save File, be sure you are open the right Level.sav")
+        sys.exit(0)
 
     if args.gui and sys.platform == 'darwin':
         if sys.flags.interactive:
@@ -603,6 +609,8 @@ def main():
         traceback.print_exception(e)
         log.error("Corrupted Save File", exc_info=True)
         Statistics()
+        if args.gui:
+            messagebox.showerror("Error Save File", "Corrupted Save File, be sure you are open the right Level.sav")
 
     log.info("Total load in %.3fms" % (1000 * (time.time() - t1)))
 
@@ -1752,6 +1760,14 @@ class GUI():
                 return None
         return target_uuid
 
+    def set_ui_progressing(self, state):
+        button_keys = ['del_unreference_item', 'cleanup_character', 'del_damage_obj', 'del_old_player', 'repair_all_user',
+                       'edit_player', 'edit_save', 'edit_item', 'edit_pal', 'repair_user', 'migrate_player', 'copy_player',
+                       'delete_player', 'rename_player', 'delete_base', 'copy_instance', 'edit_instance', 'open_file',
+                       'set_guild_owner', 'migrate_to_local']
+        for key in button_keys:
+            self.i18n[key]["state"] = "disabled" if state else "normal"
+
     def parse_target_uuid(self, checkExists=True, showmessage=True):
         target_uuid = self.target_player.get().split(" - ")[0]
         if target_uuid == "":
@@ -2001,8 +2017,10 @@ class GUI():
 
         unreferencedContainerIds = FindAllUnreferencedItemContainerIds()
         log.info(f"Delete Non-Referenced Item Containers: {len(unreferencedContainerIds)}")
+        self.set_ui_progressing(True)
         BatchDeleteItemContainer(unreferencedContainerIds, self.update_progress)
-        self.progressbar['value'] = 100
+        self.update_progress(100, 100)
+        self.set_ui_progressing(False)
         messagebox.showinfo("Result", "Delete Success")
 
     def cleanup_character(self):
@@ -2020,7 +2038,8 @@ class GUI():
             return
         unreferencedContainerIds = FindAllUnreferencedCharacterContainerIds()
         BatchDeleteCharacterContainer(unreferencedContainerIds, self.update_progress)
-        self.progressbar['value'] = 100
+        self.update_progress(100, 100)
+        self.set_ui_progressing(False)
         messagebox.showinfo("Result", "Delete Success")
 
     def update_progress(self, x, y):

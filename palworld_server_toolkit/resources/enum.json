@@ -19,20 +19,26 @@
         "EPalGenderType::Male"
     ],
     "EPalBaseCampWorkerSickType": [
-        "EPalBaseCampWorkerSickType::Weakness",
-        "EPalBaseCampWorkerSickType::Fracture",
-        "EPalBaseCampWorkerSickType::Bulimia",
+        "EPalBaseCampWorkerSickType::None",
         "EPalBaseCampWorkerSickType::Cold",
+        "EPalBaseCampWorkerSickType::Sprain",
+        "EPalBaseCampWorkerSickType::Bulimia",
         "EPalBaseCampWorkerSickType::GastricUlcer",
+        "EPalBaseCampWorkerSickType::Fracture",
+        "EPalBaseCampWorkerSickType::Weakness",
         "EPalBaseCampWorkerSickType::DepressionSprain",
-        "EPalBaseCampWorkerSickType::Sprain"
+        "EPalBaseCampWorkerSickType::DisturbingElement"
     ],
     "EPalStatusPhysicalHealthType": [
+        "EPalStatusPhysicalHealthType::Healthful",
         "EPalStatusPhysicalHealthType::MinorInjury",
+        "EPalStatusPhysicalHealthType::Severe",
         "EPalStatusPhysicalHealthType::Dying",
-        "EPalStatusPhysicalHealthType::Severe"
+        "EPalStatusPhysicalHealthType::DeadBody",
+        "EPalStatusPhysicalHealthType::CloudCemetery"
     ],
     "EPalStatusHungerType": [
+        "EPalStatusHungerType::Default",
         "EPalStatusHungerType::Hunger",
         "EPalStatusHungerType::Starvation"
     ],

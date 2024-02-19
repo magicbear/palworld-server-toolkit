@@ -47,9 +47,9 @@ def main():
         "-p",
         help="RCON Password",
     )
-    
+
     args = parser.parse_args()
-    
+
     try:
         if not os.path.exists("%s/.config" % Path.home()):
             os.mkdir("%s/.config" % Path.home())
@@ -59,7 +59,7 @@ def main():
 
         player_cache = "%s/.config/palworld-server-toolkit/player.txt" % Path.home()
         mapping = {}
-        
+
         if os.path.exists(player_cache):
             with open(player_cache,"rb") as f:
                 for line in f:
@@ -76,7 +76,7 @@ def main():
         if args.password:
             client = Client(args.host, args.port, passwd=args.password, timeout=0.5)
             client.connect(True)
-        
+
             try:
                 players = client.run('ShowPlayers').split("\n")
                 for player in players:
@@ -129,7 +129,7 @@ def main():
         print("An error occurred:", e)
 
 def PrettyPrint(data, level = 0):
-     simpleType = ['DateTime', 'Guid', 'LinearColor', 'Quat', 'Vector', 'PalContainerId']
+    simpleType = ['DateTime', 'Guid', 'LinearColor', 'Quat', 'Vector', 'PalContainerId']
     if 'struct_type' in data:
         if data['struct_type'] == 'DateTime':
             print("%s<Value Type='DateTime'>%d</Value>" % ("  " * level, data['value']))
