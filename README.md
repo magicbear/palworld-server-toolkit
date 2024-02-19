@@ -30,6 +30,8 @@
   - [服务器存档转本地](#服务器存档转本地)
   - [感谢](#感谢)
   - [视频操作教程 - 哔哩哔哩](https://www.bilibili.com/video/BV1s2421A7jX/)
+  - [有偿协助 / 请喝咖啡 - 闲鱼](https://m.tb.cn/h.5GkXWQ8?tk=t7zFWkLsfee)
+  - [有偿协助 - 闲鱼](#payment)
 
 
 ## GUI
@@ -275,6 +277,12 @@ options:
 ## **TODO**
 	
 - [ ] Cleanup the data on `FoliageGridSaveDataMap`
+
+---
+
+## PAYMENT
+
+![](./docs/img/payment.png)
 
 ---
 
