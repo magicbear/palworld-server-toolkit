@@ -53,7 +53,8 @@
     "EPalTribeID": [
         "EPalTribeID::None",
         "EPalTribeID::GrassMammoth",
-        "EPalTribeID::RobinHood"
+        "EPalTribeID::RobinHood",
+        "EPalTribeID::LavaGirl"
     ],
     "EPalGroupType": [
         "EPalGroupType::Organization",

@@ -112,7 +112,7 @@ loadingStatistics = {}
 
 
 class MappingCacheObject:
-    __slots__ = ("_worldSaveData",
+    __slots__ = ("_worldSaveData", "EnumOptions",
                  "PlayerIdMapping", "CharacterSaveParameterMap", "MapObjectSaveData", "MapObjectSpawnerInStageSaveData",
                  "ItemContainerSaveData", "DynamicItemSaveData", "CharacterContainerSaveData", "GroupSaveDataMap",
                  "WorkSaveData", "BaseCampMapping", "GuildSaveDataMap", "GuildInstanceMapping",
@@ -171,6 +171,10 @@ class MappingCacheObject:
         elif item == 'FoliageGridSaveDataMap':
             self.LoadMapObjectMaps()
             return self.FoliageGridSaveDataMap
+        elif item == "EnumOptions":
+            with open(f"{module_dir}/resources/enum.json", "r", encoding="utf-8") as f:
+                MappingCache.EnumOptions = json.load(f)
+            return MappingCache.EnumOptions
 
     def LoadWorkSaveData(self):
         load_skipped_decode(self._worldSaveData, ['WorkSaveData'], False)
@@ -786,8 +790,6 @@ try:
             #
             # tk.font.Font(family=
             self.__font = ("Courier New", 12)
-            with open(f"{module_dir}/resources/enum.json", "r", encoding="utf-8") as f:
-                self.enum_options = json.load(f)
             self.geometry("950x800")
 
         def delete_select_attribute(self, master, cmbx, attrib):
@@ -1126,12 +1128,12 @@ try:
                                        width=40).pack(
                             side=tk.RIGHT)
                         self.assign_attrib_var(attrib_var[attribute_key], attrib)
-                    elif attrib['type'] == "EnumProperty" and attrib['value']['type'] in self.enum_options:
-                        if attrib['value']['value'] not in self.enum_options[attrib['value']['type']]:
-                            self.enum_options[attrib['value']['type']].append(attrib['value']['value'])
+                    elif attrib['type'] == "EnumProperty" and attrib['value']['type'] in MappingCache.EnumOptions:
+                        if attrib['value']['value'] not in MappingCache.EnumOptions[attrib['value']['type']]:
+                            MappingCache.EnumOptions[attrib['value']['type']].append(attrib['value']['value'])
                         AutocompleteCombobox(master=g_frame, font=self.__font, width=40,
                                              textvariable=attrib_var[attribute_key],
-                                             values=self.enum_options[attrib['value']['type']]).pack(side="right")
+                                             values=MappingCache.EnumOptions[attrib['value']['type']]).pack(side="right")
                         self.assign_attrib_var(attrib_var[attribute_key], attrib)
                     elif attrib['type'] == "ArrayProperty" and attrib['array_type'] in ["StructProperty",
                                                                                         "EnumProperty",
@@ -2801,6 +2803,47 @@ def FindPlayersFromInactiveGuild(days):
     return player_list
 
 
+def RepairCharacterContainer(container_id):
+    container = parse_item(MappingCache.CharacterContainerSaveData[container_id],
+                           "CharacterContainerSaveData")
+    slotItems = container['value']['Slots']['value']['values']
+    for idx_slot, _slot in enumerate(slotItems):
+        if _slot['RawData']['value']['instance_id'] == PalObject.EmptyUUID:
+            if _slot['PermissionTribeID']['value']['value'] not in ["EPalTribeID::None", "None"]:
+                log.warning(f"Character Container {container_id}: {idx_slot} Invalid EPalTribeID = {_slot['PermissionTribeID']['value']['value']}")
+                if _slot['PermissionTribeID']['value']['value'] not in MappingCache.EnumOptions["EPalTribeID"]:
+                    gp(_slot)
+                else:
+                    _slot['PermissionTribeID']['value']['value'] = "EPalTribeID::None"
+            continue
+        if _slot['RawData']['value']['instance_id'] not in MappingCache.CharacterSaveParameterMap:
+            log.warning(f"Charcater Container {container_id} -> {_slot['RawData']['value']['instance_id']} invalid")
+            gp(_slot)
+            _slot['RawData']['value']['instance_id'] = PalObject.EmptyUUID
+            _slot['PermissionTribeID']['value']['value'] = "EPalTribeID::None"
+
+
+def UpdateCharacterToSlot(character, target_container_id, slotIndex=None, slotItem=None):
+    if slotIndex is None:
+        container = MappingCache.CharacterContainerSaveData[target_container_id]
+        for _slotIndex, _slotItem in enumerate(container['value']['Slots']['value']['values']):
+            if _slotItem['RawData']['value']['instance_id'] == PalObject.EmptyUUID or \
+                _slotItem['RawData']['value']['instance_id'] not in MappingCache.CharacterSaveParameterMap or \
+                _slotItem['RawData']['value']['instance_id'] == character['key']['InstanceId']['value']:
+                slotItem = _slotItem
+                slotIndex = _slotIndex
+                break
+    if slotIndex is None or slotItem is None:
+        log.error(f"  Character {character['key']['InstanceId']['value']} Container -> {target_container_id} No empty slots")
+        return False
+    log.info(f"  Character {character['key']['InstanceId']['value']} Container -> {target_container_id} Slot {slotIndex}")
+    slotItem['RawData']['value']['instance_id'] = character['key']['InstanceId']['value']
+    characterData = character['value']['RawData']['value']['object']['SaveParameter']['value']
+    characterData['SlotID']['value']['ContainerId']['value']['ID']['value'] = target_container_id
+    characterData['SlotID']['value']['SlotIndex']['value'] = slotIndex
+    return True
+
+
 def RepairPlayer(player_uid):
     err, player_gvas, player_sav_file, player_gvas_file = GetPlayerGvas(player_uid)
     if err:
@@ -2895,10 +2938,22 @@ def RepairPlayer(player_uid):
     unloadedSlots = []
     unknowContainers = set()
     baseWorkerContainers = set()
+    workerContainers = set()
     workerSlots = set()
     slotCharacterIndex = {
 
     }
+
+    player = MappingCache.PlayerIdMapping[player_uid]
+    group_id = player['value']['RawData']['value']['group_id']
+    if group_id in MappingCache.GroupSaveDataMap:
+        group = MappingCache.GroupSaveDataMap[group_id]['value']['RawData']['value']
+
+        for base_idx, base_id in enumerate(group['base_ids']):
+            basecamp = MappingCache.BaseCampMapping[base_id]['value']
+            if 'WorkerDirector' in basecamp:
+                baseWorkerContainers.add(basecamp['WorkerDirector']['value']['RawData']['value']['container_id'])
+
     for instanceId in MappingCache.CharacterSaveParameterMap:
         item = MappingCache.CharacterSaveParameterMap[instanceId]
         player = item['value']['RawData']['value']['object']['SaveParameter']['value']
@@ -2912,43 +2967,59 @@ def RepairPlayer(player_uid):
                 standbySlots.append(item['key']['InstanceId']['value'])
             elif 'SlotID' in player:
                 slot_id = player['SlotID']['value']['ContainerId']['value']['ID']['value']
-                unknowContainers.add(slot_id)
-                if slot_id not in MappingCache.CharacterContainerSaveData:
-                    log.info(f"{tcl(33)} Player {tcl(93)}{player_uid}{tcl(33)} SlotID "
-                          f"{tcl(93)}{slot_id}{tcl(33)} invalid{tcl(0)}")
-                    player['SlotID']['value']['ContainerId']['value']['ID']['value'] = \
-                        player_gvas['PalStorageContainerId']['value']['ID']['value']
-                    standbySlots.append(item['key']['InstanceId']['value'])
-                    rebuildPalStorageContainerId = True
+                if slot_id in baseWorkerContainers:
+                    # Player in group of worker
+                    workerSlots.add(item['key']['InstanceId']['value'])
                 else:
-                    container = parse_item(MappingCache.CharacterContainerSaveData[slot_id],
-                                           "CharacterContainerSaveData")
-                    if slot_id not in slotCharacterIndex:
-                        slotCharacterIndex[slot_id] = []
-                    slotCharacterIndex[slot_id].append(item)
-                    slotItems = container['value']['Slots']['value']['values']
-                    try:
-                        slotItem = slotItems[player['SlotID']['value']['SlotIndex']['value']]
-                        if slotItem['RawData']['value']['instance_id'] != item['key']['InstanceId']['value']:
-                            log.info(f"{tcl(33)} Player {tcl(93)}{player_uid}{tcl(33)} SlotID "
-                                  f"{tcl(93)}{slot_id}{tcl(33)} ItemIndex not matched -> "
-                                  f"{player['SlotID']['value']['SlotIndex']['value']}{tcl(0)}")
-                            raise IndexError()
-                    except IndexError:
-                        for idx_slot, _slot in enumerate(slotItems):
-                            if _slot['RawData']['value']['instance_id'] == item['key']['InstanceId']['value']:
-                                player['SlotID']['value']['SlotIndex']['value'] = idx_slot
-                                slotItem = _slot
-                                break
-
-                    if slotItem['PermissionTribeID']['value']['value'] in ["EPalTribeID::GrassMammoth",
-                                                                           "EPalTribeID::RobinHood"]:
-                        workerSlots.add(item['key']['InstanceId']['value'])
-                        baseWorkerContainers.add(slot_id)
+                    unknowContainers.add(slot_id)
+                    log.warning(f"  Player {tcl(93)}{player_uid}{tcl(33)}  Pal {tcl(93)}{item['key']['InstanceId']['value']}{tcl(0)}  "
+                                f"SlotID  {tcl(93)}{slot_id}{tcl(33)}  is not Player's Slot")
+                    if slot_id not in MappingCache.CharacterContainerSaveData:
+                        log.info(f"{tcl(33)} Player {tcl(93)}{player_uid}{tcl(33)} SlotID "
+                              f"{tcl(93)}{slot_id}{tcl(33)} invalid{tcl(0)}")
+                        player['SlotID']['value']['ContainerId']['value']['ID']['value'] = \
+                            player_gvas['PalStorageContainerId']['value']['ID']['value']
+                        standbySlots.append(item['key']['InstanceId']['value'])
+                        rebuildPalStorageContainerId = True
                     else:
-                        if slotItem['PermissionTribeID']['value']['value'] not in ["EPalTribeID::None", "None"]:
-                            gp(slotItem)
-                        unloadedSlots.append(item['key']['InstanceId']['value'])
+                        container = parse_item(MappingCache.CharacterContainerSaveData[slot_id],
+                                               "CharacterContainerSaveData")
+                        if slot_id not in slotCharacterIndex:
+                            slotCharacterIndex[slot_id] = []
+                        slotCharacterIndex[slot_id].append(item)
+                        slotItems = container['value']['Slots']['value']['values']
+                        slotItem = None
+                        try:
+                            slotItem = slotItems[player['SlotID']['value']['SlotIndex']['value']]
+                            if slotItem['RawData']['value']['instance_id'] != item['key']['InstanceId']['value']:
+                                log.warning(f"Player {tcl(93)}{player_uid}{tcl(33)} SlotID "
+                                      f"{tcl(93)}{slot_id}{tcl(33)} ItemIndex not matched -> "
+                                      f"{player['SlotID']['value']['SlotIndex']['value']}")
+                                raise IndexError()
+                        except IndexError:
+                            for idx_slot, _slot in enumerate(slotItems):
+                                if _slot['RawData']['value']['instance_id'] == item['key']['InstanceId']['value']:
+                                    player['SlotID']['value']['SlotIndex']['value'] = idx_slot
+                                    slotItem = _slot
+                                    break
+
+                        if slotItem is None:
+                            if not UpdateCharacterToSlot(item, slot_id):
+                                unloadedSlots.append(item['key']['InstanceId']['value'])
+                                log.warning(f"Player {tcl(93)}{player_uid}{tcl(33)} SlotID "
+                                      f"{tcl(93)}{slot_id}{tcl(33)} Slot Item not found -> "
+                                      f"{player['SlotID']['value']['SlotIndex']['value']}")
+                        else:
+                            if slotItem['PermissionTribeID']['value']['value'] in ["EPalTribeID::GrassMammoth",
+                                                                                   "EPalTribeID::RobinHood"]:
+                                workerSlots.add(item['key']['InstanceId']['value'])
+                                workerContainers.add(slot_id)
+                            else:
+                                if not (slotItem['PermissionTribeID']['value']['value'] in
+                                        MappingCache.EnumOptions['EPalTribeID']):
+                                    logging.warning("Undefined EPalTribeID:")
+                                    gp(slotItem)
+                                unloadedSlots.append(item['key']['InstanceId']['value'])
 
             if 'OldOwnerPlayerUIds' in player:
                 if player_uid not in player['OldOwnerPlayerUIds']['value']['values']:
@@ -2980,34 +3051,38 @@ def RepairPlayer(player_uid):
             anyFix = True
 
     if len(unloadedSlots) > 0:
-        log.warning(f"{tcl(33)}Warning: Player {tcl(93)}{player_uid}{tcl(33)} Have {tcl(32)}{len(unloadedSlots)}{tcl(33)} "
+        log.warning(f"Player {tcl(93)}{player_uid}{tcl(33)} Have {tcl(32)}{len(unloadedSlots)}{tcl(33)} "
               f"character not in player containers, worker in base: {tcl(32)}{len(workerSlots)}{tcl(33)}, "
               f"loaded: {tcl(32)}{len(loaded_instance)}{tcl(33)} / standby: {tcl(32)}{len(standbySlots)}{tcl(0)}")
         log.info(f"Container ids:")
-        load_containers = set()
-        load_containers.update(unknowContainers)
-        load_containers.update(baseWorkerContainers)
-        load_containers.add(player_gvas['OtomoCharacterContainerId']['value']['ID']['value'])
-        load_containers.add(player_gvas['PalStorageContainerId']['value']['ID']['value'])
+        load_containers = []
+        load_containers.append(player_gvas['OtomoCharacterContainerId']['value']['ID']['value'])
+        load_containers.append(player_gvas['PalStorageContainerId']['value']['ID']['value'])
+        load_containers += list(baseWorkerContainers)
+        load_containers += list(workerContainers)
+        load_containers += list(unknowContainers)
         emptySlotForPlayerIdle = 0
         moveToPalSlots = []
         for container_id in load_containers:
             if container_id not in MappingCache.CharacterContainerSaveData:
                 raise KeyError(f"Container ID {container_id} Not exists")
                 # continue
+            RepairCharacterContainer(container_id)
             container = parse_item(MappingCache.CharacterContainerSaveData[container_id], "CharacterContainerSaveData")
             container_type = f"{tcl(31)}Unknow Container"
             idle_slots = list(filter(lambda slot: slot['RawData']['value']['instance_id'] == PalObject.EmptyUUID,
                                      container['value']['Slots']['value']['values']))
             if container_id in baseWorkerContainers:
-                container_type = f"{tcl(36)}Worker Container"
+                container_type = f"{tcl(36)}Own Guild Worker Container"
+            elif container_id in workerContainers:
+                container_type = f"{tcl(36)}Other Guild Worker Container"
             elif container_id == player_gvas['OtomoCharacterContainerId']['value']['ID']['value']:
                 container_type = f"{tcl(33)}Player Otomo Character"
             elif container_id == player_gvas['PalStorageContainerId']['value']['ID']['value']:
                 container_type = f"{tcl(33)}Player Idle Character"
                 emptySlotForPlayerIdle = len(idle_slots)
             log.info(
-                f"  {container_type}{tcl(0)}: {container_id}{tcl(0)}: {len(idle_slots)} / {len(container['value']['Slots']['value']['values'])}")
+                f"  {container_type}{tcl(0)}: {container_id}{tcl(0)}: {len(container['value']['Slots']['value']['values']) - len(idle_slots)} / {len(container['value']['Slots']['value']['values'])}  Idle: {len(idle_slots)}")
             if len(container['value']['Slots']['value']['values']) == 480:
                 moveToPalSlots.append(container_id)
 
@@ -3016,19 +3091,20 @@ def RepairPlayer(player_uid):
             target_container_id = player_gvas['PalStorageContainerId']['value']['ID']['value']
             for container_id in moveToPalSlots:
                 container = MappingCache.CharacterContainerSaveData[target_container_id]
+                if container_id not in slotCharacterIndex or len(slotCharacterIndex[container_id]) == 0:
+                    continue
+                character = None
                 for slotIndex, slotItem in enumerate(container['value']['Slots']['value']['values']):
-                    if slotItem['RawData']['value']['instance_id'] == PalObject.EmptyUUID or \
-                            slotItem['RawData']['value']['instance_id'] not in MappingCache.CharacterSaveParameterMap:
+                    if character is None:
                         if container_id not in slotCharacterIndex or len(slotCharacterIndex[container_id]) == 0:
                             break
-                        character = slotCharacterIndex[container_id].pop()
-                        log.info(
-                            f"  Character {character['key']['InstanceId']['value']} Container -> {target_container_id}")
-                        slotItem['RawData']['value']['instance_id'] = character['key']['InstanceId']['value']
-                        player = character['value']['RawData']['value']['object']['SaveParameter']['value']
-                        player['SlotID']['value']['ContainerId']['value']['ID']['value'] = target_container_id
-                        player['SlotID']['value']['SlotIndex']['value'] = slotIndex
-
+                        character = slotCharacterIndex[container_id].pop(0)
+                    if slotItem['RawData']['value']['instance_id'] == PalObject.EmptyUUID or \
+                       slotItem['RawData']['value']['instance_id'] not in MappingCache.CharacterSaveParameterMap or \
+                       slotItem['RawData']['value']['instance_id'] == character['key']['InstanceId']['value']:
+                        standbySlots.append(character['key']['InstanceId']['value'])
+                        UpdateCharacterToSlot(character, target_container_id, slotIndex, slotItem)
+                        character = None
             # gp(container)
 
     player = MappingCache.PlayerIdMapping[player_uid]
@@ -3039,22 +3115,28 @@ def RepairPlayer(player_uid):
         new_handle_ids = [
             {'guid': player_uid, 'instance_id': player_gvas['IndividualId']['value']['InstanceId']['value']}
         ]
+        required_guild_instances = set([player_gvas['IndividualId']['value']['InstanceId']['value']])
+        current_guild_instances = set()
         for instance_id in loaded_instance:
             new_handle_ids.append({'guid': PalObject.EmptyUUID, 'instance_id': instance_id})
+            required_guild_instances.add(instance_id)
         for instance_id in standbySlots:
             new_handle_ids.append({'guid': PalObject.EmptyUUID, 'instance_id': instance_id})
+            required_guild_instances.add(instance_id)
+
         start_items = len(new_handle_ids)
         for ind_char in group['individual_character_handle_ids']:
             if ind_char['guid'] == player_uid or ind_char['instance_id'] in loaded_instance or \
                     ind_char['instance_id'] in standbySlots:
                 remove_handle_ids.append(ind_char)
+                current_guild_instances.add(ind_char['instance_id'])
             else:
                 new_handle_ids.append(ind_char)
-        for ind_char in remove_handle_ids:
-            group['individual_character_handle_ids'].remove(ind_char)
-        if start_items != len(remove_handle_ids) or replace_anyway:
+        if len(required_guild_instances - current_guild_instances) > 0 or replace_anyway:
+            for ind_char in remove_handle_ids:
+                group['individual_character_handle_ids'].remove(ind_char)
             anyFix = True
-            log.error(f"{tcl(33)}Error: Guild instance {tcl(36)}{group_id}{tcl(0)} invalid, local items: {start_items}, "
+            log.error(f"{tcl(33)}Guild instance {tcl(36)}{group_id}{tcl(0)} invalid, local items: {start_items}, "
                   f"replace with {len(group['individual_character_handle_ids'])} -> {len(new_handle_ids)}")
             group['individual_character_handle_ids'] += new_handle_ids
 
@@ -3584,7 +3666,7 @@ def GetReferencedCharacterContainerIdsByPlayer(player_uid):
 
 def FindReferenceCharacterContainerIds(with_character=True):
     reference_ids = set()
-    dynamic_ids = set()
+
     for basecamp_id in MappingCache.BaseCampMapping:
         basecamp = MappingCache.BaseCampMapping[basecamp_id]['value']
         if 'WorkerDirector' in basecamp:
@@ -3595,14 +3677,6 @@ def FindReferenceCharacterContainerIds(with_character=True):
             characterData = character['value']['RawData']['value']['object']['SaveParameter']['value']
             if 'SlotID' in characterData:
                 reference_ids.add(characterData['SlotID']['value']['ContainerId']['value']['ID']['value'])
-
-    for basecamp in wsd['BaseCampSaveData']['value']:
-        for BaseCampModule in basecamp['value']['ModuleMap']['value']:
-            if BaseCampModule['key'] == "EPalBaseCampModuleType::TransportItemDirector":
-                for transport_item in BaseCampModule['value']['RawData']['value']['transport_item_character_infos']:
-                    for item_info in transport_item['item_infos']:
-                        if item_info['item_id']['dynamic_id']['local_id_in_created_world'] != PalObject.EmptyUUID:
-                            dynamic_ids.add(item_info['item_id']['dynamic_id']['local_id_in_created_world'])
 
     for playerUId in MappingCache.PlayerIdMapping:
         reference_ids.update(GetReferencedCharacterContainerIdsByPlayer(playerUId))
