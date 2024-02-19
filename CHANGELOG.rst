@@ -25,6 +25,7 @@ Feature:
 - PalEdit: Moveset on pals.json  Name -> CodeName
 - PalEdit: Pal skill show only available skills on Equipped Skills
 - Add no select src/target player prompt
+- Logging system, save the log to backup file
 
 Fix:
 
@@ -34,6 +35,7 @@ Fix:
 - RepairPlayer will be fail on unavailable Character Container
 - PalEdit: Pal skills EPalWazaID::None, None will be failed on loading
 - PalEdit: change skills from Name -> CodeName save to skills for i18n
+- RepairPlayer make Guild individual_character_handle_ids invalid
 
 Major:
 
@@ -42,6 +44,8 @@ Major:
 - Progress bar for Cleanup Item
 - Progress bar for Cleanup Character
 - Repair All Player will be throw Exception when can not repair a player
+- Copy Player: Ignore the Pals that on the guild, only copy for the teams Pals and the Pal Storage's Pals, ignore
+  the Pals that working on the base
 
 v0.7.5
 -------
