@@ -4842,7 +4842,7 @@ def DeleteBaseCamp(base_id, group_id=None):
             group_data['individual_character_handle_ids'].remove(instance)
 
     IsDynamicItemDeleted = False
-    for BaseCampModule in baseCamp['value']['ModuleMap']['value']:
+    for BaseCampModule in baseCamp['ModuleMap']['value']:
         if BaseCampModule['key'] == "EPalBaseCampModuleType::TransportItemDirector":
             for transport_item in BaseCampModule['value']['RawData']['value']['transport_item_character_infos']:
                 for item_info in transport_item['item_infos']:
