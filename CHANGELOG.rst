@@ -25,6 +25,8 @@ Feature:
 
 - Show error msg on corrupted save file
 - Have login to steam save convert to no login to steam save (have app_id to no app_id)
+- MP loading progress
+- Delete Damange Object will delete no CharacterId object
 
 v0.7.7
 -------

@@ -1,5 +1,6 @@
-import re
+import time
 import traceback
+from functools import reduce
 
 from palworld_save_tools.archive import *
 from palworld_save_tools.paltypes import *
@@ -801,6 +802,7 @@ class FProgressArchiveReader(FArchiveReader):
         reduce_memory = False
         self.raise_error = False
         self.processlist = {}
+        self.progresslist = {}
         if 'reduce_memory' in kwargs:
             reduce_memory = kwargs['reduce_memory']
             del kwargs['reduce_memory']
@@ -871,7 +873,17 @@ class FProgressArchiveReader(FArchiveReader):
                     ) from e
 
     def progress(self):
-        return self.data.tell()
+        reduce_size = 0
+        for mp_path in self.progresslist:
+            reduce_size += self.progresslist[mp_path]['size']
+            prop = getattr(self.progresslist[mp_path]['share_mp'], "prop", None)
+            if prop is not None:
+                loaded_size = int(self.progresslist[mp_path]['size'] * (prop.current / prop.count))
+                reduce_size -= loaded_size
+        try:
+            return self.data.tell() - reduce_size
+        except ValueError:
+            return -reduce_size
 
     def load_mp_map(self, properties, path, size):
         key_type = self.fstring()
@@ -903,6 +915,11 @@ class FProgressArchiveReader(FArchiveReader):
             "id": _id,
             "value": share_mp.shm.name
         })
+        self.progresslist[path] = {
+            "share_mp": share_mp,
+            "count": count,
+            "size": size
+        }
         p = MPMapPropertyProcess(self, properties, count, path)
         p.start()
         properties.update({
@@ -947,6 +964,11 @@ class FProgressArchiveReader(FArchiveReader):
         properties['value'].update({
             'values': mp_ctx
         })
+        self.progresslist[path] = {
+            "share_mp": mp_ctx,
+            "count": count,
+            "size": size
+        }
         return p
 
     def property(
@@ -1081,6 +1103,7 @@ class FProgressArchiveReader(FArchiveReader):
                             PalObject.debug_wsd = properties['worldSaveData']['value']
                         raise ValueError(f"Decode failed, path={path}.{mp_path}, property={keyList}") from e
             self.processlist = {}
+            self.progresslist = {}
         return properties
 
     def parse_item(self, properties, skip_path):
@@ -1101,7 +1124,7 @@ class FProgressArchiveReader(FArchiveReader):
                 properties[idx] = self.parse_item(item, top_skip_path)
         return properties
 
-    def parse_skiped_item(self, properties, skip_path):
+    def parse_skiped_item(self, properties, skip_path, progress: Optional[Callable]=None):
         if "skip_type" not in properties:
             return properties
 
@@ -1130,10 +1153,13 @@ class FProgressArchiveReader(FArchiveReader):
         elif ".worldSaveData.%s" % skip_path in localProperties:
             del localProperties[".worldSaveData.%s" % skip_path]
 
+        data = writer.bytes()
         with FProgressArchiveReader(
-                writer.bytes(), PALWORLD_TYPE_HINTS,
+                data, PALWORLD_TYPE_HINTS,
                 localProperties
         ) as reader:
+            if progress is not None:
+                progress(reader, len(data))
             decoded_properties = reader.property(properties["skip_type"], len(properties['value']),
                                                  ".worldSaveData.%s" % skip_path)
             for k in decoded_properties:
@@ -1207,6 +1233,7 @@ class CustomEncoder(json.JSONEncoder):
 
 
 def AutoMakeStruct(struct):
+    import re
     structs = {}
     if 'type' in struct and struct['type'] == "StructProperty":
         if struct['struct_type'] in ["Vector"]:
@@ -1234,6 +1261,326 @@ def AutoMakeStruct(struct):
                                                                                                                "\n        "))
     return structs
 
+class MappingCacheObject:
+    __slots__ = ("_worldSaveData", "EnumOptions", "use_mp",
+                 "PlayerIdMapping", "CharacterSaveParameterMap", "MapObjectSaveData", "MapObjectSpawnerInStageSaveData",
+                 "ItemContainerSaveData", "DynamicItemSaveData", "CharacterContainerSaveData", "GroupSaveDataMap",
+                 "WorkSaveData", "BaseCampMapping", "GuildSaveDataMap", "GuildInstanceMapping",
+                 "FoliageGridSaveDataMap")
+
+    _MappingCacheInstances = {
+
+    }
+
+    @staticmethod
+    def get(worldSaveData, use_mp=True) -> "MappingCacheObject":
+        if id(worldSaveData) not in MappingCacheObject._MappingCacheInstances:
+            MappingCacheObject._MappingCacheInstances[id(worldSaveData)] = MappingCacheObject(worldSaveData)
+            MappingCacheObject._MappingCacheInstances[id(worldSaveData)].use_mp = use_mp
+        return MappingCacheObject._MappingCacheInstances[id(worldSaveData)]
+
+    def __init__(self, worldSaveData):
+        self._worldSaveData = worldSaveData
+        self.use_mp = True
+
+    def __getattr__(self, item):
+        if item == 'WorkSaveData':
+            self.LoadWorkSaveData()
+            return self.WorkSaveData
+        elif item == 'MapObjectSaveData':
+            self.LoadMapObjectMaps()
+            return self.MapObjectSaveData
+        elif item == 'MapObjectSpawnerInStageSaveData':
+            self.LoadMapObjectMaps()
+            return self.MapObjectSpawnerInStageSaveData
+        elif item == 'PlayerIdMapping':
+            self.LoadCharacterSaveParameterMap()
+            return self.PlayerIdMapping
+        elif item == 'CharacterSaveParameterMap':
+            self.LoadCharacterSaveParameterMap()
+            return self.CharacterSaveParameterMap
+        elif item == 'ItemContainerSaveData':
+            self.LoadItemContainerMaps()
+            return self.ItemContainerSaveData
+        elif item == 'DynamicItemSaveData':
+            self.LoadItemContainerMaps()
+            return self.DynamicItemSaveData
+        elif item == 'CharacterContainerSaveData':
+            self.LoadCharacterContainerMaps()
+            return self.CharacterContainerSaveData
+        elif item == 'GroupSaveDataMap':
+            self.LoadGroupSaveDataMap()
+            return self.GroupSaveDataMap
+        elif item == 'GuildSaveDataMap':
+            self.LoadGroupSaveDataMap()
+            return self.GuildSaveDataMap
+        elif item == 'BaseCampMapping':
+            self.LoadBaseCampMapping()
+            return self.BaseCampMapping
+        elif item == 'GuildInstanceMapping':
+            self.LoadGuildInstanceMapping()
+            return self.GuildInstanceMapping
+        elif item == 'FoliageGridSaveDataMap':
+            self.LoadMapObjectMaps()
+            return self.FoliageGridSaveDataMap
+        elif item == "EnumOptions":
+            with open(f"{module_dir}/resources/enum.json", "r", encoding="utf-8") as f:
+                self.EnumOptions = json.load(f)
+            return self.EnumOptions
+
+    def LoadWorkSaveData(self):
+        BatchParseItem(self._worldSaveData, ['WorkSaveData'], False, use_mp=self.use_mp)
+        self.WorkSaveData = {wrk['RawData']['value']['id']: wrk for wrk in
+                             self._worldSaveData['WorkSaveData']['value']['values']}
+
+    def LoadMapObjectMaps(self):
+        BatchParseItem(self._worldSaveData, ['MapObjectSaveData', 'MapObjectSpawnerInStageSaveData'], False, use_mp=self.use_mp)
+        self.MapObjectSaveData = {
+            mapobj['MapObjectInstanceId']['value']: mapobj for mapobj in
+            self._worldSaveData['MapObjectSaveData']['value']['values']}
+        self.MapObjectSpawnerInStageSaveData = {
+            mapObj['key']: mapObj
+            for mapObj in
+            self._worldSaveData['MapObjectSpawnerInStageSaveData']['value'][0]['value'][
+                'SpawnerDataMapByLevelObjectInstanceId']['value']
+        }
+        self.FoliageGridSaveDataMap = {
+
+        }
+        # for foliage in self._worldSaveData['FoliageGridSaveDataMap']['value']:
+        #     modelMaps = foliage['value']['ModelMap']['value']
+        #     for model in modelMaps:
+        #         self.FoliageGridSaveDataMap.update({
+        #             inst['key']['Guid']['value']: foliage for inst in model['value']['InstanceDataMap']['value']
+        #         })
+
+    def LoadCharacterSaveParameterMap(self):
+        self.CharacterSaveParameterMap = {character['key']['InstanceId']['value']: character for character in
+                                          self._worldSaveData['CharacterSaveParameterMap']['value']}
+        self.PlayerIdMapping = {character['key']['PlayerUId']['value']: character for character in
+                                filter(lambda x: 'IsPlayer' in
+                                                 x['value']['RawData']['value']['object']['SaveParameter']['value'],
+                                       self._worldSaveData['CharacterSaveParameterMap']['value'])}
+
+    def LoadItemContainerMaps(self):
+        BatchParseItem(self._worldSaveData, ['ItemContainerSaveData', 'DynamicItemSaveData'], False, use_mp=self.use_mp)
+        self.ItemContainerSaveData = {container['key']['ID']['value']: container for container in
+                                      self._worldSaveData['ItemContainerSaveData']['value']}
+        self.DynamicItemSaveData = {dyn_item_data['ID']['value']['LocalIdInCreatedWorld']['value']: dyn_item_data
+                                    for
+                                    dyn_item_data in self._worldSaveData['DynamicItemSaveData']['value']['values']}
+
+    def LoadCharacterContainerMaps(self):
+        BatchParseItem(self._worldSaveData, ['CharacterContainerSaveData'], False, use_mp=self.use_mp)
+        self.CharacterContainerSaveData = {container['key']['ID']['value']: container for container in
+                                           self._worldSaveData['CharacterContainerSaveData']['value']}
+
+    def LoadGroupSaveDataMap(self):
+        self.GroupSaveDataMap = {group['key']: group for group in self._worldSaveData['GroupSaveDataMap']['value']}
+        self.GuildSaveDataMap = {group['key']: group for group in
+                                 filter(lambda x: x['value']['GroupType']['value']['value'] == "EPalGroupType::Guild",
+                                        self._worldSaveData['GroupSaveDataMap']['value'])}
+
+    def LoadBaseCampMapping(self):
+        self.BaseCampMapping = {base['key']: base for base in self._worldSaveData['BaseCampSaveData']['value']}
+
+    def LoadGuildInstanceMapping(self):
+        self.GuildInstanceMapping = {}
+        for group_id in self.GuildSaveDataMap:
+            group_data = parse_skiped_item(self.GuildSaveDataMap[group_id], "GroupSaveDataMap")
+            item = group_data['value']['RawData']['value']
+            self.GuildInstanceMapping.update(
+                {ind_char['guid']: ind_char['instance_id'] for ind_char in item['individual_character_handle_ids']})
+
+    def __del__(self):
+        for key in wsd:
+            if isinstance(self._worldSaveData[key]['value'], MPMapProperty):
+                self._worldSaveData[key]['value'].close()
+                self._worldSaveData[key]['value'].release()
+            elif isinstance(self._worldSaveData[key]['value'], dict) and 'values' in self._worldSaveData[key][
+                'value'] and isinstance(
+                self._worldSaveData[key]['value']['values'], MPArrayProperty):
+                self._worldSaveData[key]['value']['values'].close()
+                self._worldSaveData[key]['value']['values'].release()
+
+
+def parse_skiped_item(properties, skip_path, progress: Optional[Callable]=None, recursive=True, mp=None):
+    if "skip_type" not in properties:
+        return properties
+
+    writer = FArchiveWriter(PALWORLD_CUSTOM_PROPERTIES)
+    if properties["skip_type"] == "ArrayProperty":
+        writer.fstring(properties["array_type"])
+        writer.optional_guid(properties.get("id", None))
+        writer.write(properties['value'])
+    elif properties["skip_type"] == "MapProperty":
+        writer.fstring(properties["key_type"])
+        writer.fstring(properties["value_type"])
+        writer.optional_guid(properties.get("id", None))
+        writer.write(properties["value"])
+    elif properties["skip_type"] == "StructProperty":
+        writer.fstring(properties["struct_type"])
+        writer.guid(properties["struct_id"])
+        writer.optional_guid(properties.get("id", None))
+        writer.write(properties["value"])
+
+    keep_custom_type = False
+    if recursive:
+        localProperties = copy.deepcopy(PALWORLD_CUSTOM_PROPERTIES)
+    else:
+        localProperties = copy.deepcopy(SKP_PALWORLD_CUSTOM_PROPERTIES)
+    if ".worldSaveData.%s" % skip_path in PALWORLD_CUSTOM_PROPERTIES:
+        localProperties[".worldSaveData.%s" % skip_path] = PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.%s" % skip_path]
+        keep_custom_type = True
+    elif ".worldSaveData.%s" % skip_path in localProperties:
+        del localProperties[".worldSaveData.%s" % skip_path]
+
+    with FProgressArchiveReader(
+            writer.bytes(), PALWORLD_TYPE_HINTS,
+            localProperties,
+            reduce_memory=mp is None
+    ) as reader:
+        if progress is not None:
+            progress(reader, len(properties['value']))
+        if reader.mp_loading and mp is not None and properties["skip_type"] == "MapProperty":
+            mp[f".worldSaveData.{skip_path}"] = reader.load_mp_map(properties, f".worldSaveData.{skip_path}",
+                                                                   len(properties['value']))
+        elif reader.mp_loading and mp is not None and properties["skip_type"] == "ArrayProperty":
+            mp[f".worldSaveData.{skip_path}"] = reader.load_mp_array(properties, f".worldSaveData.{skip_path}",
+                                                                     len(properties['value']))
+        else:
+            decoded_properties = reader.property(properties["skip_type"], len(properties['value']),
+                                                 ".worldSaveData.%s" % skip_path)
+            for k in decoded_properties:
+                properties[k] = decoded_properties[k]
+    if not keep_custom_type:
+        del properties['custom_type']
+    del properties["skip_type"]
+    return properties
+
+
+class MPProgressReader:
+    def __init__(self, proc):
+        self.mp_ctx = {}
+        self.proc = proc
+        self.loaded_size = 0
+
+    def add(self, path, reader, size):
+        self.mp_ctx[path] = (reader, size)
+
+    def start(self):
+        if len(self.mp_ctx) == 0:
+            return
+        if self.proc is None:
+            return
+        self.proc(self, reduce(lambda x, y: x + y[1], self.mp_ctx.values(), 0))
+
+    def progress(self):
+        t_proc = 0
+        del_mp_path = []
+        for mp_path, ctx in self.mp_ctx.items():
+            prog = ctx[0].progress()
+            if prog == 0:
+                self.loaded_size += ctx[1]
+                del_mp_path.append(mp_path)
+            else:
+                t_proc += ctx[1] + prog
+        for mp_path in del_mp_path:
+            del self.mp_ctx[mp_path]
+        return self.loaded_size + t_proc
+
+    def eof(self):
+        return len(self.mp_ctx) == 0
+
+def BatchParseItem(_worldSaveData, skip_paths, recursive=True, progress=None, use_mp=True):
+    if isinstance(skip_paths, str):
+        skip_paths = [skip_paths]
+
+    mp = {}
+    t2 = time.time()
+    parsed = 0
+    skip_paths.sort()
+    mp_ctx = MPProgressReader(progress)
+    if use_mp:
+        mp_items = filter(lambda x: not f".worldSaveData.{x}" in PALWORLD_CUSTOM_PROPERTIES, skip_paths)
+        skip_paths = filter(lambda x: f".worldSaveData.{x}" in PALWORLD_CUSTOM_PROPERTIES, skip_paths)
+        for skip_path in mp_items:
+            properties = _worldSaveData[skip_path]
+
+            if "skip_type" not in properties:
+                continue
+            parsed += 1
+            parse_skiped_item(properties, skip_path,
+                    progress=lambda reader, size: mp_ctx.add(skip_path, reader, size),
+                    recursive=recursive, mp=mp)
+            # print("Done in %.2fs" % (time.time() - t1))
+
+    # sorted(skip_paths,
+    #                             key=lambda x: 'Z' + x if f".worldSaveData.{x}" in PALWORLD_CUSTOM_PROPERTIES else x):
+    for skip_path in skip_paths:
+        properties = _worldSaveData[skip_path]
+
+        if "skip_type" not in properties:
+            continue
+        parsed += 1
+        print("Parsing .worldSaveData.%s..." % skip_path, end="", flush=True)
+        t1 = time.time()
+        sub_mp = None if f".worldSaveData.{skip_path}" in PALWORLD_CUSTOM_PROPERTIES else (mp if use_mp else None)
+        parse_skiped_item(properties, skip_path, progress, recursive, sub_mp)
+        print("Done in %.2fs" % (time.time() - t1))
+
+    mp_ctx.start()
+
+    while mp is not None and len(mp.keys()) > 0:
+        s = len(mp.keys())
+        for mp_path in mp:
+            mp[mp_path].join(timeout=0)
+            t3 = time.time() - t2
+            if mp[mp_path].is_alive():
+                continue
+            if mp_path in PALWORLD_CUSTOM_PROPERTIES:
+                with FProgressArchiveReader(
+                        b"", PALWORLD_TYPE_HINTS,
+                        PALWORLD_CUSTOM_PROPERTIES
+                ) as reader:
+                    reader.fallbackData = _worldSaveData[mp_path[15:]]
+                    _worldSaveData[mp_path[15:]] = PALWORLD_CUSTOM_PROPERTIES[mp_path][0](reader,
+                                                                                          _worldSaveData[mp_path[15:]][
+                                                                                              'type'], -1, mp_path)
+                    _worldSaveData[mp_path[15:]]["custom_type"] = mp_path
+            print("Loading %s in %.2fs, extra parse %.2fs" % (mp_path, t3, time.time() - t2 - t3))
+            del mp[mp_path]
+            break
+        if len(mp.keys()) - s == 0:
+            time.sleep(0.01)
+    if parsed > 0:
+        print("Parse skipped data in %.2fs" % (time.time() - t2))
+
+
+# ArrayProperty: -> .Value
+# MapProperty: -> Duplicate with Parent Name ['KeyName']
+SKP_PALWORLD_CUSTOM_PROPERTIES = copy.deepcopy(PALWORLD_CUSTOM_PROPERTIES)
+SKP_PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.MapObjectSaveData"] = (skip_decode, skip_encode)
+SKP_PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.MapObjectSaveData.MapObjectSaveData.WorldLocation"] = (
+    skip_decode, skip_encode)
+SKP_PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.MapObjectSaveData.MapObjectSaveData.WorldRotation"] = (
+    skip_decode, skip_encode)
+SKP_PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.MapObjectSaveData.MapObjectSaveData.Model.Value.EffectMap"] = (
+    skip_decode, skip_encode)
+SKP_PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.MapObjectSaveData.MapObjectSaveData.WorldScale3D"] = (
+    skip_decode, skip_encode)
+SKP_PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.FoliageGridSaveDataMap"] = (skip_decode, skip_encode)
+SKP_PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.MapObjectSpawnerInStageSaveData"] = (skip_decode, skip_encode)
+SKP_PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.DynamicItemSaveData"] = (skip_decode, skip_encode)
+SKP_PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.CharacterContainerSaveData"] = (skip_decode, skip_encode)
+SKP_PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.CharacterContainerSaveData.Value.Slots"] = (skip_decode, skip_encode)
+SKP_PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.CharacterContainerSaveData.Value.RawData"] = (skip_decode, skip_encode)
+SKP_PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.ItemContainerSaveData"] = (skip_decode, skip_encode)
+SKP_PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.ItemContainerSaveData.Value.BelongInfo"] = (skip_decode, skip_encode)
+SKP_PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.ItemContainerSaveData.Value.Slots"] = (skip_decode, skip_encode)
+SKP_PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.ItemContainerSaveData.Value.RawData"] = (skip_decode, skip_encode)
+SKP_PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.GroupSaveDataMap"] = (group_decode, group_encode)
+SKP_PALWORLD_CUSTOM_PROPERTIES[".worldSaveData.GroupSaveDataMap.Value.RawData"] = (skip_decode, skip_encode)
 
 # print("\n\n".join(AutoMakeStruct(copy.deepcopy(MappingCache.CharacterSaveParameterMap[toUUID('1dd8d2a0-4dd7-4b05-f3c0-7ab60ebd95e4')]['value']['RawData']['value']['object']['SaveParameter'])).values()))
 
