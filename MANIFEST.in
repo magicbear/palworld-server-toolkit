@@ -1,4 +1,4 @@
-graft palworld_server_toolkit/PalEdit/resources
+graft palworld_server_toolkit/pal_edit/palworld_pal_edit/resources
 prune palworld_server_toolkit/resources/items
 prune palworld_server_toolkit/resources/pal_category
 prune palworld_server_toolkit/resources/pal_inventory
