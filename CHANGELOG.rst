@@ -20,6 +20,8 @@ v0.7.8
 Fix:
 
 - Bug on RepairPlayer
+- Copy Instance will replace the item in containers, on the game will be the copied pals replace the old one
+- Delete Damange Object delete the MapObject on invalid Workee attribute
 
 Feature:
 

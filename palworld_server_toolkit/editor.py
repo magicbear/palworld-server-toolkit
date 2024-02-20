@@ -39,7 +39,7 @@ log_std_stream = logging.StreamHandler(sys.stderr)
 log.setLevel(logging.DEBUG)
 
 class CustomFormatter(logging.Formatter):
-    format = "%(levelname)s: %(message)s"
+    format = "%(levelname)-8s: %(message)s"
 
     FORMATS = {
         logging.DEBUG: tcl("38;20") + format + tcl(0),
@@ -3310,8 +3310,7 @@ def CopyCharacter(characterId, src_wsd, target_container=None, dry_run=False):
                                         "CharacterContainerSaveData")
         isFound = None
         for _slotIndex, slotItem in enumerate(characterContainer['value']['Slots']['value']['values']):
-            if slotItem['RawData']['value']['instance_id'] in [orig_InstanceId,
-                                                               character['key']['InstanceId']['value']]:
+            if slotItem['RawData']['value']['instance_id'] in character['key']['InstanceId']['value']:
                 slotItem['RawData']['value']['instance_id'] = character['key']['InstanceId']['value']
                 isFound = _slotIndex
                 break
@@ -3749,30 +3748,34 @@ def FindDamageRefContainer(dry_run=False):
         build_player_uid = mapObject['Model']['value']['RawData']['value']['build_player_uid']
         group_id = mapObject['Model']['value']['RawData']['value']['group_id_belong_to']
         repair_work_id = mapObject['Model']['value']['RawData']['value']['repair_work_id']
+        map_object_debug_msg = f"  Build By {tcl(33)}{build_player_uid}{tcl(0)}  Group {tcl(33)}{group_id}{tcl(0)}"
 
-        for concrete in mapObject['ConcreteModel']['value']['ModuleMap']['value']:
+        remove_concrete = []
+        for con_idx, concrete in enumerate(mapObject['ConcreteModel']['value']['ModuleMap']['value']):
             if concrete['key'] == "EPalMapObjectConcreteModelModuleType::ItemContainer":
                 if concrete['value']['RawData']['value']['target_container_id'] \
                         not in MappingCache.ItemContainerSaveData:
                     InvalidObjects['MapObject'].add(mapObject['MapObjectInstanceId']['value'])
                     log.info(f"MapObject {mapObject['MapObjectInstanceId']['value']} -> ItemContainer "
-                          f"{concrete['value']['RawData']['value']['target_container_id']} Invalid")
+                          f"{concrete['value']['RawData']['value']['target_container_id']} Invalid {map_object_debug_msg}")
             if concrete['key'] == "EPalMapObjectConcreteModelModuleType::Workee":
                 work_id = concrete['value']['RawData']['value']['target_work_id']
                 if work_id != PalObject.EmptyUUID and work_id not in MappingCache.WorkSaveData:
-                    log.info(f"MapObject {tcl(33)}{map_id}{tcl(0)}  -> Workee {tcl(33)}{work_id}{tcl(0)} invalid")
-                    InvalidObjects['MapObject'].add(map_id)
+                    log.debug(f"MapObject {tcl(33)}{map_id}{tcl(0)}  -> Workee {tcl(33)}{work_id}{tcl(0)} invalid {map_object_debug_msg}")
+                    if not dry_run:
+                        mapObject['ConcreteModel']['value']['ModuleMap']['value'].pop(con_idx)
+                    # InvalidObjects['MapObject'].add(map_id)
         if basecamp_id != PalObject.EmptyUUID and basecamp_id not in MappingCache.BaseCampMapping:
-            log.info(f"MapObject {tcl(33)}{map_id}{tcl(0)}  -> Basecamp {tcl(33)}{basecamp_id}{tcl(0)} invalid")
+            log.info(f"MapObject {tcl(33)}{map_id}{tcl(0)}  -> Basecamp {tcl(33)}{basecamp_id}{tcl(0)} invalid {map_object_debug_msg}")
             InvalidObjects['MapObject'].add(map_id)
-        if build_player_uid != PalObject.EmptyUUID and build_player_uid not in MappingCache.PlayerIdMapping:
-            log.info(f"MapObject {tcl(33)}{map_id}{tcl(0)}  -> Build Player {tcl(33)}{build_player_uid}{tcl(0)} invalid")
+        elif build_player_uid != PalObject.EmptyUUID and build_player_uid not in MappingCache.PlayerIdMapping:
+            log.info(f"MapObject {tcl(33)}{map_id}{tcl(0)}  -> Build Player {tcl(33)}{build_player_uid}{tcl(0)} invalid {map_object_debug_msg}")
             InvalidObjects['MapObject'].add(map_id)
-        if group_id != PalObject.EmptyUUID and group_id not in MappingCache.GuildSaveDataMap:
-            log.info(f"MapObject {tcl(33)}{map_id}{tcl(0)}  -> Group {tcl(33)}{group_id}{tcl(0)} invalid")
+        elif group_id != PalObject.EmptyUUID and group_id not in MappingCache.GuildSaveDataMap:
+            log.info(f"MapObject {tcl(33)}{map_id}{tcl(0)}  -> Group {tcl(33)}{group_id}{tcl(0)} invalid {map_object_debug_msg}")
             InvalidObjects['MapObject'].add(map_id)
-        if repair_work_id != PalObject.EmptyUUID and repair_work_id not in MappingCache.WorkSaveData:
-            log.info(f"MapObject {tcl(33)}{map_id}{tcl(0)}  -> Repair Work {tcl(33)}{repair_work_id}{tcl(0)} invalid")
+        elif repair_work_id != PalObject.EmptyUUID and repair_work_id not in MappingCache.WorkSaveData:
+            log.info(f"MapObject {tcl(33)}{map_id}{tcl(0)}  -> Repair Work {tcl(33)}{repair_work_id}{tcl(0)} invalid {map_object_debug_msg}")
             InvalidObjects['MapObject'].add(map_id)
 
     for spawn_id in MappingCache.MapObjectSpawnerInStageSaveData:
@@ -3780,7 +3783,7 @@ def FindDamageRefContainer(dry_run=False):
         for spawn_item in spawn_obj['value']['ItemMap']['value']:
             map_id = spawn_item['value']['MapObjectInstanceId']['value']
             if map_id != PalObject.EmptyUUID and map_id not in MappingCache.MapObjectSaveData:
-                log.info(f"MapObjectSpawnerInStage {tcl(33)}{spawn_id}{tcl(0)}  -> Map {tcl(33)}{map_id}{tcl(0)} invalid")
+                log.warning(f"MapObjectSpawnerInStage {tcl(33)}{spawn_id}{tcl(0)}  -> Map {tcl(33)}{map_id}{tcl(0)} invalid")
                 InvalidObjects['MapObjectSpawnerInStage'].add(spawn_id)
 
     for character in wsd['CharacterSaveParameterMap']['value']:
@@ -3809,13 +3812,13 @@ def FindDamageRefContainer(dry_run=False):
         if 'EquipItemContainerId' in characterData:
             if characterData['EquipItemContainerId']['value']['ID']['value'] not in MappingCache.ItemContainerSaveData:
                 InvalidObjects['Character']['EquipItemContainerId'].append(character['key']['InstanceId']['value'])
-                log.info(
+                log.debug(
                     f"%-60s {character['key']['InstanceId']['value']} -> EqualItemContainerID {characterData['EquipItemContainerId']['value']['ID']['value']} Invalid" %
                     CharacterDescription(character))
         if 'ItemContainerId' in characterData:
             if characterData['ItemContainerId']['value']['ID']['value'] not in MappingCache.ItemContainerSaveData:
                 InvalidObjects['Character']['ItemContainerId'].append(character['key']['InstanceId']['value'])
-                log.info(
+                log.debug(
                     f"%-60s {character['key']['InstanceId']['value']} -> ItemContainerId {characterData['ItemContainerId']['value']['ID']['value']} Invalid" % CharacterDescription(
                         character))
 
