@@ -26,6 +26,7 @@
   "repair_user": "\uD83D\uDD27 修复",
   "migrate_to_local": "迁移到本地",
   "migrate_player": "迁移玩家",
+  "migrate_to_steam": "迁移至Steam用户",
   "migrate_to_nosteam": "有Steam转无Steam",
   "copy_player": "复制玩家",
   "op_for_all": "对文件进行操作",

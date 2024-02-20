@@ -14,6 +14,7 @@ import msgpack
 import ctypes
 import sys
 import pprint
+from cityhash import CityHash64
 
 try:
     from setproctitle import setproctitle
@@ -127,6 +128,9 @@ def PlayerUid2NoSteam(unrealHashType):
       )
     return "%08X" % result
 
+def steamIdToPlayerUid(uid):
+    hash = CityHash64(str(uid).encode("utf-16-le"))
+    return UUID(int(u32(u32(hash) + (hash >> 32) * 23)).to_bytes(4, byteorder="little", signed=False) + b"\x00" * 12)
 
 class PalObject:
     EmptyUUID = toUUID("00000000-0000-0000-0000-000000000000")

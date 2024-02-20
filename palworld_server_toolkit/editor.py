@@ -1343,6 +1343,29 @@ class GUI():
         except Exception as e:
             messagebox.showerror("Migrate Error", str(e))
 
+    def migrate_to_steamid(self):
+        src_uuid = self.parse_source_uuid(True, True)
+        if src_uuid is None:
+            return
+
+        steam_id = simpledialog.askinteger("Migrate", "Server run with AppID = 2394010\nSteam ID?")
+        if steam_id is None:
+            return
+        new_uuid = steamIdToPlayerUid(steam_id)
+        answer = messagebox.showwarning("Migrate",
+                                        self.lang_data['msg_confirm_new_uuid']
+                                        .replace("{UUID}", src_uuid)
+                                        .replace("{NEW_UUID}", str(new_uuid)),
+                                        type=messagebox.YESNO)
+        if answer != 'yes':
+            return
+        try:
+            MigratePlayer(src_uuid, new_uuid)
+            messagebox.showinfo("Result", "Migrate to no steam success")
+            self.load_players()
+        except Exception as e:
+            messagebox.showerror("Migrate Error", str(e))
+
     def migrate(self):
         src_uuid, target_uuid = self.gui_parse_uuid()
         if src_uuid is None:
@@ -1497,7 +1520,7 @@ class GUI():
             target_uuid += "-0000-0000-0000-000000000000"
         if target_uuid == "":
             messagebox.showerror("Target Player Error", self.lang_data['prompt_no_target_player'])
-            return None, None
+            return None
         try:
             uuid.UUID(target_uuid)
         except Exception as e:
@@ -2017,6 +2040,12 @@ class GUI():
                                             command=self.migrate_to_nosteam)
         self.i18n['migrate_to_nosteam'] = self.btn_migrate_nosteam
         self.btn_migrate_nosteam.pack(side="left")
+
+        self.btn_migrate_steam = ttk.Button(master=g_multi_button_frame, text="Migrate To Steam",
+                                            style="custom.TButton",
+                                            command=self.migrate_to_steamid)
+        self.i18n['migrate_to_steam'] = self.btn_migrate_steam
+        self.btn_migrate_steam.pack(side="left")
 
         self.btn_migrate = ttk.Button(master=g_multi_button_frame, text="⬆️ Migrate Player ⬇️", style="custom.TButton",
                                       command=self.migrate)

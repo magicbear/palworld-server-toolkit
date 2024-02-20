@@ -23,6 +23,8 @@
   "edit_item": "\uD83D\uDCE6 部品を変更",
   "edit_pal": "\uD83D\uDC37 パルを変更",
   "repair_user": "\uD83D\uDD27 修復",
+  "migrate_to_steam": "Steam ユーザーに移行",
+  "migrate_to_nosteam": "Steam 以外の場所に移行",
   "migrate_to_local": "ローカルに移行",
   "migrate_player": "キャラクターを移行する",
   "copy_player": "キャラクターをコピー",
