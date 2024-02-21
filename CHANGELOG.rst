@@ -14,6 +14,13 @@ Changelog
     Note that they these tags will not actually close the issue/PR until they
     are merged into the "default" branch.
 
+0.7.9
+-------
+
+Fix:
+
+- Bug on Edit GUI
+
 v0.7.8
 -------
 
