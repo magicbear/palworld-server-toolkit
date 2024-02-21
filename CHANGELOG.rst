@@ -20,6 +20,9 @@ Changelog
 Feature:
 
 - Status on GUI
+- Change Pal Storage Slot Count
+- AdjustCharacterContainerSlots
+- Change Guild Worker Slot Count
 
 0.7.9
 -------

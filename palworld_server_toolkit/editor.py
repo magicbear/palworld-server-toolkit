@@ -1756,27 +1756,10 @@ class GUI():
         container = parse_item(MappingCache.CharacterContainerSaveData[container_id], "CharacterContainerSaveData")
         slots = container['value']['Slots']['value']['values']
         slots_count = simpledialog.askinteger("Adjust", "New slots?", initialvalue=len(slots))
-        idle_slots = list(filter(lambda slot: slot['RawData']['value']['instance_id'] == PalObject.EmptyUUID,
-                                 container['value']['Slots']['value']['values']))
-        if slots_count is not None:
-            if slots_count < len(slots) - len(idle_slots):
-                messagebox.showerror("Adjust",
-                                     f"New slots {slots_count} less then require: {len(slots) - len(idle_slots)}")
-                return
-            if slots_count < len(slots):
-                new_count = len(slots)
-                for n in range(len(slots), 0, -1):
-                    slot = slots[n - 1]
-                    if slot['RawData']['value']['instance_id'] == PalObject.EmptyUUID:
-                        slots.pop(n - 1)
-                        if new_count == slots_count:
-                            break
-            else:
-                for _ in range(slots_count - len(slots)):
-                    slots.append(PalObject.PalCharacterSlotSaveData_Array(
-                        PalObject.EmptyUUID,
-                        PalObject.EmptyUUID,
-                        PalObject.EmptyUUID))
+        err = AdjustCharacterContainerSlots(container, slots_count)
+        if err is not None:
+            messagebox.showerror("Adjust",err)
+        else:
             messagebox.showinfo("Result", "Update Success")
         self.status('done')
 
@@ -1822,6 +1805,26 @@ class GUI():
             messagebox.showinfo("Result", "Delete Base Camp Success")
         else:
             messagebox.showerror("Delete Base", "Failed to delete")
+        self.status('done')
+
+    def adjust_base_slot_count(self):
+        target_guild_uuid = self.target_guild.get().split(" - ")[0]
+        try:
+            baseCamp = MappingCache.BaseCampMapping[toUUID(self.target_base.get())]['value']
+        except Exception as e:
+            messagebox.showerror("Error Base Camp", "Error Base Camp")
+            return
+        self.status('loading')
+        container_id = baseCamp['WorkerDirector']['value']['RawData']['value']['container_id']
+        self.status('loading')
+        container = parse_item(MappingCache.CharacterContainerSaveData[container_id], "CharacterContainerSaveData")
+        slots = container['value']['Slots']['value']['values']
+        slots_count = simpledialog.askinteger("Adjust", "New slots?", initialvalue=len(slots))
+        err = AdjustCharacterContainerSlots(container, slots_count)
+        if err is not None:
+            messagebox.showerror("Adjust",err)
+        else:
+            messagebox.showinfo("Result", "Update Success")
         self.status('done')
 
     def select_target_player(self, evt):
@@ -2116,6 +2119,12 @@ class GUI():
                                                               style="custom.TButton",
                                                               command=self.delete_base)
         g_delete_base.pack(side="left")
+
+        self.i18n['adjust_base_worker'] = adjust_base_worker = ttk.Button(master=f_target_guildbase, text="Adjust Base Slot",
+                                                              style="custom.TButton",
+                                                              command=self.adjust_base_slot_count)
+        adjust_base_worker.pack(side="left")
+
         #
         f_target_instance = tk.Frame()
         self.i18n['target_instance'] = tk.Label(master=f_target_instance, text="Target Instance", font=self.font)
@@ -2432,6 +2441,30 @@ def SetGuildOwner(group_id, new_player_uid):
     MoveToGuild(new_player_uid, group_id)
     MappingCache.GroupSaveDataMap[toUUID(group_id)]['value']['RawData']['value']['admin_player_uid'] = new_player_uid
     return True
+
+
+def AdjustCharacterContainerSlots(container, slots_count):
+    slots = container['value']['Slots']['value']['values']
+    idle_slots = list(filter(lambda slot: slot['RawData']['value']['instance_id'] == PalObject.EmptyUUID,
+                             container['value']['Slots']['value']['values']))
+    if slots_count is not None:
+        if slots_count < len(slots) - len(idle_slots):
+            return f"New slots {slots_count} less then require: {len(slots) - len(idle_slots)}"
+        if slots_count < len(slots):
+            new_count = len(slots)
+            for n in range(len(slots), 0, -1):
+                slot = slots[n - 1]
+                if slot['RawData']['value']['instance_id'] == PalObject.EmptyUUID:
+                    slots.pop(n - 1)
+                    if new_count == slots_count:
+                        break
+        else:
+            for _ in range(slots_count - len(slots)):
+                slots.append(PalObject.PalCharacterSlotSaveData_Array(
+                    PalObject.EmptyUUID,
+                    PalObject.EmptyUUID,
+                    PalObject.EmptyUUID))
+    return None
 
 
 def CopyItemContainers(src_containers, targetInstanceId):
