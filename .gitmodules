@@ -1,6 +1,6 @@
-[submodule "save_tools"]
-	path = save_tools
-	url = https://github.com/cheahjs/palworld-save-tools.git
 [submodule "PalEdit"]
 	path = palworld_server_toolkit/pal_edit
 	url = https://github.com/magicbear/PalEdit.git
+[submodule "save_tools"]
+	path = save_tools
+	url = https://github.com/cheahjs/palworld-save-tools.git
