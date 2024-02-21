@@ -21,6 +21,11 @@ Feature:
 
 - Startup Inteactive Mode in GUI
 
+Fix:
+
+- Edit GUI for ArrayProperty can not multiple edit now
+- CopyPlayer error
+
 0.8.0
 -------
 
