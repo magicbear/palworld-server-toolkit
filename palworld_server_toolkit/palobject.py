@@ -22,6 +22,10 @@ except ImportError:
     def setproctitle(name):
         pass
 
+module_dir = os.path.dirname(os.path.realpath(__file__))
+if not os.path.exists("%s/resources/gui.json" % module_dir) and getattr(sys, 'frozen', False):
+    module_dir = os.path.dirname(sys.executable)
+
 
 class GvasPrettyPrint(pprint.PrettyPrinter):
     _dispatch = pprint.PrettyPrinter._dispatch.copy()
