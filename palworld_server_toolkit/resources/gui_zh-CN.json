@@ -32,6 +32,7 @@
   "migrate_to_nosteam": "有Steam转无Steam",
   "copy_player": "复制玩家",
   "op_for_all": "对文件进行操作",
+  "interactive": "交互模式",
   "del_unreference_item": "\uD83D\uDDD1️ 清理无用物品库",
   "cleanup_character": "\uD83D\uDDD1️ 清理无用角色库",
   "del_damage_obj": "\uD83C\uDD98 删除损坏对象",

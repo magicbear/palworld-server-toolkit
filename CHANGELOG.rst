@@ -14,6 +14,13 @@ Changelog
     Note that they these tags will not actually close the issue/PR until they
     are merged into the "default" branch.
 
+0.8.1
+-------
+
+Feature:
+
+- Startup Inteactive Mode in GUI
+
 0.8.0
 -------
 

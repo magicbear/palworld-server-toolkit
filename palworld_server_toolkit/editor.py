@@ -203,14 +203,35 @@ def load_skipped_decode(_worldSaveData, skip_paths, recursive=True):
 
 def gui_thread():
     global gui
-    try:
-        gui = GUI()
-        gui.load()
-        gui.mainloop()
-    except tk.TclError:
-        log.error("Failed to create GUI", exc_info=True)
-        gui = None
+    gui.mainloop()
 
+class InteractThread(threading.Thread):
+    _instance = None
+
+    def __init__(self):
+        super().__init__(daemon=True)
+
+    @staticmethod
+    def load():
+        if InteractThread._instance is None:
+            InteractThread._instance = InteractThread()
+            InteractThread._instance.start()
+        return InteractThread._instance
+
+    def interact_readfunc(self, prompt):
+        print(prompt, end="", flush=True)
+        line = sys.stdin.readline()
+        if line.strip() == "quit()":
+            return None
+        return line
+
+    def run(self):
+        import code
+        try:
+            code.interact(readfunc=self.interact_readfunc, local=globals())
+        except Exception as e:
+            traceback.print_exception(e)
+        InteractThread._instance = None
 
 def main():
     global output_file, output_path, args, gui, playerMapping
@@ -307,17 +328,6 @@ def main():
             messagebox.showerror("Error Save File", "Corrupted Save File, be sure you are open the right Level.sav")
         sys.exit(0)
 
-    if args.gui and sys.platform == 'darwin':
-        if sys.flags.interactive:
-            log.warning("Mac OS python not support interactive with GUI")
-            gui = GUI()
-            gui.load()
-            gui.gui.update()
-    #         gui_thread()
-    #         sys.exit(0)
-    elif args.gui and sys.flags.interactive:
-        threading.Thread(target=gui_thread, daemon=True).start()
-
     if args.statistics:
         Statistics()
 
@@ -381,11 +391,27 @@ def main():
         print("  search_key(wsd, '<value>')                 - Locate the key in the structure")
         print("  search_values(wsd, '<value>')              - Locate the value in the structure")
         print("  PrettyPrint(value)                         - Use XML format to show the value")
-        return
-    elif args.gui:
-        gui_thread()
     elif modify_to_file:
         Save()
+
+    if args.gui:
+        global gui
+        try:
+            gui = GUI()
+            gui.load()
+
+            if sys.flags.interactive:
+                if sys.platform == 'darwin':
+                    # log.warning("Mac OS python not support interactive with GUI")
+                    InteractThread.load()
+                    gui.gui.mainloop()
+                else:
+                    threading.Thread(target=gui_thread, daemon=True).start()
+            else:
+                gui.mainloop()
+        except tk.TclError:
+            log.error("Failed to create GUI", exc_info=True)
+            gui = None
 
 
 try:
@@ -1910,13 +1936,13 @@ class GUI():
 
     def set_progress(self, val):
         try:
-            self.progressbar['value'] = val
             self.lbl_status.config(text="%s %d%%" % (self.lang_data['status_loading'], val))
+            self.progressbar['value'] = val
             self.gui.update()
         except AttributeError as e:
             traceback.print_exception(e)
         except RuntimeError as e:
-            traceback.print_exception(e)
+            pass
 
     def update_progress(self, x, y):
         try:
@@ -2250,6 +2276,11 @@ class GUI():
                                   command=self.repair_all_player)
         self.i18n['repair_all_user'] = g_repair_all
         g_repair_all.pack(side=tk.LEFT)
+
+        if not sys.flags.interactive:
+            self.i18n['interactive'] = ttk.Button(master=g_wholefile, text="Interactive", style="custom.TButton",
+                                      command=InteractThread.load)
+            self.i18n['interactive'].pack(side=tk.LEFT)
 
         g_save = ttk.Button(text="Save & Exit", style="custom.TButton", command=self.save)
         self.i18n['save'] = g_save

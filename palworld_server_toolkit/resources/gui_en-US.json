@@ -31,6 +31,7 @@
   "migrate_to_nosteam": "Migrate To No Steam",
   "copy_player": "⬆️ Copy Player ⬇️",
   "op_for_all": "Operate for File",
+  "interactive": "Interactive",
   "del_unreference_item": "\uD83D\uDDD1️ Cleanup Item",
   "cleanup_character": "\uD83D\uDDD1️ Cleanup Character",
   "del_damage_obj": "\uD83C\uDD98 Del Damage Instance",

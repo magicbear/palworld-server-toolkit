@@ -31,6 +31,7 @@
   "migrate_player": "キャラクターを移行する",
   "copy_player": "キャラクターをコピー",
   "op_for_all": "ファイルの操作",
+  "interactive": "インタプリタ",
   "del_unreference_item": "\uD83D\uDDD1️ 部品格納庫削除",
   "cleanup_character": "\uD83D\uDDD1️ パル格納庫削除",
   "del_damage_obj": "\uD83C\uDD98 破損を削除",
