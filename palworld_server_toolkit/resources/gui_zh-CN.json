@@ -42,5 +42,8 @@
   "msg_confirm_fix_mapobject": "找到损坏的地图物件 {MAP_COUNT} 个，损坏的玩家存档 {SAVE_COUNT} 个，帕鲁 {CHARACTER_COUNT} 个，营地 {BASECAMP_COUNT} 个，工作数据 {WORKDATA_COUNT} 个、孵蛋器／浓缩机 {SPAWNER_COUNT} 个\n确认继续?",
   "msg_confirm_delete_objs": "确认删除 {COUNT} 个物件？\n注意：这是一个测试功能，请确认已备份文件\n完成后请打开游戏确认是否能正常游玩\n确认继续?",
   "msg_confirm_delete": "确认删除 {COUNT} 个玩家？\n注意：这是一个测试功能，请确认已备份文件\n完成后请打开游戏确认是否能正常游玩\n确认继续?",
-  "msg_player_folder_not_exists": "Level.sav 所在目录中 Players 文件夹不存在"
+  "msg_player_folder_not_exists": "Level.sav 所在目录中 Players 文件夹不存在",
+  "status_loading": "正在加载中⋯⋯",
+  "status_error": "错误",
+  "status_done": "完成"
 }

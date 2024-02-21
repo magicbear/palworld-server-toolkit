@@ -41,5 +41,8 @@
   "msg_confirm_fix_mapobject": "{MAP_COUNT} 個のマップ オブジェクトが破損しています。{SAVE_COUNT} 個のキャラクター アーカイブが破損しています。{CHARACTER_COUNT} 個の Pallu が破損しています\n続行しますか?",
   "msg_confirm_delete_objs": "{COUNT} を削除しますか?\n注: これはテスト機能です。ファイルがバックアップされていることを確認してください\n完了後、ゲームを開いて正常にプレイできるかどうかを確認してください\n確認してください続く？",
   "msg_confirm_delete": "{COUNT} 名キャラクターを削除しますか?\n注: これはテスト機能です。ファイルがバックアップされていることを確認してください\n完了後、ゲームを開いて正常にプレイできるかどうかを確認してください\n確認してください続く？",
-  "msg_player_folder_not_exists": "Level.sav が存在するディレクトリに Players フォルダーが存在しません。"
+  "msg_player_folder_not_exists": "Level.sav が存在するディレクトリに Players フォルダーが存在しません。",
+  "status_loading": "読み込み中...",
+  "status_error": "エラー",
+  "status_done": "完了"
 }

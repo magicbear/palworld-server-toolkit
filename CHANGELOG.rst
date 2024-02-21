@@ -14,6 +14,13 @@ Changelog
     Note that they these tags will not actually close the issue/PR until they
     are merged into the "default" branch.
 
+0.8.0
+-------
+
+Feature:
+
+- Status on GUI
+
 0.7.9
 -------
 

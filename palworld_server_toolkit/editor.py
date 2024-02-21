@@ -134,23 +134,13 @@ class skip_loading_progress(threading.Thread):
                     print("\033]0;%s - %3.1f%%\a" % (loadingTitle, 100 * self.reader.progress() / self.size), end="",
                           flush=True)
                 print("%3.0f%%" % (100 * self.reader.progress() / self.size), end="\b\b\b\b", flush=True)
-                try:
-                    if gui is not None:
-                        gui.progressbar['value'] = 100 * self.reader.data.tell() / self.size
-                except AttributeError:
-                    pass
-                except RuntimeError:
-                    pass
+                if gui is not None:
+                    gui.set_progress(100 * self.reader.progress() / self.size)
                 time.sleep(0.05)
         except ValueError:
             pass
-        try:
-            if gui is not None:
-                gui.progressbar['value'] = 100
-        except AttributeError:
-            pass
-        except RuntimeError:
-            pass
+        if gui is not None:
+            gui.set_progress(100)
 
 
 class ProgressGvasFile(GvasFile):
@@ -209,14 +199,14 @@ def load_skipped_decode(_worldSaveData, skip_paths, recursive=True):
                    use_mp=not getattr(args, "reduce_memory", False))
 
 def gui_thread():
+    global gui
     try:
-        global gui
         gui = GUI()
         gui.load()
         gui.mainloop()
     except tk.TclError:
         log.error("Failed to create GUI", exc_info=True)
-        pass
+        gui = None
 
 
 def main():
@@ -1317,7 +1307,9 @@ class GUI():
         if src_uuid is None:
             return
         try:
+            self.status('loading')
             MigratePlayer(src_uuid, "00000000-0000-0000-0000-000000000001")
+            self.status('done')
             messagebox.showinfo("Result", "Migrate to local success")
             self.load_players()
         except Exception as e:
@@ -1337,7 +1329,9 @@ class GUI():
         if answer != 'yes':
             return
         try:
+            self.status('loading')
             MigratePlayer(src_uuid, new_uuid)
+            self.status('done')
             messagebox.showinfo("Result", "Migrate to no steam success")
             self.load_players()
         except Exception as e:
@@ -1360,7 +1354,9 @@ class GUI():
         if answer != 'yes':
             return
         try:
+            self.status('loading')
             MigratePlayer(src_uuid, new_uuid)
+            self.status('done')
             messagebox.showinfo("Result", "Migrate to no steam success")
             self.load_players()
         except Exception as e:
@@ -1382,7 +1378,9 @@ class GUI():
             messagebox.showerror("Error", "Src == Target ")
             return
         try:
+            self.status('loading')
             MigratePlayer(src_uuid, target_uuid)
+            self.status('done')
             messagebox.showinfo("Result", "Migrate success")
             self.load_players()
         except Exception as e:
@@ -1391,10 +1389,12 @@ class GUI():
     def open_file(self):
         bk_f = filedialog.askopenfilename(filetypes=[("Level.sav file", "*.sav")], title="Open Level.sav")
         if bk_f:
+            self.status('loading')
             if self.data_source.current() == 0:
                 LoadFile(bk_f)
             else:
                 OpenBackup(bk_f)
+            self.status('done')
             self.change_datasource(None)
             self.load_guilds()
 
@@ -1411,7 +1411,9 @@ class GUI():
             return None
 
         try:
+            self.status('loading')
             SetGuildOwner(target_guild_uuid, src_uuid)
+            self.status('done')
             messagebox.showinfo("Move Guild Success", "Move Guild Successed")
         except Exception as e:
             traceback.print_exception(e)
@@ -1440,9 +1442,11 @@ class GUI():
             messagebox.showerror("Error", "Backup file is not loaded")
             return
         try:
+            self.status('loading')
             CopyPlayer(src_uuid, target_uuid, wsd if self.data_source.current() == 0 else backup_wsd)
             messagebox.showinfo("Result", "Copy success")
             self.load_players()
+            self.status('done')
         except Exception as e:
             messagebox.showerror("Copy Error", "\n".join(traceback.format_exception(e)))
 
@@ -1585,9 +1589,11 @@ class GUI():
                                                      initialvalue="*** CHEATER PLAYER ***")
         if new_player_name:
             try:
+                self.status('loading')
                 RenamePlayer(target_uuid, new_player_name)
                 messagebox.showinfo("Result", "Rename success")
                 self.load_players()
+                self.status('done')
             except Exception as e:
                 messagebox.showerror("Rename Error", "\n".join(traceback.format_exception(e)))
 
@@ -1598,12 +1604,18 @@ class GUI():
         if 'yes' == messagebox.showwarning("Delete Player", "Confirm to delete player %s" % target_uuid,
                                            type=messagebox.YESNO):
             try:
+                self.status('loading')
                 DeletePlayer(target_uuid)
                 messagebox.showinfo("Result", "Delete success")
                 self.load_players()
+                self.status('done')
             except Exception as e:
                 traceback.print_exception(e)
                 messagebox.showerror("Delete Error", "\n".join(traceback.format_exception(e)))
+
+    def status(self, status):
+        self.lbl_status.config(text=self.lang_data['status_'+status])
+        self.gui.update()
 
     def move_guild(self):
         target_uuid = self.parse_target_uuid()
@@ -1628,7 +1640,9 @@ class GUI():
             messagebox.showerror("Target Guild is not found")
             return None
         try:
+            self.status('loading')
             MoveToGuild(target_uuid, target_guild_uuid)
+            self.status('done')
             messagebox.showinfo("Result", "Move Guild success")
             self.load_players()
             self.load_guilds()
@@ -1639,7 +1653,9 @@ class GUI():
     def save(self):
         if 'yes' == messagebox.showwarning("Save", "Confirm to save file?", type=messagebox.YESNO):
             try:
+                self.status('loading')
                 Save(False)
+                self.status('done')
                 messagebox.showinfo("Result", "Save to %s success" % output_path)
                 print()
                 sys.exit(0)
@@ -1681,7 +1697,9 @@ class GUI():
         if err:
             messagebox.showerror("Copy Instance Error", f"Player sav file not exists: {player_sav_file}")
             return
+        self.status('loading')
         new_uuid = CopyCharacter(target_uuid, wsd, player_gvas['PalStorageContainerId']['value']['ID']['value'])
+        self.status('done')
         if new_uuid:
             messagebox.showinfo("Copy Instance", "Copy Instance Success")
         else:
@@ -1697,7 +1715,9 @@ class GUI():
         if not os.path.exists(os.path.dirname(os.path.abspath(args.filename)) + "/Players/"):
             messagebox.showerror("Cleanup", self.lang_data['msg_player_folder_not_exists'])
             return
+        self.status('loading')
         PlayerItemEdit(target_uuid, self.language)
+        self.status('done')
 
     def edit_player_save(self):
         target_uuid = self.parse_target_uuid()
@@ -1716,7 +1736,9 @@ class GUI():
             messagebox.showerror("Cleanup", self.lang_data['msg_player_folder_not_exists'])
             return
         try:
+            self.status('loading')
             RepairPlayer(target_uuid)
+            self.status('done')
             messagebox.showinfo("Result", "Repair success")
             self.load_players()
         except Exception as e:
@@ -1730,10 +1752,12 @@ class GUI():
                 paledit.gui.destroy()
         except NameError:
             pass
+        self.status('loading')
         paledit = PalEditGUI()
         paledit.load_i18n(self.language)
         paledit.load(None)
         paledit.mainloop()
+        self.status('done')
 
     def delete_base(self):
         target_guild_uuid = self.target_guild.get().split(" - ")[0]
@@ -1741,10 +1765,12 @@ class GUI():
             uuid.UUID(target_guild_uuid)
         except Exception as e:
             target_guild_uuid = None
+        self.status('loading')
         if DeleteBaseCamp(self.target_base.get(), group_id=target_guild_uuid):
             messagebox.showinfo("Result", "Delete Base Camp Success")
         else:
             messagebox.showerror("Delete Base", "Failed to delete")
+        self.status('done')
 
     def select_target_player(self, evt):
         target_uuid = self.parse_target_uuid(showmessage=False)
@@ -1784,6 +1810,7 @@ class GUI():
             messagebox.showerror("Cleanup", self.lang_data['msg_player_folder_not_exists'])
             return
 
+        self.status('loading')
         answer = messagebox.showwarning("Cleanup",
                                         self.lang_data['msg_confirm_delete_objs']
                                         .replace("{COUNT}",
@@ -1791,14 +1818,17 @@ class GUI():
                                         type=messagebox.YESNO)
 
         if answer != 'yes':
+            self.status('done')
             return
 
+        self.status('loading')
         unreferencedContainerIds = FindAllUnreferencedItemContainerIds()
         log.info(f"Delete Non-Referenced Item Containers: {len(unreferencedContainerIds)}")
         self.set_ui_progressing(True)
         BatchDeleteItemContainer(unreferencedContainerIds, self.update_progress)
         self.update_progress(100, 100)
         self.set_ui_progressing(False)
+        self.status('done')
         messagebox.showinfo("Result", "Delete Success")
 
     def cleanup_character(self):
@@ -1806,6 +1836,7 @@ class GUI():
             messagebox.showerror("Cleanup", self.lang_data['msg_player_folder_not_exists'])
             return
 
+        self.status('loading')
         answer = messagebox.showwarning("Cleanup",
                                         self.lang_data['msg_confirm_delete_objs']
                                         .replace("{COUNT}",
@@ -1813,18 +1844,29 @@ class GUI():
                                         type=messagebox.YESNO)
 
         if answer != 'yes':
+            self.status('done')
             return
         unreferencedContainerIds = FindAllUnreferencedCharacterContainerIds()
         BatchDeleteCharacterContainer(unreferencedContainerIds, self.update_progress)
         self.update_progress(100, 100)
         self.set_ui_progressing(False)
+        self.status('done')
         messagebox.showinfo("Result", "Delete Success")
+
+    def set_progress(self, val):
+        try:
+            self.progressbar['value'] = val
+            self.lbl_status.config(text="%s %d%%" % (self.lang_data['status_loading'], val))
+            self.gui.update()
+        except AttributeError as e:
+            traceback.print_exception(e)
+        except RuntimeError as e:
+            traceback.print_exception(e)
 
     def update_progress(self, x, y):
         try:
             if x % 1000 == 0:
-                self.progressbar['value'] = 100 * x / y
-                self.gui.update()
+                self.set_progress(100 * x / y)
         except Exception as e:
             pass
 
@@ -1833,6 +1875,7 @@ class GUI():
             messagebox.showerror("Cleanup", self.lang_data['msg_player_folder_not_exists'])
             return
 
+        self.status('loading')
         BrokenObjects = FindDamageRefContainer(True)
         delete_objects = FixBrokenObject(True)
 
@@ -1857,10 +1900,12 @@ class GUI():
                                                  "%d" % (len(BrokenObjects['FoliageGrid']))),
                                         type=messagebox.YESNO)
         if answer != 'yes':
+            self.status('done')
             return
         FixBrokenObject()
         FixBrokenDamageRefContainer()
         self.load_players()
+        self.status('done')
 
     def delete_old_player(self):
         if not os.path.exists(os.path.dirname(os.path.abspath(args.filename)) + "/Players/"):
@@ -1868,6 +1913,7 @@ class GUI():
             return
         days = simpledialog.askinteger("Delete Old Player", self.lang_data['prompt_howlong_day'])
         if days is not None:
+            self.status('loading')
             players = FindPlayersFromInactiveGuild(days)
             if 'yes' == messagebox.showwarning("Cleanup", self.lang_data['msg_confirm_delete'].replace("{COUNT}",
                                                                                                        "%d" % len(
@@ -1881,8 +1927,10 @@ class GUI():
                 self.gui.update()
                 self.load_players()
                 messagebox.showinfo("Result", "Delete Success")
+            self.status('done')
 
     def repair_all_player(self):
+        self.status('loading')
         for playerid in MappingCache.PlayerIdMapping:
             try:
                 RepairPlayer(playerid)
@@ -1890,7 +1938,9 @@ class GUI():
                 traceback.print_exception(e)
                 messagebox.showerror("Repair Error",
                                      f"Repair Player {playerid} Failed\n{e.__class__.__name__}: {str(e)}")
+                self.status('error')
                 return
+        self.status('done')
         messagebox.showinfo("Result", "Repair success")
 
     def getPalTranslatedName(self, saveParameter):
@@ -2138,6 +2188,10 @@ class GUI():
         g_save = ttk.Button(text="Save & Exit", style="custom.TButton", command=self.save)
         self.i18n['save'] = g_save
         g_save.pack()
+
+        self.lbl_status = tk.Label(font=self.font, text="Website: http://mb.im/", pady=3, borderwidth=1, border=True)
+        self.lbl_status.pack(fill=tk.X)
+        self.i18n['status'] = self.lbl_status
 
         self.progressbar = ttk.Progressbar()
         self.progressbar.pack(fill=tk.constants.X)
