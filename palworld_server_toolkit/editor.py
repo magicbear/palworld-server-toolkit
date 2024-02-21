@@ -1345,7 +1345,11 @@ class GUI():
         steam_id = simpledialog.askinteger("Migrate", "Server run with AppID = 2394010\nSteam ID?")
         if steam_id is None:
             return
-        new_uuid = steamIdToPlayerUid(steam_id)
+        try:
+            new_uuid = steamIdToPlayerUid(steam_id)
+        except ImportError:
+            messagebox.showerror("Result", "CityHash component not installed. Please install")
+            return
         answer = messagebox.showwarning("Migrate",
                                         self.lang_data['msg_confirm_new_uuid']
                                         .replace("{UUID}", src_uuid)
