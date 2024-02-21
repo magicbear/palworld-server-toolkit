@@ -65,10 +65,14 @@ Visit [Release Pages](https://github.com/magicbear/palworld-server-toolkit/relea
 
 1. Python 3.9 or newer.
     - Windows users: You can install [Python 3.12 from the Microsoft Store](https://apps.microsoft.com/detail/9NCVDN91XZQP) or from [python.org](https://www.python.org/)
+    - Ubuntu users:
+      - for 20.04/22.04 `add-apt-repository ppa:deadsnakes/ppa -y; apt update; apt install python3.11-full`
 
 2. Download source code by `git clone https://github.com/magicbear/palworld-server-toolkit.git`
 
 3. Execute `git submodule update --init --recursive`
+
+4. Execute by `python3.11 -i <SRCDIR>/palworld_save_tools/editor.py <Level.sav>`
 
 ## Question?
 
