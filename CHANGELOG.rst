@@ -14,17 +14,36 @@ Changelog
     Note that they these tags will not actually close the issue/PR until they
     are merged into the "default" branch.
 
+0.8.3
+-------
+
+Fix:
+
+- i18n bug for Pal Name
+
+Feature:
+
+- MigrateBaseCamp - premium feature
+- MigrateBaseCampBuilder - premium feature
+
 0.8.2
 -------
 
 Feature:
 
 - Edit GUI for MapProperty
+- Item Edit GUI for Group
+- MigrateAllToNoSteam feature
 
 Fix:
 
 - CopyMapObject failed
 - Adjust Slots cancel with msg
+- _CopyWorkSaveData failed
+- Progress stucked on Repair player
+- Edit GUI error on Quat Struct
+- error prompt for migrate to steam user
+- Add exception on CopyCharacterContainer for invalid character container
 
 0.8.1
 -------
@@ -37,6 +56,7 @@ Fix:
 
 - Edit GUI for ArrayProperty can not multiple edit now
 - CopyPlayer error
+
 
 0.8.0
 -------

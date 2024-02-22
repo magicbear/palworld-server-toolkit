@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # Author: MagicBear
 # License: MIT License
+import code
 import io
 import json
 import os, datetime, time
@@ -130,7 +131,7 @@ class skip_loading_progress(threading.Thread):
 
     def run(self) -> None:
         try:
-            while not self.reader.eof():
+            while not self.reader.progress_eof():
                 if sys.platform in ['linux', 'darwin']:
                     print("\033]0;%s - %3.1f%%\a" % (loadingTitle, 100 * self.reader.progress() / self.size), end="",
                           flush=True)
@@ -485,6 +486,35 @@ try:
                 self.autocomplete()
             # No need for up/down, we'll jump to the popup
             # list at the position of the autocompletion
+
+
+    class SimpleComboBoxDialog:
+        def __init__(self, title, text, choices, state="normal"):
+            self.t = tk.Toplevel()
+            self.t.title(title if title else "")
+            base_frame = tk.Frame(self.t, padx=15, pady=15)
+            base_frame.pack(fill=tk.BOTH)
+
+            self.selection = None
+            tk.Label(base_frame, text=text if text else "").grid(row=0, column=0)
+            self.c = AutocompleteCombobox(master=base_frame, width=60, value=choices if choices else [], state=state)
+            self.c.grid(row=0, column=1, columnspan=5)
+
+            button_frame = tk.Frame(base_frame)
+            button_frame.grid(row=1, column=0, columnspan=6)
+
+            ok = tk.Button(master=button_frame, text="OK", command=self.set_val)
+            ok.grid(row=0, column=0)
+            cancel = tk.Button(master=button_frame, text="Cancel", command=self.t.destroy)
+            cancel.grid(row=0, column=1)
+
+        def set_val(self):
+            self.selection = self.c.get()
+            self.t.destroy()
+
+        def wait(self):
+            self.t.wait_window()
+            return self.selection
 
 
     class AutocompleteComboBoxPopup(AutocompleteCombobox):
@@ -1279,6 +1309,56 @@ try:
             self.destroy()
 
 
+    class ItemContainerEdit(ParamEditor):
+        def __init__(self, item_container_id, i18n='en-US'):
+            self.i18n = i18n
+            self.item_containers = {}
+            self.item_container_vars = []
+            self.item_container_id = item_container_id
+
+            super().__init__()
+            self.gui.title("Item Edit - %s" % item_container_id)
+            ttk.Button(master=self.gui, style="custom.TButton", text="Save", command=self.savedata).pack(
+                fill=tk.constants.X,
+                anchor=tk.constants.S,
+                expand=False)
+            threading.Thread(target=self.load, args=[self.gui]).start()
+
+        def create_base_frame(self):
+            return ttk.Notebook(master=self)
+
+        def load(self, tabs):
+            if not os.path.exists(module_dir + "/resources/item_%s.json" % self.i18n):
+                self.i18n = 'en-US'
+            with open(module_dir + "/resources/item_%s.json" % self.i18n, "r", encoding='utf-8') as f:
+                item_list = json.load(f)
+            for itemCodeName in item_list:
+                if item_list[itemCodeName] is None:
+                    item_list[itemCodeName] = f": {itemCodeName}"
+                else:
+                    item_list[itemCodeName] = f"{item_list[itemCodeName]}: {itemCodeName}"
+            self.item_container_vars = []
+            item_container = parse_item(
+                MappingCache.ItemContainerSaveData[self.item_container_id], "ItemContainerSaveData")
+            self.item_containers = [{
+                'SlotIndex': item['SlotIndex'],
+                'ItemId': item['ItemId']['value']['StaticId'],
+                'StackCount': item['StackCount']
+            } for item in item_container['value']['Slots']['value']['values']]
+            tables = self.build_array_gui(tabs, ("SlotIndex", "ItemId", "StackCount"),
+                                          self.item_container_vars,
+                                          {"ItemId": item_list})
+            for idx, item in enumerate(self.item_containers):
+                self.item_container_vars.append({})
+                self.build_array_gui_item(tables, idx, self.item_container_vars[idx], item)
+            self.geometry("640x800")
+
+        def savedata(self):
+            for idx, item in enumerate(self.item_containers):
+                self.save(self.item_containers[idx], self.item_container_vars[idx])
+            self.destroy()
+
+
     class PlayerSaveEdit(ParamEditor):
         def __init__(self, player_uid):
             err, player_gvas, self.player_sav_file, self.player_gvas_file = GetPlayerGvas(player_uid)
@@ -1530,7 +1610,7 @@ class GUI():
             self.status('loading')
             MigratePlayer(src_uuid, new_uuid)
             self.status('done')
-            messagebox.showinfo("Result", "Migrate to no steam success")
+            messagebox.showinfo("Result", "Migrate to steam success")
             self.load_players()
         except Exception as e:
             messagebox.showerror("Migrate Error", str(e))
@@ -1788,8 +1868,8 @@ class GUI():
                 traceback.print_exception(e)
                 messagebox.showerror("Delete Error", "\n".join(traceback.format_exception(e)))
 
-    def status(self, status):
-        self.lbl_status.config(text=self.lang_data['status_' + status])
+    def status(self, status, ext_msg=""):
+        self.lbl_status.config(text=self.lang_data['status_' + status]+ext_msg)
         self.gui.update()
 
     def move_guild(self):
@@ -1971,6 +2051,52 @@ class GUI():
             messagebox.showerror("Delete Base", "Failed to delete")
         self.status('done')
 
+    def migrate_base(self):
+        try:
+            target_base = toUUID(self.target_base.get().split(" - ")[0])
+        except Exception as e:
+            messagebox.showerror("Migrate", "Invalid Base")
+            return
+        if target_base not in MappingCache.BaseCampMapping:
+            messagebox.showerror("Migrate", "Invalid Base")
+            return
+
+        c = SimpleComboBoxDialog("Target Guild", "Guild: ", self.target_guild['value'])
+        target_guild = c.wait()
+        if target_guild is not None:
+            try:
+                target_guild = toUUID(target_guild.split(" - ")[0])
+            except Exception as e:
+                messagebox.showerror("Migrate", "Invalid Guild")
+                return
+            self.status('loading')
+            try:
+                MigrateBaseCamp(target_base, target_guild)
+                messagebox.showinfo("Result", "Migrate Base Success")
+            except Exception as e:
+                messagebox.showerror("Migrate", "Failed to migrate\n" + "\n".join(traceback.format_exception(e)))
+            self.status('done')
+
+
+    def migrate_builder(self):
+        try:
+            target_base = toUUID(self.target_base.get().split(" - ")[0])
+        except Exception as e:
+            messagebox.showerror("Migrate", "Invalid Base")
+            return
+        if target_base not in MappingCache.BaseCampMapping:
+            messagebox.showerror("Migrate", "Invalid Base")
+            return
+        target_uuid = self.parse_target_uuid(showmessage=True)
+        if target_uuid is not None:
+            self.status('loading')
+            try:
+                MigrateBaseCampBuilder(target_base, target_uuid)
+                messagebox.showinfo("Result", "Migrate Base Success")
+            except Exception as e:
+                messagebox.showerror("Migrate", "Failed to migrate\n" + "\n".join(traceback.format_exception(e)))
+            self.status('done')
+
     def adjust_base_slot_count(self):
         target_guild_uuid = self.target_guild.get().split(" - ")[0]
         try:
@@ -2151,14 +2277,15 @@ class GUI():
 
     def repair_all_player(self):
         self.status('loading')
-        for playerid in MappingCache.PlayerIdMapping:
+        repairPlayerIds = [playerid for playerid in MappingCache.PlayerIdMapping]
+        for playerid in repairPlayerIds:
             try:
                 RepairPlayer(playerid)
             except Exception as e:
                 traceback.print_exception(e)
                 messagebox.showerror("Repair Error",
                                      f"Repair Player {playerid} Failed\n{e.__class__.__name__}: {str(e)}")
-                self.status('error')
+                self.status('error', f": Player ID {playerid}")
                 return
         self.status('done')
         messagebox.showinfo("Result", "Repair success")
@@ -2284,6 +2411,18 @@ class GUI():
                                                               style="custom.TButton",
                                                               command=self.delete_base)
         g_delete_base.pack(side="left")
+
+        if 'MigrateBaseCamp' in globals().keys():
+            self.i18n['migrate_base'] = g_merge_base = ttk.Button(master=f_target_guildbase, text="Migrate Base",
+                                                                  style="custom.TButton",
+                                                                  command=self.migrate_base)
+            g_merge_base.pack(side="left")
+
+        if 'MigrateBaseCampBuilder' in globals().keys():
+            self.i18n['migrate_builder'] = g_merge_base = ttk.Button(master=f_target_guildbase, text="Migrate Builder",
+                                                                  style="custom.TButton",
+                                                                  command=self.migrate_builder)
+            g_merge_base.pack(side="left")
 
         self.i18n['adjust_base_worker'] = adjust_base_worker = ttk.Button(master=f_target_guildbase,
                                                                           text="Adjust Base Slot",
@@ -2443,7 +2582,7 @@ class GUI():
         self.language = lang
         with open("%s/resources/gui_%s.json" % (module_dir, lang), encoding='utf-8') as f:
             self.lang_data.update(json.load(f))
-        if os.path.exists("%s/resources/pal_%s.json"):
+        if os.path.exists("%s/resources/pal_%s.json" % (module_dir, lang)):
             with open("%s/resources/pal_%s.json" % (module_dir, lang), encoding='utf-8') as f:
                 self.pal_i18n.update(json.load(f))
 
@@ -2814,10 +2953,10 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
             f.write(sav_file)
         RepairPlayer(new_player_uid)
 
-
 def MoveToGuild(player_uid, group_id):
     player_uid = toUUID(player_uid)
-    if toUUID(group_id) not in MappingCache.GroupSaveDataMap:
+    group_id = toUUID(group_id)
+    if group_id not in MappingCache.GroupSaveDataMap:
         log.error(f"{tcl(31)}Error: cannot found target guild{tcl(0)}")
         return
 
@@ -2870,6 +3009,7 @@ def MoveToGuild(player_uid, group_id):
                 group_info['individual_character_handle_ids'].remove(item)
 
     MappingCache.PlayerIdMapping[player_uid]['value']['RawData']['value']['group_id'] = toUUID(group_id)
+
     group_data = parse_item(MappingCache.GroupSaveDataMap[toUUID(group_id)], "GroupSaveDataMap")
     group_info = group_data['value']['RawData']['value']
     log.info(f"{tcl(32)}Append character and players to Guild {group_info['guild_name']}{tcl(0)}")
@@ -2882,6 +3022,7 @@ def MoveToGuild(player_uid, group_id):
         }
     })
     group_info['individual_character_handle_ids'] += instances
+
     MappingCache.LoadGroupSaveDataMap()
 
 
@@ -3393,6 +3534,22 @@ def MigratePlayer(player_uid, new_player_uid):
     # RepairPlayer(new_player_uid)
     log.info("Finish to migrate player from Save")
 
+
+def MigrateAllToNoSteam(dry_run=False):
+    migrate_sets = []
+    skip_player_id = []
+    for player_uid in MappingCache.PlayerIdMapping:
+        new_uuid = toUUID(PlayerUid2NoSteam(int.from_bytes(player_uid.raw_bytes[0:4], byteorder='little')) + "-0000-0000-0000-000000000000")
+        migrate_sets.append((player_uid, new_uuid))
+        if new_uuid in MappingCache.PlayerIdMapping:
+            skip_player_id.append(new_uuid)
+            log.warning(f"Replaced Player {new_uuid}")
+        else:
+            log.info(f"Migrate from {player_uid} to {new_uuid}")
+    if not dry_run:
+        for src_uuid, new_uuid in migrate_sets:
+            if src_uuid not in skip_player_id:
+                MigratePlayer(src_uuid, new_uuid)
 
 def MigrateBuilding(player_uid, new_player_uid):
     player_uid = toUUID(player_uid)
@@ -4751,7 +4908,9 @@ def CopyCharacterContainer(containerId, src_wsd, dry_run=False, new_container_id
                                "CharacterContainerSaveData.Value.Slots")
         containerSlots = container['value']['values']
     except KeyError:
-        return
+        log.error(f"Copy Character Container failed, invalid containerId: {containerId}")
+        raise KeyError(f"Copy Character Container failed, invalid containerId: {containerId}")
+
     if container_only:
         for idx, containerSlot in enumerate(containerSlots):
             containerSlots[idx] = PalObject.PalCharacterSlotSaveData_Array(
@@ -4981,7 +5140,7 @@ def CopyBaseCamp(base_id, group_id, old_wsd, dry_run=False):
             CopyMapObject(modelId, old_wsd, dry_run)
             log.info(f"Delete Base Camp Work Collection {wrk_id}")
             if not dry_run:
-                _CopyWorkSaveData(wrk_id)
+                _CopyWorkSaveData(wrk_id, old_wsd)
         else:
             log.info(f"Ignore Base Camp Work Collection {wrk_id}")
     workDirectorContainer_id = baseCamp['WorkerDirector']['value']['RawData']['value']['container_id']
@@ -5604,6 +5763,8 @@ def buildDotImage():
     else:
         sys.stderr.write(cmd.stderr)
 
+if os.path.exists(f"{module_dir}/premium.py"):
+    exec(code.compile_command(open(f"{module_dir}/premium.py", "r").read(), f"{module_dir}/premium.py", "exec"))
 
 if __name__ == "__main__":
     multiprocessing.freeze_support()

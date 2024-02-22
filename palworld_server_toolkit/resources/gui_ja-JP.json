@@ -10,6 +10,8 @@
   "set_guild_owner": "\uD83D\uDD75️ ギルドオーナーを設定",
   "target_base": "ターゲットキャンプ ⛺️",
   "delete_base": "❌️ キャンプを削除 ⛺️",
+  "migrate_base": "ギルドに移行",
+  "migrate_builder": "ビルダーを移行",
   "adjust_base_worker": "\uD83D\uDCD2 パラスロットを調整",
   "target_instance": "ターゲットトパル",
   "edit_instance": "パルを変更",
