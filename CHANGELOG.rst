@@ -25,6 +25,7 @@ Fix:
 
 - CopyMapObject failed
 - Adjust Slots cancel with msg
+= _CopyWorkSaveData failed
 
 0.8.1
 -------

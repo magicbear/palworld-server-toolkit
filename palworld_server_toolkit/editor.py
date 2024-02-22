@@ -4981,7 +4981,7 @@ def CopyBaseCamp(base_id, group_id, old_wsd, dry_run=False):
             CopyMapObject(modelId, old_wsd, dry_run)
             log.info(f"Delete Base Camp Work Collection {wrk_id}")
             if not dry_run:
-                _CopyWorkSaveData(wrk_id)
+                _CopyWorkSaveData(wrk_id, old_wsd)
         else:
             log.info(f"Ignore Base Camp Work Collection {wrk_id}")
     workDirectorContainer_id = baseCamp['WorkerDirector']['value']['RawData']['value']['container_id']
