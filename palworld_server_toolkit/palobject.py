@@ -1,4 +1,5 @@
 import time
+import tkinter
 import traceback
 from functools import reduce
 
@@ -95,8 +96,18 @@ class GvasPrettyPrint(pprint.PrettyPrinter):
                      context, level)
         stream.write(tcl(0))
 
+    def _pprint_tk(self, object, stream, indent, allowance, context, level):
+        stream.write(f"{tcl(36)}{object.__class__.__name__}:{tcl(93)}")
+        self._format(str(object.get()), stream, indent, allowance,
+                     context, level)
+        stream.write(tcl(0))
+
     _dispatch[dict.__repr__] = _pprint_dict
     _dispatch[UUID.__repr__] = _pprint_UUID
+    _dispatch[tkinter.StringVar.__repr__] = _pprint_tk
+    _dispatch[tkinter.BooleanVar.__repr__] = _pprint_tk
+    _dispatch[tkinter.DoubleVar.__repr__] = _pprint_tk
+    _dispatch[tkinter.IntVar.__repr__] = _pprint_tk
 
 
 def tcl(cl):
@@ -168,6 +179,10 @@ class PalObject:
     @staticmethod
     def FloatProperty(val):
         return {'id': None, 'type': 'FloatProperty', 'value': val}
+
+    @staticmethod
+    def NameProperty(val):
+        return {'id': None, 'type': 'NameProperty', 'value': val}
 
     @staticmethod
     def ArrayProperty(array_type, val, custom_type=None):

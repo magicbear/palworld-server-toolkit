@@ -205,6 +205,7 @@ def gui_thread():
     global gui
     gui.mainloop()
 
+
 class InteractThread(threading.Thread):
     _instance = None
 
@@ -232,6 +233,7 @@ class InteractThread(threading.Thread):
         except Exception as e:
             traceback.print_exception(e)
         InteractThread._instance = None
+
 
 def main():
     global output_file, output_path, args, gui, playerMapping
@@ -549,7 +551,7 @@ try:
             # w, h, x, y = (self.winfo_screenwidth() * 0.01, self.winfo_screenheight() * 0.01,
             #               self.winfo_screenwidth()//2,  self.winfo_screenheight() // 2)
             # self.geometry("%dx%d+%d+%d" % (int(w), int(h), x, y))
-            self.wm_minsize(600,300)
+            self.wm_minsize(800, 500)
             self.var_options = None
             self.gui = self
             self.parent = self
@@ -604,22 +606,73 @@ try:
             return scrollable_frame
 
         def delete_select_item(self, g_frame, attribute_key, attrib_var, attrib, cmbx):
+            cur = cmbx.current()
             if cmbx.current() == -1:
                 return
-            if len(attrib['value']['values']) == 1:
-                messagebox.showwarning("At lease keep one variable")
-                return
-            del attrib['value']['values'][cmbx.current()]
-            del attrib_var[cmbx.current()]
-            cmbx['values'] = ["Item %d" % i for i in range(len(attrib['value']['values']))]
+            if attrib['type'] == "ArrayProperty":
+                if len(attrib['value']['values']) == 1:
+                    messagebox.showwarning("At lease keep one variable")
+                    return
+                del attrib['value']['values'][cur]
+                del attrib_var[cur]
+                cmbx['values'] = ["Item %d" % i for i in range(len(attrib['value']['values']))]
+                cmbx.current(cur - 1 if cur == len(cmbx['values']) else cur)
+            elif attrib['type'] == "MapProperty" and attrib['key_type'] == "NameProperty":
+                if len(attrib['value']) == 1:
+                    messagebox.showwarning("At lease keep one variable")
+                    return
+                del attrib['value'][cur]
+                del attrib_var[cmbx.get()]
+                cmbx['values'] = [attr['key'] for attr in attrib['value']]
+                cmbx.current(cur - 1 if cur == len(cmbx['values']) else cur)
+            else:
+                raise ValueError(f"Expected ArrayProperty or MapProperty, got {attrib['type']} in {attribute_key}")
 
         def add_select_item(self, g_frame, attribute_key, attrib_var, attrib, cmbx):
             if cmbx.current() == -1:
                 return
-            attrib['value']['values'].append(copy.deepcopy(attrib['value']['values'][cmbx.current()]))
-            attrib_var.append({})
-            cmbx['values'] = ["Item %d" % i for i in range(len(attrib['value']['values']))]
-            cmbx.current(len(attrib['value']['values']) - 1)
+            if attrib['type'] == "ArrayProperty":
+                attrib['value']['values'].append(copy.deepcopy(attrib['value']['values'][cmbx.current()]))
+                x = len(attrib['value']['values']) - 1
+
+                if attrib['array_type'] in ["NameProperty", "EnumProperty"]:
+                    attrib_var.append(tk.StringVar(g_frame))
+                    attrib_var[x].set(attrib['value']['values'][x])
+                elif attrib['array_type'] == "StructProperty":
+                    attrib_var.append(ParamEditor.make_attrib_var(g_frame, attrib={
+                        "type": attrib['value']['prop_type'],
+                        "struct_type": attrib['value']['type_name'],
+                        "value": attrib['value']['values'][x]
+                    }))
+                    self.assign_attrib_var(attrib_var[x], {
+                        "type": attrib['value']['prop_type'],
+                        "struct_type": attrib['value']['type_name'],
+                        "value": attrib['value']['values'][x]
+                    })
+                else:
+                    raise TypeError(f"Unxpected array_type {attrib['array_type']}")
+                cmbx['values'] = ["Item %d" % i for i in range(len(attrib['value']['values']))]
+                cmbx.current(len(attrib['value']['values']) - 1)
+            elif attrib['type'] == "MapProperty" and attrib['key_type'] == "NameProperty":
+                key = simpledialog.askstring("NameProperty", "Key?")
+                if key is not None:
+                    attrib['value'].append({
+                        'key': key,
+                        'value': copy.deepcopy(attrib['value'][cmbx.current()]['value'])
+                    })
+                    x = len(attrib['value']) - 1
+                    attrib_var[key] = ParamEditor.make_attrib_var(g_frame, attrib={
+                        "type": attrib['value_type'],
+                        "value": attrib['value'][x]['value']
+                    })
+                    self.assign_attrib_var(attrib_var[key], {
+                        "type": attrib['value_type'],
+                        "value": attrib['value'][x]['value']
+                    })
+                    cmbx['values'] = [attr['key'] for attr in attrib['value']]
+                    cmbx.current(x)
+            else:
+                raise ValueError(f"Expected ArrayProperty or MapProperty, got {attrib['type']} in {attribute_key}")
 
         def build_subgui(self, g_frame, attribute_key, attrib_var, attrib):
             sub_frame = ttk.Frame(master=g_frame, borderwidth=1, relief=tk.constants.GROOVE, padding=2)
@@ -627,9 +680,16 @@ try:
             sub_frame_c = ttk.Frame(master=sub_frame)
 
             sub_frame_item = ttk.Frame(master=sub_frame)
-            tk.Label(master=sub_frame_item, font=self.__font, text=attrib['array_type']).pack(side="left")
-            cmbx = ttk.Combobox(master=sub_frame_item, font=self.__font, width=20, state="readonly",
-                                values=["Item %d" % i for i in range(len(attrib['value']['values']))])
+            if attrib['type'] == "ArrayProperty":
+                tk.Label(master=sub_frame_item, font=self.__font, text="Array:" + attrib['array_type'][:-8]).pack(
+                    side="left")
+                cmbx = ttk.Combobox(master=sub_frame_item, font=self.__font, width=20, state="readonly",
+                                    values=["Item %d" % i for i in range(len(attrib['value']['values']))])
+            elif attrib['type'] == "MapProperty":
+                tk.Label(master=sub_frame_item, font=self.__font, text="Map:" + attrib['value_type'][:-8]).pack(
+                    side="left")
+                cmbx = ttk.Combobox(master=sub_frame_item, font=self.__font, width=20, state="readonly",
+                                    values=[attr['key'] for attr in attrib['value']])
             cmbx.bind("<<ComboboxSelected>>",
                       lambda evt: self.cmb_array_selected(evt, sub_frame_c, attribute_key, attrib_var, attrib))
             cmbx.pack(side=tk.LEFT)
@@ -670,7 +730,7 @@ try:
                 return tk.StringVar(master)
             elif attrib['type'] == "StructProperty" and attrib['struct_type'] in ["Vector", "Quat"]:
                 return [tk.StringVar(master), tk.StringVar(master), tk.StringVar(master)] + \
-                        ([attrib['struct_type']] if attrib['struct_type']=="Quat" else [])
+                    ([tk.StringVar(master)] if attrib['struct_type'] == "Quat" else [])
             elif attrib['type'] == "StructProperty" and attrib['struct_type'] == "LinearColor":
                 return [tk.StringVar(master), tk.StringVar(master), tk.StringVar(master), tk.StringVar(master)]
             elif attrib['type'] == "BoolProperty":
@@ -678,9 +738,7 @@ try:
             elif attrib['type'] == "ArrayProperty" and attrib['array_type'] in ["NameProperty", "EnumProperty"]:
                 attrib_var = []
                 for x in range(len(attrib['value']['values'])):
-                    attrib_var.append({
-                        attrib['array_type'][:-8]: tk.StringVar(master)
-                    })
+                    attrib_var.append(tk.StringVar(master))
                 return attrib_var
             elif attrib['type'] == "ArrayProperty" and attrib['array_type'] in ["StructProperty"]:
                 attrib_var = []
@@ -696,12 +754,15 @@ try:
                 for key in attrib['value']:
                     attrib_var[key] = ParamEditor.make_attrib_var(master=master, attrib=attrib['value'][key])
                 return attrib_var
-            # elif attrib['type'] == "MapProperty" and attrib['key_type'] == "NameProperty" and \
-            #     attrib['value_type'] == "BoolProperty":
-            #     attrib_var = {}
-            #     for attr in attrib['value']:
-            #         attrib_var[attr['key']] = tk.BooleanVar(master=master)
-            #     return attrib_var
+            elif attrib['type'] == "MapProperty" and attrib['key_type'] == "NameProperty" and \
+                    attrib['value_type'] not in ["StructProperty", "MapProperty", "ArrayProperty"]:
+                attrib_var = {}
+                for attr in attrib['value']:
+                    attrib_var[attr['key']] = ParamEditor.make_attrib_var(master, attrib={
+                        "type": attrib['value_type'],
+                        "value": attr['value']
+                    })
+                return attrib_var
 
         def assign_attrib_var(self, var, attrib):
             if attrib['type'] in ["IntProperty", "StrProperty", "NameProperty", "FloatProperty"]:
@@ -723,7 +784,7 @@ try:
                 var[1].set(str(attrib['value']['y']))
                 var[2].set(str(attrib['value']['z']))
                 if attrib['struct_type'] == "Quat":
-                    var[2].set(str(attrib['value']['w']))
+                    var[3].set(str(attrib['value']['w']))
             elif attrib['type'] == "StructProperty" and attrib['struct_type'] == "LinearColor":
                 var[0].set(str(attrib['value']['r']))
                 var[1].set(str(attrib['value']['g']))
@@ -735,7 +796,7 @@ try:
                 var.set(attrib['value']['value'])
             elif attrib['type'] == "ArrayProperty" and attrib['array_type'] in ["NameProperty", "EnumProperty"]:
                 for x in range(len(attrib['value']['values'])):
-                    var[x][attrib['array_type'][:-8]].set(attrib['value']['values'][x])
+                    var[x].set(attrib['value']['values'][x])
             elif attrib['type'] == "ArrayProperty" and attrib['array_type'] in ["StructProperty"]:
                 for x in range(len(attrib['value']['values'])):
                     self.assign_attrib_var(var[x], {
@@ -751,27 +812,54 @@ try:
                     except TypeError as e:
                         log.error("Error attribute [%s] " % (key), exc_info=True)
                         print("Error attribute [%s] " % (key), attrib)
-            # elif attrib['type'] == "MapProperty" and attrib['key_type'] == "NameProperty" and \
-            #     attrib['value_type'] == "BoolProperty":
-            #     for attr in attrib['value']:
-            #         var[attr['key']].set(attr['value'])
+            elif attrib['type'] == "MapProperty" and attrib['key_type'] == "NameProperty" and \
+                    attrib['value_type'] not in ["StructProperty", "MapProperty", "ArrayProperty"]:
+                for idx, attr in enumerate(attrib['value']):
+                    self.assign_attrib_var(var[attr['key']], {
+                        "type": attrib['value_type'],
+                        "value": attr['value']
+                    })
 
-        def save(self, attribs, attrib_var, path=""):
-            for attribute_key in attribs:
+        def save(self, attribs, attrib_var, path="", override_attrib=None,
+                 specified_key=None):
+            for attribute_key, attrib in (attribs.items() if isinstance(attribs, dict) else enumerate(attribs)):
+                if specified_key is not None and attribute_key != specified_key:
+                    continue
                 attrib = attribs[attribute_key]
-                if attribute_key not in attrib_var or attrib_var[attribute_key] is None:
+                storage_object = attrib
+                storage_key = 'value'
+                if override_attrib is not None:
+                    if override_attrib['type'] == "ArrayProperty":
+                        storage_object = override_attrib['value']['values']
+                        storage_key = specified_key
+                        attrib = {
+                            "type": override_attrib['array_type'],
+                            "value": override_attrib['value']['values'][specified_key]
+                        }
+                        if override_attrib['array_type'] == "StructProperty":
+                            attrib['struct_type'] = override_attrib['value']['type_name']
+                        elif override_attrib['array_type'] == "EnumProperty":
+                            attrib = {
+                                'type': "StrProperty",
+                                'value': override_attrib['value']['values'][specified_key]
+                            }
+                    elif override_attrib['type'] == "MapProperty":
+                        storage_object = override_attrib['value'][specified_key]
+                        attribute_key = override_attrib['value'][specified_key]['key']
+                        attrib = {
+                            "type": override_attrib['value_type'],
+                            "value": override_attrib['value'][specified_key]['value']
+                        }
+                if (isinstance(attrib_var, dict) and attribute_key not in attrib_var) or \
+                        (isinstance(attrib_var, list) and attribute_key >= len(attrib_var)) or \
+                        attrib_var[attribute_key] is None:
+                    log.debug(f"Ignore {path} -> {attribute_key}")
+                    gp(attrib_var[attribute_key])
                     continue
                 if not isinstance(attrib, dict):
+                    log.debug(f"Invalid {path} -> {attribute_key}")
                     continue
                 if 'type' in attrib:
-                    storage_object = attrib
-                    storage_key = 'value'
-                    if 'value' in attrib:
-                        storage_key = 'value'
-                    elif 'values' in attrib and 'value_idx' in attrib:
-                        storage_object = attrib['values']
-                        storage_key = attrib['value_idx']
-
                     if attrib['type'] == "IntProperty":
                         log.debug("%s%s [%s] = %d -> %d" % (
                             path, attribute_key, attrib['type'], storage_object[storage_key],
@@ -872,27 +960,21 @@ try:
                                                            storage_object[storage_key]['value'],
                                                            attrib_var[attribute_key].get()))
                         storage_object[storage_key]['value'] = attrib_var[attribute_key].get()
-                    elif attrib['type'] == "ArrayProperty" and attrib['array_type'] in "NameProperty":
+                    elif attrib['type'] == 'ArrayProperty':
                         for idx, item in enumerate(attrib['value']['values']):
-                            log.debug("%s%s[%d] [%s] = " % (path, attribute_key, idx, attrib['type']))
-                            self.save({
-                                'Name': {
-                                    'type': attrib['array_type'],
-                                    'values': attrib['value']['values'],
-                                    'value_idx': idx
-                                }}, attrib_var[attribute_key][idx], "%s[%d]." % (attribute_key, idx))
-                    elif attrib['type'] == "ArrayProperty" and attrib['array_type'] == "EnumProperty":
-                        for idx, item in enumerate(attrib['value']['values']):
-                            log.debug("%s%s[%d] [%s] = " % (path, attribute_key, idx, attrib['type']))
-                            self.save({
-                                attrib['array_type'][:-8]: {
-                                    'type': "StrProperty",
-                                    'values': attrib['value']['values'],
-                                    'value_idx': idx
-                                }}, attrib_var[attribute_key][idx], "%s[%d]." % (attribute_key, idx))
-                    elif attrib['type'] == "ArrayProperty" and attrib['array_type'] in ["StructProperty"]:
-                        for idx, item in enumerate(attrib['value']['values']):
-                            self.save(attrib['value']['values'][idx], attrib_var[attribute_key][idx], "%s[%d]." % (attribute_key, idx))
+                            # log.debug("%s%s[%d] [%s:%s] = " % (path, attribute_key, idx, attrib['type'],
+                            #                                    attrib['array_type']))
+                            self.save(attrib['value']['values'], attrib_var[attribute_key],
+                                      path=f"{path}{attribute_key}.",
+                                      override_attrib=attrib, specified_key=idx)
+                    elif attrib['type'] == 'MapProperty' and attrib['key_type'] == "NameProperty":
+                        for idx, item in enumerate(attrib['value']):
+                            # log.debug("%s%s[%d] [%s:%s] = " % (path, attribute_key, idx, attrib['type'],
+                            #                                    attrib['value_type']))
+
+                            self.save(attrib['value'], attrib_var[attribute_key],
+                                      path=f"{path}{attribute_key}",
+                                      override_attrib=attrib, specified_key=idx)
                     elif attrib['type'] == "StructProperty":
                         if attrib_var[attribute_key] is None:
                             continue
@@ -901,10 +983,33 @@ try:
                                       "%s[\"%s\"]." % (attribute_key, key))
                     else:
                         log.error("unsupported property type -> %s[%s]" % (attribute_key, attrib['type']))
+                        gp(attrib)
 
-        def build_variable_gui(self, parent, attrib_var, attribs, with_labelframe=True):
-            for attribute_key in attribs:
+        def build_variable_gui(self, parent, attrib_var, attribs, with_labelframe=True, override_attrib=None,
+                               specified_key=None):
+            for attribute_key, attrib in (attribs.items() if isinstance(attribs, dict) else enumerate(attribs)):
+                if specified_key is not None and attribute_key != specified_key:
+                    continue
                 attrib = attribs[attribute_key]
+                if override_attrib is not None:
+                    if override_attrib['type'] == "ArrayProperty":
+                        attrib = {
+                            "type": override_attrib['array_type'],
+                            "value": override_attrib['value']['values'][specified_key]
+                        }
+                        if override_attrib['array_type'] == "StructProperty":
+                            attrib['struct_type'] = override_attrib['value']['type_name']
+                        elif override_attrib['array_type'] == "EnumProperty":
+                            attrib = {
+                                'type': "StrProperty",
+                                'value': override_attrib['value']['values'][specified_key]
+                            }
+                    elif override_attrib['type'] == "MapProperty":
+                        attribute_key = override_attrib['value'][specified_key]['key']
+                        attrib = {
+                            "type": override_attrib['value_type'],
+                            "value": override_attrib['value'][specified_key]['value']
+                        }
                 if not isinstance(attrib, dict):
                     continue
                 if 'type' in attrib:
@@ -933,6 +1038,9 @@ try:
                     elif attrib['type'] == "ArrayProperty" and attrib['array_type'] in ["StructProperty",
                                                                                         "EnumProperty",
                                                                                         "NameProperty"]:
+                        self.build_subgui(g_frame, attribute_key, attrib_var[attribute_key], attrib)
+                    elif attrib['type'] == "MapProperty" and attrib['key_type'] == "NameProperty" and \
+                            attrib['value_type'] not in ["StructProperty", "MapProperty", "ArrayProperty"]:
                         self.build_subgui(g_frame, attribute_key, attrib_var[attribute_key], attrib)
                     elif attrib['type'] == "StructProperty" and attrib['struct_type'] in ["Guid", "PalContainerId"]:
                         tk.Entry(font=self.__font, master=g_frame, width=50,
@@ -963,7 +1071,8 @@ try:
                         tk.Entry(font=self.__font, master=g_frame, width=12,
                                  validate='all', validatecommand=valid_cmd,
                                  textvariable=attrib_var[attribute_key][0]).pack(side="right", fill=tk.constants.X)
-                    elif attrib['type'] == "StructProperty" and attrib['struct_type'] != "FixedPoint64":
+                    elif attrib['type'] == "StructProperty" and attrib['struct_type'] not in ["FixedPoint64",
+                                                                                              "DateTime"]:
                         sub_f = tk.Frame(master=g_frame)
                         sub_f.pack(side="right", fill=tk.constants.X)
                         try:
@@ -976,17 +1085,10 @@ try:
                                     gp(attrib['value'][key])
                                     print("----------------------------")
                         except Exception as e:
-                            log.error("Error attribute [%s]->%s " % (key, attribute_key), exc_info=True)
+                            log.error("Error attribute %s " % (attribute_key), exc_info=True)
                             traceback.print_exception(e)
                             gp(attrib)
                             print("----------------------------")
-                    # elif attrib['type'] == "MapProperty" and attrib['key_type'] == "NameProperty" and \
-                    #     attrib['value_type'] == "BoolProperty":
-                    #     sub_f = tk.Frame(master=g_frame)
-                    #     sub_f.pack(side="right", fill=tk.constants.X)
-                    #     gp(attrib['value'])
-                    #     for key in attrib['value']:
-                    #         tk.Checkbutton(master=sub_f, text=key['key'], variable=attrib_var[key['key']]).pack(side=tk.RIGHT)
                     elif attrib_var[attribute_key] is not None:
                         valid_cmd = None
                         if attrib['type'] in ["IntProperty"] or \
@@ -1014,22 +1116,27 @@ try:
             for item in g_frame.winfo_children():
                 item.destroy()
             log.debug("Binding to %s[%d]" % (attribute_key, evt.widget.current()))
-            if attrib['type'] == 'ArrayProperty' and attrib['array_type'] in ['NameProperty']:
-                self.build_variable_gui(g_frame, attrib_var[evt.widget.current()], {
-                    attrib['array_type'][:-8]: {
-                        'type': attrib['array_type'],
-                        'value': attrib['value']['values'][evt.widget.current()]
-                    }}, with_labelframe=False)
-            elif attrib['type'] == 'ArrayProperty' and attrib['array_type'] == 'EnumProperty':
-                self.build_variable_gui(g_frame, attrib_var[evt.widget.current()], {
-                    attrib['array_type'][:-8]: {
-                        'type': "StrProperty",
-                        'value': attrib['value']['values'][evt.widget.current()]
-                    }}, with_labelframe=False)
+            # if attrib['type'] == 'ArrayProperty' and attrib['array_type'] in ['NameProperty']:
+            #     self.build_variable_gui(g_frame, attrib_var[evt.widget.current()], {
+            #         attrib['array_type'][:-8]: {
+            #             'type': attrib['array_type'],
+            #             'value': attrib['value']['values'][evt.widget.current()]
+            #         }}, with_labelframe=False)
+            # elif attrib['type'] == 'ArrayProperty' and attrib['array_type'] == 'EnumProperty':
+            #     self.build_variable_gui(g_frame, attrib_var[evt.widget.current()], {
+            #         attrib['array_type'][:-8]: {
+            #             'type': "StrProperty",
+            #             'value': attrib['value']['values'][evt.widget.current()]
+            #         }}, with_labelframe=False)
+            # el
+            if attrib['type'] == 'ArrayProperty':
+                self.build_variable_gui(g_frame, attrib_var, attrib['value']['values'], with_labelframe=False,
+                                        override_attrib=attrib, specified_key=evt.widget.current())
+            elif attrib['type'] == 'MapProperty':
+                self.build_variable_gui(g_frame, attrib_var, attrib['value'], with_labelframe=False,
+                                        override_attrib=attrib, specified_key=evt.widget.current())
             else:
-                struct_value = attrib['value']['values'][evt.widget.current()]
-                self.build_variable_gui(g_frame, attrib_var[evt.widget.current()], struct_value,
-                                        with_labelframe=True)
+                raise ValueError(f"Expected ArrayProperty or MapProperty, got {attrib['type']} in {attribute_key}")
 
         @staticmethod
         def on_table_gui_dblclk(event, popup_set, columns, attrib_var, var_options):
@@ -1100,6 +1207,7 @@ try:
 
         def autosize(self):
             self.geometry("")
+
 
     class PlayerItemEdit(ParamEditor):
         def __init__(self, player_uid, i18n='en-US'):
@@ -1813,7 +1921,7 @@ class GUI():
         slots_count = simpledialog.askinteger("Adjust", "New slots?", initialvalue=len(slots))
         err = AdjustCharacterContainerSlots(container, slots_count)
         if err is not None:
-            messagebox.showerror("Adjust",err)
+            messagebox.showerror("Adjust", err)
         else:
             messagebox.showinfo("Result", "Update Success")
         self.status('done')
@@ -1877,7 +1985,7 @@ class GUI():
         slots_count = simpledialog.askinteger("Adjust", "New slots?", initialvalue=len(slots))
         err = AdjustCharacterContainerSlots(container, slots_count)
         if err is not None:
-            messagebox.showerror("Adjust",err)
+            messagebox.showerror("Adjust", err)
         else:
             messagebox.showinfo("Result", "Update Success")
         self.status('done')
@@ -2175,9 +2283,10 @@ class GUI():
                                                               command=self.delete_base)
         g_delete_base.pack(side="left")
 
-        self.i18n['adjust_base_worker'] = adjust_base_worker = ttk.Button(master=f_target_guildbase, text="Adjust Base Slot",
-                                                              style="custom.TButton",
-                                                              command=self.adjust_base_slot_count)
+        self.i18n['adjust_base_worker'] = adjust_base_worker = ttk.Button(master=f_target_guildbase,
+                                                                          text="Adjust Base Slot",
+                                                                          style="custom.TButton",
+                                                                          command=self.adjust_base_slot_count)
         adjust_base_worker.pack(side="left")
 
         #
@@ -2308,7 +2417,7 @@ class GUI():
 
         if not sys.flags.interactive:
             self.i18n['interactive'] = ttk.Button(master=g_wholefile, text="Interactive", style="custom.TButton",
-                                      command=InteractThread.load)
+                                                  command=InteractThread.load)
             self.i18n['interactive'].pack(side=tk.LEFT)
 
         g_save = ttk.Button(text="Save & Exit", style="custom.TButton", command=self.save)
