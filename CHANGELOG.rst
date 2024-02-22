@@ -28,6 +28,8 @@ Fix:
 - _CopyWorkSaveData failed
 - Progress stucked on Repair player
 - Edit GUI error on Quat Struct
+- error prompt for migrate to steam user
+- Add exception on CopyCharacterContainer for invalid character container
 
 0.8.1
 -------

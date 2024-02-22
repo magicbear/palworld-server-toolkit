@@ -4752,7 +4752,9 @@ def CopyCharacterContainer(containerId, src_wsd, dry_run=False, new_container_id
                                "CharacterContainerSaveData.Value.Slots")
         containerSlots = container['value']['values']
     except KeyError:
-        return
+        log.error(f"Copy Character Container failed, invalid containerId: {containerId}")
+        raise KeyError(f"Copy Character Container failed, invalid containerId: {containerId}")
+
     if container_only:
         for idx, containerSlot in enumerate(containerSlots):
             containerSlots[idx] = PalObject.PalCharacterSlotSaveData_Array(
