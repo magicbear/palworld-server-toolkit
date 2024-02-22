@@ -3551,16 +3551,14 @@ def CopyMapObject(map_object_id, src_wsd, dry_run=False):
         log.error(f"Error: Map Object {map_object_id} not found")
         return False
 
-    if not dry_run:
-        wsd['MapObjectSaveData']['value']['values'].append(mapObject)
-
     reference_ids = FindReferenceMapObject(map_object_id, srcMapping=srcMappingObject)
     for map_object_id in reference_ids['MapObject']:
         if map_object_id in MappingCache.MapObjectSaveData:
             continue
         log.info(f"Clone MapObject {map_object_id}")
         mapObject = copy.deepcopy(srcMappingObject.MapObjectSaveData[toUUID(map_object_id)])
-        wsd['MapObjectSaveData']['value'].append(mapObject)
+        if not dry_run:
+            wsd['MapObjectSaveData']['value']['values'].append(mapObject)
     for item_container_id in reference_ids['ItemContainer']:
         if item_container_id in MappingCache.ItemContainerSaveData:
             continue

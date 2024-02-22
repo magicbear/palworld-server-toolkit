@@ -21,6 +21,10 @@ Feature:
 
 - Edit GUI for MapProperty
 
+Fix:
+
+- CopyMapObject failed
+
 0.8.1
 -------
 
