@@ -4925,7 +4925,7 @@ def _CopyWorkSaveData(wrk_id, old_wsd):
     OldMappingCache = MappingCacheObject.get(old_wsd, use_mp=not getattr(args, "reduce_memory", False))
     try:
         if wrk_id in OldMappingCache.WorkSaveData:
-            wsd['WorkSaveData']['value']['values'].append(copy.deepcopy(MappingCache.WorkSaveData[wrk_id]))
+            wsd['WorkSaveData']['value']['values'].append(copy.deepcopy(OldMappingCache.WorkSaveData[wrk_id]))
     except ValueError:
         log.error(f"Failed to Clone WorkSave Data {wrk_id}")
 
