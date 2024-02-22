@@ -1530,7 +1530,7 @@ class GUI():
             self.status('loading')
             MigratePlayer(src_uuid, new_uuid)
             self.status('done')
-            messagebox.showinfo("Result", "Migrate to no steam success")
+            messagebox.showinfo("Result", "Migrate to steam success")
             self.load_players()
         except Exception as e:
             messagebox.showerror("Migrate Error", str(e))

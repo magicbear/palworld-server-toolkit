@@ -27,6 +27,7 @@ Fix:
 - Adjust Slots cancel with msg
 - _CopyWorkSaveData failed
 - Progress stucked on Repair player
+- Edit GUI error on Quat Struct
 
 0.8.1
 -------
