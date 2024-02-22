@@ -24,6 +24,7 @@ Feature:
 Fix:
 
 - CopyMapObject failed
+- Adjust Slots cancel with msg
 
 0.8.1
 -------

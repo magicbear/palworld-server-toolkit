@@ -1984,11 +1984,12 @@ class GUI():
         container = parse_item(MappingCache.CharacterContainerSaveData[container_id], "CharacterContainerSaveData")
         slots = container['value']['Slots']['value']['values']
         slots_count = simpledialog.askinteger("Adjust", "New slots?", initialvalue=len(slots))
-        err = AdjustCharacterContainerSlots(container, slots_count)
-        if err is not None:
-            messagebox.showerror("Adjust", err)
-        else:
-            messagebox.showinfo("Result", "Update Success")
+        if slots_count is not None:
+            err = AdjustCharacterContainerSlots(container, slots_count)
+            if err is not None:
+                messagebox.showerror("Adjust", err)
+            else:
+                messagebox.showinfo("Result", "Update Success")
         self.status('done')
 
     def select_target_player(self, evt):
