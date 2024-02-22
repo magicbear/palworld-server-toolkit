@@ -130,7 +130,7 @@ class skip_loading_progress(threading.Thread):
 
     def run(self) -> None:
         try:
-            while not self.reader.progress_eof():
+            while not self.reader.eof():
                 if sys.platform in ['linux', 'darwin']:
                     print("\033]0;%s - %3.1f%%\a" % (loadingTitle, 100 * self.reader.progress() / self.size), end="",
                           flush=True)
@@ -1530,7 +1530,7 @@ class GUI():
             self.status('loading')
             MigratePlayer(src_uuid, new_uuid)
             self.status('done')
-            messagebox.showinfo("Result", "Migrate to steam success")
+            messagebox.showinfo("Result", "Migrate to no steam success")
             self.load_players()
         except Exception as e:
             messagebox.showerror("Migrate Error", str(e))
@@ -1788,8 +1788,8 @@ class GUI():
                 traceback.print_exception(e)
                 messagebox.showerror("Delete Error", "\n".join(traceback.format_exception(e)))
 
-    def status(self, status, ext_msg=""):
-        self.lbl_status.config(text=self.lang_data['status_' + status]+ext_msg)
+    def status(self, status):
+        self.lbl_status.config(text=self.lang_data['status_' + status])
         self.gui.update()
 
     def move_guild(self):
@@ -2151,15 +2151,14 @@ class GUI():
 
     def repair_all_player(self):
         self.status('loading')
-        repairPlayerIds = [playerid for playerid in MappingCache.PlayerIdMapping]
-        for playerid in repairPlayerIds:
+        for playerid in MappingCache.PlayerIdMapping:
             try:
                 RepairPlayer(playerid)
             except Exception as e:
                 traceback.print_exception(e)
                 messagebox.showerror("Repair Error",
                                      f"Repair Player {playerid} Failed\n{e.__class__.__name__}: {str(e)}")
-                self.status('error', f": Player ID {playerid}")
+                self.status('error')
                 return
         self.status('done')
         messagebox.showinfo("Result", "Repair success")
@@ -4752,9 +4751,7 @@ def CopyCharacterContainer(containerId, src_wsd, dry_run=False, new_container_id
                                "CharacterContainerSaveData.Value.Slots")
         containerSlots = container['value']['values']
     except KeyError:
-        log.error(f"Copy Character Container failed, invalid containerId: {containerId}")
-        raise KeyError(f"Copy Character Container failed, invalid containerId: {containerId}")
-
+        return
     if container_only:
         for idx, containerSlot in enumerate(containerSlots):
             containerSlots[idx] = PalObject.PalCharacterSlotSaveData_Array(
@@ -4984,7 +4981,7 @@ def CopyBaseCamp(base_id, group_id, old_wsd, dry_run=False):
             CopyMapObject(modelId, old_wsd, dry_run)
             log.info(f"Delete Base Camp Work Collection {wrk_id}")
             if not dry_run:
-                _CopyWorkSaveData(wrk_id, old_wsd)
+                _CopyWorkSaveData(wrk_id)
         else:
             log.info(f"Ignore Base Camp Work Collection {wrk_id}")
     workDirectorContainer_id = baseCamp['WorkerDirector']['value']['RawData']['value']['container_id']
