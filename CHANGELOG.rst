@@ -25,7 +25,8 @@ Fix:
 
 - CopyMapObject failed
 - Adjust Slots cancel with msg
-= _CopyWorkSaveData failed
+- _CopyWorkSaveData failed
+- Progress stucked on Repair player
 
 0.8.1
 -------
@@ -38,6 +39,7 @@ Fix:
 
 - Edit GUI for ArrayProperty can not multiple edit now
 - CopyPlayer error
+
 
 0.8.0
 -------

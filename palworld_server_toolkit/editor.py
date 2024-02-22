@@ -130,7 +130,7 @@ class skip_loading_progress(threading.Thread):
 
     def run(self) -> None:
         try:
-            while not self.reader.eof():
+            while not self.reader.progress_eof():
                 if sys.platform in ['linux', 'darwin']:
                     print("\033]0;%s - %3.1f%%\a" % (loadingTitle, 100 * self.reader.progress() / self.size), end="",
                           flush=True)
@@ -1788,8 +1788,8 @@ class GUI():
                 traceback.print_exception(e)
                 messagebox.showerror("Delete Error", "\n".join(traceback.format_exception(e)))
 
-    def status(self, status):
-        self.lbl_status.config(text=self.lang_data['status_' + status])
+    def status(self, status, ext_msg=""):
+        self.lbl_status.config(text=self.lang_data['status_' + status]+ext_msg)
         self.gui.update()
 
     def move_guild(self):
@@ -2151,14 +2151,15 @@ class GUI():
 
     def repair_all_player(self):
         self.status('loading')
-        for playerid in MappingCache.PlayerIdMapping:
+        repairPlayerIds = [playerid for playerid in MappingCache.PlayerIdMapping]
+        for playerid in repairPlayerIds:
             try:
                 RepairPlayer(playerid)
             except Exception as e:
                 traceback.print_exception(e)
                 messagebox.showerror("Repair Error",
                                      f"Repair Player {playerid} Failed\n{e.__class__.__name__}: {str(e)}")
-                self.status('error')
+                self.status('error', f": Player ID {playerid}")
                 return
         self.status('done')
         messagebox.showinfo("Result", "Repair success")
