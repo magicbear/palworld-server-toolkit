@@ -1869,7 +1869,7 @@ class GUI():
                 messagebox.showerror("Delete Error", "\n".join(traceback.format_exception(e)))
 
     def status(self, status, ext_msg=""):
-        self.lbl_status.config(text=self.lang_data['status_' + status]+ext_msg)
+        self.lbl_status.config(text=self.lang_data['status_' + status] + ext_msg)
         self.gui.update()
 
     def move_guild(self):
@@ -2076,7 +2076,6 @@ class GUI():
             except Exception as e:
                 messagebox.showerror("Migrate", "Failed to migrate\n" + "\n".join(traceback.format_exception(e)))
             self.status('done')
-
 
     def migrate_builder(self):
         try:
@@ -2420,8 +2419,8 @@ class GUI():
 
         if 'MigrateBaseCampBuilder' in globals().keys():
             self.i18n['migrate_builder'] = g_merge_base = ttk.Button(master=f_target_guildbase, text="Migrate Builder",
-                                                                  style="custom.TButton",
-                                                                  command=self.migrate_builder)
+                                                                     style="custom.TButton",
+                                                                     command=self.migrate_builder)
             g_merge_base.pack(side="left")
 
         self.i18n['adjust_base_worker'] = adjust_base_worker = ttk.Button(master=f_target_guildbase,
@@ -2952,6 +2951,7 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
             sav_file = compress_gvas_to_sav(player_gvas_file.write(PALWORLD_CUSTOM_PROPERTIES), save_type)
             f.write(sav_file)
         RepairPlayer(new_player_uid)
+
 
 def MoveToGuild(player_uid, group_id):
     player_uid = toUUID(player_uid)
@@ -3539,7 +3539,8 @@ def MigrateAllToNoSteam(dry_run=False):
     migrate_sets = []
     skip_player_id = []
     for player_uid in MappingCache.PlayerIdMapping:
-        new_uuid = toUUID(PlayerUid2NoSteam(int.from_bytes(player_uid.raw_bytes[0:4], byteorder='little')) + "-0000-0000-0000-000000000000")
+        new_uuid = toUUID(PlayerUid2NoSteam(
+            int.from_bytes(player_uid.raw_bytes[0:4], byteorder='little')) + "-0000-0000-0000-000000000000")
         migrate_sets.append((player_uid, new_uuid))
         if new_uuid in MappingCache.PlayerIdMapping:
             skip_player_id.append(new_uuid)
@@ -3550,6 +3551,7 @@ def MigrateAllToNoSteam(dry_run=False):
         for src_uuid, new_uuid in migrate_sets:
             if src_uuid not in skip_player_id:
                 MigratePlayer(src_uuid, new_uuid)
+
 
 def MigrateBuilding(player_uid, new_player_uid):
     player_uid = toUUID(player_uid)
@@ -4291,6 +4293,30 @@ def FindDamageRefContainer(dry_run=False):
                 f"MapObject {tcl(33)}{map_id}{tcl(0)}  -> Repair Work {tcl(33)}{repair_work_id}{tcl(0)} invalid {map_object_debug_msg}")
             InvalidObjects['MapObject'].add(map_id)
 
+        connector = mapObject['Model']['value']['Connector']['value']['RawData']
+        reference_ids = []
+        if 'value' in connector:
+            # Parent of this object
+            if 'connect' in connector['value']:
+                if 'any_place' in connector['value']['connect']:
+                    for connection_item in connector['value']['connect']['any_place']:
+                        if connection_item["connect_to_model_instance_id"] not in MappingCache.MapObjectSaveData:
+                            connect_instance_id = connection_item["connect_to_model_instance_id"]
+                            log.info(
+                                f"MapObject {tcl(33)}{map_id}{tcl(0)}  -> any_place Connector "
+                                f"{tcl(33)}{connect_instance_id}{tcl(0)} invalid {map_object_debug_msg}")
+                            InvalidObjects['MapObject'].add(map_id)
+
+        if 'other_connectors' in connector['value']:
+            for other_connection_list in connector['value']['other_connectors']:
+                for connection_item in other_connection_list['connect']:
+                    if connection_item["connect_to_model_instance_id"] not in MappingCache.MapObjectSaveData:
+                        connect_instance_id = connection_item["connect_to_model_instance_id"]
+                        log.info(
+                            f"MapObject {tcl(33)}{map_id}{tcl(0)}  -> other_connectors Connector "
+                            f"{tcl(33)}{connect_instance_id}{tcl(0)} invalid {map_object_debug_msg}")
+                        InvalidObjects['MapObject'].add(map_id)
+
     for spawn_id in MappingCache.MapObjectSpawnerInStageSaveData:
         spawn_obj = MappingCache.MapObjectSpawnerInStageSaveData[spawn_id]
         for spawn_item in spawn_obj['value']['ItemMap']['value']:
@@ -4526,6 +4552,14 @@ def DeleteItemContainer(itemContainerId, isBatch=False):
     if not isBatch:
         MappingCache.LoadItemContainerMaps()
 
+
+def LoadMapByRange(x, y):
+    for map_id in MappingCache.MapObjectSaveData:
+        mapObject = parse_item(MappingCache.MapObjectSaveData[map_id], "MapObjectSaveData.MapObjectSaveData")
+        vector = mapObject['WorldLocation']['value']
+        if (x[0] <= vector['x'] / 305 and vector['x'] / 305 <= x[1] and
+                y[0] <= vector['y'] / 1125 and vector['y'] / 1125 <= y[1]):
+            gp(mapObject)
 
 def DeletePlayer(player_uid, InstanceId=None, dry_run=False):
     load_skipped_decode(wsd, ['ItemContainerSaveData', 'CharacterContainerSaveData', 'MapObjectSaveData',
@@ -5762,6 +5796,7 @@ def buildDotImage():
             f.write(cmd.stdout)
     else:
         sys.stderr.write(cmd.stderr)
+
 
 if os.path.exists(f"{module_dir}/premium.py"):
     exec(code.compile_command(open(f"{module_dir}/premium.py", "r").read(), f"{module_dir}/premium.py", "exec"))

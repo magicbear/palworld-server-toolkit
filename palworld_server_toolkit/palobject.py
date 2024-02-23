@@ -878,7 +878,6 @@ class FProgressArchiveReader(FArchiveReader):
         try:
             return data.decode(encoding)
         except Exception as e:
-            print(self.raise_error)
             if self.raise_error:
                 raise Exception(
                     f"Error decoding {encoding} string of length {size}: {bytes(data)!r}"
