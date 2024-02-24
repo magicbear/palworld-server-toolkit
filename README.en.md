@@ -297,3 +297,4 @@ Thanks to
 - [PalworldCharacterTransfer](https://github.com/jmkl009/PalworldCharacterTransfer) - Idea for the Dynamic Item Data transfer
 - [Palworld Host Save Fix](https://github.com/xNul/palworld-host-save-fix) - Idea for the first to transfer between server
 - [palworld-steam-id-to-player-uid](https://github.com/cheahjs/palworld-steam-id-to-player-uid)
+- [Buy me a coffee](https://www.buymeacoffee.com/magicbear)

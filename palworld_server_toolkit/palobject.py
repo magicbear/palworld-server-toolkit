@@ -878,7 +878,6 @@ class FProgressArchiveReader(FArchiveReader):
         try:
             return data.decode(encoding)
         except Exception as e:
-            print(self.raise_error)
             if self.raise_error:
                 raise Exception(
                     f"Error decoding {encoding} string of length {size}: {bytes(data)!r}"
@@ -895,18 +894,35 @@ class FProgressArchiveReader(FArchiveReader):
                         f"Error decoding {encoding} string of length {size}: {bytes(data)!r}"
                     ) from e
 
+    def progress_eof(self):
+        try:
+            return self.eof() and len(self.processlist) == 0
+        except ValueError:
+            return len(self.progresslist) == 0
+
     def progress(self):
         reduce_size = 0
+        del_path = []
         for mp_path in self.progresslist:
             reduce_size += self.progresslist[mp_path]['size']
             prop = getattr(self.progresslist[mp_path]['share_mp'], "prop", None)
             if prop is not None:
                 loaded_size = int(self.progresslist[mp_path]['size'] * (prop.current / prop.count))
                 reduce_size -= loaded_size
+                if reduce_size == 0:
+                    del_path.append(mp_path)
+            else:
+                del_path.append(mp_path)
+
+        for mp_path in del_path:
+            del self.progresslist[mp_path]
+
         try:
+            if self.eof():
+                return self.size - reduce_size
             return self.data.tell() - reduce_size
         except ValueError:
-            return -reduce_size
+            return self.size - reduce_size
 
     def load_mp_map(self, properties, path, size):
         key_type = self.fstring()
@@ -1416,7 +1432,7 @@ class MappingCacheObject:
                 {ind_char['guid']: ind_char['instance_id'] for ind_char in item['individual_character_handle_ids']})
 
     def __del__(self):
-        for key in wsd:
+        for key in self._worldSaveData:
             if isinstance(self._worldSaveData[key]['value'], MPMapProperty):
                 self._worldSaveData[key]['value'].close()
                 self._worldSaveData[key]['value'].release()
@@ -1498,16 +1514,19 @@ class MPProgressReader:
             return
         self.proc(self, reduce(lambda x, y: x + y[1], self.mp_ctx.values(), 0))
 
+    def progress_eof(self):
+        return len(self.mp_ctx) == 0
+
     def progress(self):
         t_proc = 0
         del_mp_path = []
         for mp_path, ctx in self.mp_ctx.items():
             prog = ctx[0].progress()
-            if prog == 0:
+            if ctx[0].progress_eof():
                 self.loaded_size += ctx[1]
                 del_mp_path.append(mp_path)
             else:
-                t_proc += ctx[1] + prog
+                t_proc += prog
         for mp_path in del_mp_path:
             del self.mp_ctx[mp_path]
         return self.loaded_size + t_proc
