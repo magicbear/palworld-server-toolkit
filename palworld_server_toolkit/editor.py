@@ -399,15 +399,13 @@ def main():
 
     if args.gui:
         global gui
+        gui = GUI()
         try:
-            gui = GUI()
-            gui.load()
-
             if sys.flags.interactive:
                 if sys.platform == 'darwin':
-                    # log.warning("Mac OS python not support interactive with GUI")
-                    InteractThread.load()
-                    gui.gui.mainloop()
+                    log.warning("Mac OS python not support interactive with GUI, please run command with gui.mainloop()")
+                    # InteractThread.load()
+                    # gui.gui.mainloop(time=0.1)
                 else:
                     threading.Thread(target=gui_thread, daemon=True).start()
             else:
@@ -489,7 +487,7 @@ try:
 
 
     class SimpleComboBoxDialog:
-        def __init__(self, title, text, choices, state="normal"):
+        def __init__(self, title, text, choices, state="normal", initialvalue=None):
             self.t = tk.Toplevel()
             self.t.title(title if title else "")
             base_frame = tk.Frame(self.t, padx=15, pady=15)
@@ -499,6 +497,8 @@ try:
             tk.Label(base_frame, text=text if text else "").grid(row=0, column=0)
             self.c = AutocompleteCombobox(master=base_frame, width=60, value=choices if choices else [], state=state)
             self.c.grid(row=0, column=1, columnspan=5)
+            if initialvalue is not None:
+                self.c.set(initialvalue)
 
             button_frame = tk.Frame(base_frame)
             button_frame.grid(row=1, column=0, columnspan=6)
@@ -1518,6 +1518,7 @@ class GUI():
         self.btn_migrate = None
         self.font = None
         self.build_gui()
+        self.load()
 
     def mainloop(self):
         self.gui.mainloop()
@@ -1561,7 +1562,7 @@ class GUI():
             messagebox.showinfo("Result", "Migrate to local success")
             self.load_players()
         except Exception as e:
-            messagebox.showerror("Migrate Error", str(e))
+            messagebox.showerror("Migrate Error", "\n".join(traceback.format_exception(e)))
 
     def migrate_to_nosteam(self):
         src_uuid = self.parse_source_uuid(True, True)
@@ -1584,7 +1585,7 @@ class GUI():
             messagebox.showinfo("Result", "Migrate to no steam success")
             self.load_players()
         except Exception as e:
-            messagebox.showerror("Migrate Error", str(e))
+            messagebox.showerror("Migrate Error", "\n".join(traceback.format_exception(e)))
 
     def migrate_to_steamid(self):
         src_uuid = self.parse_source_uuid(True, True)
@@ -1613,7 +1614,7 @@ class GUI():
             messagebox.showinfo("Result", "Migrate to steam success")
             self.load_players()
         except Exception as e:
-            messagebox.showerror("Migrate Error", str(e))
+            messagebox.showerror("Migrate Error", "\n".join(traceback.format_exception(e)))
 
     def migrate(self):
         src_uuid, target_uuid = self.gui_parse_uuid()
@@ -1637,7 +1638,7 @@ class GUI():
             messagebox.showinfo("Result", "Migrate success")
             self.load_players()
         except Exception as e:
-            messagebox.showerror("Migrate Error", str(e))
+            messagebox.showerror("Migrate Error", "\n".join(traceback.format_exception(e)))
 
     def open_file(self):
         bk_f = filedialog.askopenfilename(filetypes=[("Level.sav file", "*.sav")], title="Open Level.sav")
@@ -1932,6 +1933,48 @@ class GUI():
             messagebox.showerror("Edit Instance Error", "Instance Not Found")
             return
         PlayerEditGUI(instanceId=target_uuid)
+
+    def migrate_instance(self):
+        instanceId = self.target_instance.get()[:36]
+        if instanceId is None:
+            return
+        if toUUID(instanceId) not in MappingCache.CharacterSaveParameterMap:
+            messagebox.showerror("Edit Instance Error", "Instance Not Found")
+            return
+        instanceId = toUUID(instanceId)
+        character = MappingCache.CharacterSaveParameterMap[instanceId]
+        characterData = character['value']['RawData']['value']['object']['SaveParameter']['value']
+        characterContainerId = characterData['SlotID']['value']['ContainerId']['value']['ID']['value']
+        if 'OwnerPlayerUId' not in characterData:
+            messagebox.showerror("Copy Instance Error", "Only Pals can be use for Copy Instance")
+            return
+        err, player_gvas, player_sav_file, player_gvas_file = GetPlayerGvas(characterData['OwnerPlayerUId']['value'])
+        if err:
+            messagebox.showerror("Copy Instance Error", f"Player sav file not exists: {player_sav_file}")
+            return
+        containers = []
+        containers.append("%s - Pal Storage Container" % player_gvas['PalStorageContainerId']['value']['ID']['value'])
+        containers.append("%s - Otomo Container" % player_gvas['OtomoCharacterContainerId']['value']['ID']['value'])
+        group_id = character['value']['RawData']['value']['group_id']
+        if group_id in MappingCache.GuildSaveDataMap:
+            player_group = MappingCache.GuildSaveDataMap[group_id]
+            group_info = player_group['value']['RawData']['value']
+            for base_id in group_info['base_ids']:
+                if base_id in MappingCache.BaseCampMapping:
+                    basecamp = MappingCache.BaseCampMapping[base_id]['value']
+                    container_id = basecamp['WorkerDirector']['value']['RawData']['value']['container_id']
+                    containers.append(f"{container_id} - Base Camp {basecamp['RawData']['value']['name']} {base_id}")
+        new_container = SimpleComboBoxDialog("Target Contaienr", "Container", containers,
+                                             initialvalue=characterContainerId).wait()
+        if new_container is not None:
+            try:
+                self.status('loading')
+                MoveCharacterContainer(instanceId, new_container[:36])
+                self.status('done')
+                messagebox.showinfo("Migrate", "Migrate success")
+                self.load_players()
+            except Exception as e:
+                messagebox.showerror("Migrate Error", "\n".join(traceback.format_exception(e)))
 
     def copy_instance(self):
         target_uuid = self.target_instance.get()[:36]
@@ -2441,6 +2484,10 @@ class GUI():
         self.i18n['copy_instance'] = ttk.Button(master=f_target_instance, text="Copy", style="custom.TButton",
                                                 command=self.copy_instance)
         self.i18n['copy_instance'].pack(side="left")
+        if 'MoveCharacterContainer' in globals().keys():
+            self.i18n['migrate_instance'] = ttk.Button(master=f_target_instance, text="Migrate", style="custom.TButton",
+                                                    command=self.migrate_instance)
+            self.i18n['migrate_instance'].pack(side="left")
 
         g_multi_button_frame = tk.Frame()
 
@@ -3485,15 +3532,12 @@ def MigratePlayer(player_uid, new_player_uid):
                                                               2))
         elif 'OldOwnerPlayerUIds' in player and player_uid in player['OldOwnerPlayerUIds']['value']['values']:
             player['OldOwnerPlayerUIds']['value']['values'].remove(player_uid)
-            log.info(
-                f"{tcl(31)}Delete Pal OldOwnerPlayerUIds{tcl(0)}  UUID: %s  Owner: %s  CharacterID: %s" % (
-                    str(item['key']['InstanceId']['value']), str(player['OwnerPlayerUId']['value']),
-                    player['CharacterID']['value']))
+            log.info(f"{tcl(31)}Delete Pal OldOwnerPlayerUIds{tcl(0)}  UUID: %s  CharacterID: %s" % (
+                    str(item['key']['InstanceId']['value']), player['CharacterID']['value']))
         if 'SlotID' in player:
-            if player['SlotID']['value']['ContainerId']['value']['ID'][
-                'value'] not in MappingCache.CharacterContainerSaveData:
-                log.error(f"{tcl(31)}Error: Invalid Character Container ID "
-                          f"{player['SlotID']['value']['ContainerId']['value']['ID']['value']}{tcl(0)}")
+            slot_container_id = player['SlotID']['value']['ContainerId']['value']['ID']['value']
+            if slot_container_id not in MappingCache.CharacterContainerSaveData:
+                log.error(f"{tcl(31)}Error: Invalid Character Container ID {slot_container_id}{tcl(0)}")
 
     for group_data in wsd['GroupSaveDataMap']['value']:
         if str(group_data['value']['GroupType']['value']['value']) == "EPalGroupType::Guild":
@@ -3533,24 +3577,6 @@ def MigratePlayer(player_uid, new_player_uid):
     MappingCache.LoadCharacterSaveParameterMap()
     # RepairPlayer(new_player_uid)
     log.info("Finish to migrate player from Save")
-
-
-def MigrateAllToNoSteam(dry_run=False):
-    migrate_sets = []
-    skip_player_id = []
-    for player_uid in MappingCache.PlayerIdMapping:
-        new_uuid = toUUID(PlayerUid2NoSteam(
-            int.from_bytes(player_uid.raw_bytes[0:4], byteorder='little')) + "-0000-0000-0000-000000000000")
-        migrate_sets.append((player_uid, new_uuid))
-        if new_uuid in MappingCache.PlayerIdMapping:
-            skip_player_id.append(new_uuid)
-            log.warning(f"Replaced Player {new_uuid}")
-        else:
-            log.info(f"Migrate from {player_uid} to {new_uuid}")
-    if not dry_run:
-        for src_uuid, new_uuid in migrate_sets:
-            if src_uuid not in skip_player_id:
-                MigratePlayer(src_uuid, new_uuid)
 
 
 def MigrateBuilding(player_uid, new_player_uid):
@@ -4138,7 +4164,7 @@ def CharacterDescription(character):
     else:
         return f"Pal %s Own {tcl(32)}%s{tcl(0)}%s" % (
             characterData['CharacterID']['value'] if 'CharacterID' in characterData else "Invalid",
-            characterData['OwnerPlayerUId']['value'],
+            characterData['OwnerPlayerUId']['value'] if 'OwnerPlayerUId' in characterData else "Invalid",
             f" Name: {nickname})" if 'NickName' in characterData else "")
 
 
@@ -4345,9 +4371,8 @@ def FindDamageRefContainer(dry_run=False):
         if 'SlotID' in characterData and not characterData['SlotID']['value']['ContainerId']['value']['ID'][
                                                  'value'] in MappingCache.CharacterContainerSaveData:
             log.info(
-                f"{tcl(31)}Invalid Character Container{tcl(0)} {characterData['SlotID']['value']['ContainerId']['value']['ID']['value']}  UUID: %s  Owner: %s  CharacterID: %s" % (
-                    str(character['key']['InstanceId']['value']), str(characterData['OwnerPlayerUId']['value']),
-                    characterData['CharacterID']['value']))
+                f"{tcl(31)}Invalid Character Container{tcl(0)} {characterData['SlotID']['value']['ContainerId']['value']['ID']['value']}  UUID: %s   CharacterID: %s" % (
+                    str(character['key']['InstanceId']['value']), characterData['CharacterID']['value']))
             InvalidObjects['Character']['CharacterContainer'].append(character['key']['InstanceId']['value'])
         if 'EquipItemContainerId' in characterData:
             if characterData['EquipItemContainerId']['value']['ID']['value'] not in MappingCache.ItemContainerSaveData:

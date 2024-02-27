@@ -16,6 +16,7 @@
   "target_instance": "ターゲットトパル",
   "edit_instance": "パルを変更",
   "copy_instance": "パルをコピー",
+  "migrate_instance": "パルに移行",
   "save": "保存 & 終了",
   "op_for_target": "ターゲット ロールに対する操作",
   "move_to_guild": "ギルドに移動",

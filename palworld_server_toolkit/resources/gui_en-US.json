@@ -16,6 +16,7 @@
   "target_instance": "Target Pals",
   "edit_instance": "Edit Pals",
   "copy_instance": "Copy Pals",
+  "migrate_instance": "Migrate Container",
   "save": "Save & Exit",
   "op_for_target": "Operate for Target Player",
   "move_to_guild": "Move To Guild",

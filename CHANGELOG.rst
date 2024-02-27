@@ -14,6 +14,22 @@ Changelog
     Note that they these tags will not actually close the issue/PR until they
     are merged into the "default" branch.
 
+For Premium Feature
+-------
+
+- MigrateBaseCamp(base_id, group_id)
+- MigrateBaseCampBuilder(base_id, player_uid)
+- MoveCharacterContainer(instanceId, new_container_id)
+- MoveCharacterToBaseCampWorker(instanceId, basecamp_id)
+- MigrateAllToNoSteam feature
+
+0.8.4
+-------
+
+Fix:
+
+- OwnerPlayerUId error on migrate
+
 0.8.3
 -------
 
@@ -33,7 +49,6 @@ Feature:
 
 - Edit GUI for MapProperty
 - Item Edit GUI for Group
-- MigrateAllToNoSteam feature
 
 Fix:
 

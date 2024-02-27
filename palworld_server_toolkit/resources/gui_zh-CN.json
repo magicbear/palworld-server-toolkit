@@ -17,6 +17,7 @@
   "target_instance": "目标帕鲁",
   "edit_instance": "修改帕鲁",
   "copy_instance": "复制帕鲁",
+  "migrate_instance": "迁移容器",
   "save": "保存 & 退出",
   "op_for_target": "对目标角色的操作",
   "move_to_guild": "移动到公会",
