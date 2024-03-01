@@ -22,7 +22,8 @@ dependencies = [
     "pyperclip",
     "recordclass",
     "msgpack",
-    "cityhash"
+    "cityhash",
+    "palworld-coord"
 ]
 dynamic = ["version"]
 

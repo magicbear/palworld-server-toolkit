@@ -23,6 +23,14 @@ For Premium Feature
 - MoveCharacterToBaseCampWorker(instanceId, basecamp_id)
 - MigrateAllToNoSteam feature
 
+0.8.5
+-------
+
+Feature:
+
+- ShowGuild with the coord in the game
+
+
 0.8.4
 -------
 

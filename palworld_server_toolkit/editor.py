@@ -19,6 +19,7 @@ import multiprocessing
 import tarfile
 import subprocess
 import logging
+import palworld_coord
 
 module_dir = os.path.dirname(os.path.realpath(__file__))
 if not os.path.exists("%s/resources/gui.json" % module_dir) and getattr(sys, 'frozen', False):
@@ -5410,7 +5411,7 @@ def ShowGuild(data_src=None):
             offset = basecamp['value']['RawData']['value']['transform']['translation']
             print(
                 f"    Base ID {tcl(32)} {base_id} {tcl(0)} -> {tcl(33)} {basecamp['value']['RawData']['value']['name']} {tcl(0)} " +
-                f" %6.0f, %6.0f, %6.0f" % (offset['x'], offset['y'], offset['z']) +
+                f" %4.0f, %4.0f" % (palworld_coord.sav_to_map(offset['x'], offset['y'])) +
                 f" Map ID {tcl(32)} {item['map_object_instance_ids_base_camp_points'][base_idx]} {tcl(0)}")
         print()
         for player in mapObjectMeta['players']:
