@@ -21,6 +21,7 @@ The world fastest PalWorld server save editor, parse 45MB Level.sav in 1.9s for 
 ---
 
 - [Palworld Server Toolkit](#palworld-server-toolkit)
+  - [Releases](https://github.com/TronickDev/palworld-server-toolkit-auto-update)
   - [How to use install](#Binaries)
   - [Where to find the save-files](#faq)
   - [An example](#operate-sample)

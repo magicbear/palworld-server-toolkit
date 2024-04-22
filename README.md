@@ -23,6 +23,7 @@
 ---
 
 - [Palworld Server Toolkit](#palworld-server-toolkit)
+  - [已编译文件](https://github.com/TronickDev/palworld-server-toolkit-auto-update)
   - [如何安装](#直接运行)
   - [找到存档文件](#faq)
   - [操作示例](#操作示例)
@@ -32,7 +33,6 @@
   - [基础视频教学  - 哔哩哔哩](https://www.bilibili.com/video/BV1Gx421f7Ns/)
   - [存档转移视频 - 哔哩哔哩](https://www.bilibili.com/video/BV1s2421A7jX/)
   - [有偿协助 / 请喝咖啡 - 闲鱼](https://m.tb.cn/h.5GkXWQ8?tk=t7zFWkLsfee)
-  - [有偿协助 - 闲鱼](#payment)
 
 
 ## GUI
@@ -281,12 +281,6 @@ options:
 
 ---
 
-## PAYMENT
-
-![](./docs/img/payment.png)
-
----
-
 # 感谢
 
 - [palworld-save-tools](https://github.com/cheahjs/palworld-save-tools) 提供了存档解析工具实现
@@ -294,4 +288,3 @@ options:
 - [PalworldCharacterTransfer](https://github.com/jmkl009/PalworldCharacterTransfer) - 参考了其中的动态物品数据迁移引用概念
 - [Palworld Host Save Fix](https://github.com/xNul/palworld-host-save-fix) - 提供了最早期迁移玩家数据的概念
 - [palworld-steam-id-to-player-uid](https://github.com/cheahjs/palworld-steam-id-to-player-uid)
-- [https://afdian.net/a/magicbear](https://afdian.net/a/magicbear?tab=home) - 赞助我
