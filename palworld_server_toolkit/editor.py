@@ -1279,7 +1279,7 @@ try:
             frame_index = {}
             for idx_key in ['CommonContainerId', 'DropSlotContainerId', 'EssentialContainerId', 'FoodEquipContainerId',
                             'PlayerEquipArmorContainerId', 'WeaponLoadOutContainerId']:
-                if player_gvas['inventoryInfo']['value'][idx_key]['value']['ID']['value'] \
+                if player_gvas['InventoryInfo']['value'][idx_key]['value']['ID']['value'] \
                         in MappingCache.ItemContainerSaveData:
                     tab = tk.Frame(tabs)
                     tabs.add(tab, text=idx_key[:-11])
@@ -1288,7 +1288,7 @@ try:
                 tab = frame_index[idx_key]
                 self.item_container_vars[idx_key[:-11]] = []
                 item_container = parse_item(
-                    MappingCache.ItemContainerSaveData[player_gvas['inventoryInfo']['value'][idx_key]['value']['ID'][
+                    MappingCache.ItemContainerSaveData[player_gvas['InventoryInfo']['value'][idx_key]['value']['ID'][
                         'value']], "ItemContainerSaveData")
                 self.item_containers[idx_key[:-11]] = [{
                     'SlotIndex': item['SlotIndex'],
@@ -2766,8 +2766,8 @@ def GetPlayerItems(player_uid):
         return
     for idx_key in ['CommonContainerId', 'DropSlotContainerId', 'EssentialContainerId', 'FoodEquipContainerId',
                     'PlayerEquipArmorContainerId', 'WeaponLoadOutContainerId']:
-        print("  %s" % player_gvas['inventoryInfo']['value'][idx_key]['value']['ID']['value'])
-        pp.pprint(item_containers[str(player_gvas['inventoryInfo']['value'][idx_key]['value']['ID']['value'])])
+        print("  %s" % player_gvas['InventoryInfo']['value'][idx_key]['value']['ID']['value'])
+        pp.pprint(item_containers[str(player_gvas['InventoryInfo']['value'][idx_key]['value']['ID']['value'])])
         print()
 
 
@@ -2913,13 +2913,13 @@ def CopyPlayer(player_uid, new_player_uid, old_wsd, dry_run=False):
 
     for idx_key in ['CommonContainerId', 'DropSlotContainerId', 'EssentialContainerId', 'FoodEquipContainerId',
                     'PlayerEquipArmorContainerId', 'WeaponLoadOutContainerId']:
-        container_id = player_gvas['inventoryInfo']['value'][idx_key]['value']['ID']['value']
+        container_id = player_gvas['InventoryInfo']['value'][idx_key]['value']['ID']['value']
         if container_id in srcMappingCache.ItemContainerSaveData:
             container = parse_item(srcMappingCache.ItemContainerSaveData[container_id], "ItemContainerSaveData")
             new_item = copy.deepcopy(container)
             if container_id in MappingCache.ItemContainerSaveData:
-                player_gvas['inventoryInfo']['value'][idx_key]['value']['ID']['value'] = toUUID(uuid.uuid4())
-                new_item['key']['ID']['value'] = player_gvas['inventoryInfo']['value'][idx_key]['value']['ID']['value']
+                player_gvas['InventoryInfo']['value'][idx_key]['value']['ID']['value'] = toUUID(uuid.uuid4())
+                new_item['key']['ID']['value'] = player_gvas['InventoryInfo']['value'][idx_key]['value']['ID']['value']
                 log.info(f"{tcl(32)}Create Item Container{tcl(0)} %s UUID: %s -> %s" % (
                     idx_key, str(container['key']['ID']['value']), str(new_item['key']['ID']['value'])))
             else:
@@ -3225,12 +3225,12 @@ def RepairPlayer(player_uid):
     anyFix = False
     for key in ['CommonContainerId', 'DropSlotContainerId', 'EssentialContainerId', 'FoodEquipContainerId',
                 'PlayerEquipArmorContainerId', 'WeaponLoadOutContainerId']:
-        if player_gvas['inventoryInfo']['value'][key]['value']['ID']['value'] not in MappingCache.ItemContainerSaveData:
+        if player_gvas['InventoryInfo']['value'][key]['value']['ID']['value'] not in MappingCache.ItemContainerSaveData:
             log.error(
                 f"{tcl(33)}Error: Player {tcl(93)}{player_uid}{tcl(33)} Item Container {tcl(36)}{key[:-11]}{tcl(0)} "
-                f"{tcl(32)}{player_gvas['inventoryInfo']['value'][key]['value']['ID']['value']}{tcl(0)} Not exists")
+                f"{tcl(32)}{player_gvas['InventoryInfo']['value'][key]['value']['ID']['value']}{tcl(0)} Not exists")
             n = PalObject.ItemContainerSaveData_Array(
-                player_gvas['inventoryInfo']['value'][key]['value']['ID']['value'],
+                player_gvas['InventoryInfo']['value'][key]['value']['ID']['value'],
                 emptySlots[key])
             wsd['ItemContainerSaveData']['value'].append(n)
             anyFix = True
@@ -4102,7 +4102,7 @@ def FindItemIdReferenceContainers():
             for key in ['CommonContainerId', 'DropSlotContainerId', 'EssentialContainerId', 'FoodEquipContainerId',
                         'PlayerEquipArmorContainerId', 'WeaponLoadOutContainerId']:
                 LoadItemContainerSlotItems(key[:-11],
-                                           player_gvas['inventoryInfo']['value'][key]['value']['ID']['value'],
+                                           player_gvas['InventoryInfo']['value'][key]['value']['ID']['value'],
                                            ItemReferenceContainer)
         except KeyError as e:
             traceback.print_exception(e)
@@ -4449,7 +4449,7 @@ def GetReferencedItemContainerIdsByPlayer(player_uid):
 
     for key in ['CommonContainerId', 'DropSlotContainerId', 'EssentialContainerId', 'FoodEquipContainerId',
                 'PlayerEquipArmorContainerId', 'WeaponLoadOutContainerId']:
-        player_container_ids.append(player_gvas['inventoryInfo']['value'][key]['value']['ID']['value'])
+        player_container_ids.append(player_gvas['InventoryInfo']['value'][key]['value']['ID']['value'])
     return player_container_ids
 
 
@@ -4614,14 +4614,14 @@ def DeletePlayer(player_uid, InstanceId=None, dry_run=False):
                 player_container_ids.append(player_gvas[key]['value']['ID']['value'])
             for key in ['CommonContainerId', 'DropSlotContainerId', 'EssentialContainerId', 'FoodEquipContainerId',
                         'PlayerEquipArmorContainerId', 'WeaponLoadOutContainerId']:
-                log.info("  %s" % player_gvas['inventoryInfo']['value'][key]['value']['ID']['value'])
+                log.info("  %s" % player_gvas['InventoryInfo']['value'][key]['value']['ID']['value'])
 
                 log.info(f"{tcl(31)}Delete Item Container{tcl(0)}  UUID: %s" % (
-                    str(player_gvas['inventoryInfo']['value'][key]['value']['ID']['value'])))
+                    str(player_gvas['InventoryInfo']['value'][key]['value']['ID']['value'])))
                 if not dry_run:
-                    DeleteItemContainer(player_gvas['inventoryInfo']['value'][key]['value']['ID']['value'])
+                    DeleteItemContainer(player_gvas['InventoryInfo']['value'][key]['value']['ID']['value'])
                     print()
-                player_container_ids.append(player_gvas['inventoryInfo']['value'][key]['value']['ID']['value'])
+                player_container_ids.append(player_gvas['InventoryInfo']['value'][key]['value']['ID']['value'])
     # Remove item from CharacterSaveParameterMap
     deleteCharacters = []
     log.info(f"{tcl(32)}Scan for remain item in CharacterSaveParameterMap{tcl(0)}")
@@ -5790,7 +5790,7 @@ def buildDotImage():
                 continue
             for idx_key in ['CommonContainerId', 'DropSlotContainerId', 'EssentialContainerId', 'FoodEquipContainerId',
                             'PlayerEquipArmorContainerId', 'WeaponLoadOutContainerId']:
-                container_id = player_gvas['inventoryInfo']['value'][idx_key]['value']['ID']['value']
+                container_id = player_gvas['InventoryInfo']['value'][idx_key]['value']['ID']['value']
                 if container_id in MappingCache.ItemContainerSaveData:
                     dot_itemcontainer(f, container_id, idx_key[:-11])
                     f.write(f'  "{str(player_id)}" -> "{container_id}"\n')
