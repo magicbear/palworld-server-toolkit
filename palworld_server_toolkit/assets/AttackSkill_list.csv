@@ -1,0 +1,412 @@
+﻿CODENAME,zhCN,skillDesc,cheatFlag
+DarkLegion,黑暗之拥,发射多个可以追击敌人的黑暗之球。,
+Unique_BlackGriffon_TackleLaser,神圣灾祸,"<characterName id=|BlackGriffon|/>的专用技能。
+
+在向前猛冲的同时制造出光球。
+
+光球会自动捕捉敌人，并射出大量激光。",
+DarkLaser,暗黑镭射,"积蓄黑暗之力
+
+瞄准敌人发射强劲光线。",
+Unique_BlackCentaur_TwoSpearRushes,双枪一闪,"<characterName id=|BlackCentaur|/>的专用技能。
+
+左右交替刺出双臂挟着旋风的长矛，
+
+并朝前方冲刺。",
+Psychokinesis,念动引力,"用念力剥夺周围敌人的行动自由
+
+并将其从高处锤入地面。",
+ShadowBall,恶梦球,"生成巨大的黑暗之球
+
+瞄准敌人并高速发射。",
+Unique_FireKirin_Dark_DarkTossin,暗影冲撞,"<characterName id=|FireKirin_Dark|/>的专用技能。
+
+带着缠绕全身的暗黑火焰向前猛冲。
+
+途经之处均会留下滚滚火焰。",
+GhostFlame,鬼火,"发射3个怨念
+
+并执着追击敌人。",
+Unique_DarkCrow_TelePoke,幻影突袭,"<characterName id=|DarkCrow|/>的专用技能。
+
+瞬间移动至敌人身旁，
+
+再以鸟喙发动攻击。",
+Unique_Werewolf_Scratch,飞跃爪击,"<characterName id=|WereWolf|/>的专用技能。
+
+向前一跃，迅速斩下两击。
+
+且每次斩击都充满了暗属性的力量。",
+DarkWave,暗影波动,"快速释放黑暗之力
+
+给周围造成冲击。",
+DarkBall,暗黑球,"发射黑暗之球，
+
+使其以缓慢速度追赶敌人。",
+PoisonShot,剧毒射击,"用蕴藏剧毒之力的淤泥
+
+瞄准敌人并发射。",
+PoisonFog,毒雾,"于前方制造毒雾，
+
+使目标陷入中毒状态。",
+IcicleThrow,钻石星辰,"生成巨大的冰块
+
+瞄准敌人后高速发射。
+
+中弹时，可同时给周围造成冲击。",
+Unique_IceHorse_IceBladeAttack,冰晶之翼,"唤冬兽的专用技能。
+
+凝结冷空气，让翅膀覆上冰晶，
+
+并在全力奔跑的同时以冰翼撕裂敌人。",
+Unique_VolcanicMonster_Ice_IceAttack,霜冻爆裂,"<characterName id=|VolcanicMonster_Ice|/>的专用技能。
+
+举起前脚猛击地面，
+
+使冰雪于敌人所在处喷发。
+
+喷发时四周更会有雪球倾泻而下。",
+FrostBreath,凛冬之息,"朝敌人喷出冰冷空气，
+
+持续造成对方伤害。",
+Unique_CaptainPenguin_BodySlide,王者滑击,"<characterName id=|CaptainPenguin|/>的专用技能。
+
+全身散发寒气，并采用腹部着地之姿滑行，
+
+往敌人的方向用力撞去。",
+BlizzardLance,冰刺,"在敌人的脚边
+
+生成尖锐的冰刃。",
+Unique_IceDeer_IceHorn,霜角猛攻,"<characterName id=|IceDeer|/>的专用技能。
+
+以雄伟的冰角刺穿敌人。",
+IceBlade,冰刃,"制造出新月型的冰刃，
+
+将之射向前方。",
+IceMissile,冰雪飞弹,"在上空生成尖锐的冰柱
+
+瞄准敌人后发射冰柱。",
+EnergyShot,冰导弹,zh-Hans Text,
+SnowStorm,zh-Hans Text,"将冰冻之力聚集四周
+
+攻击附近的敌人后
+
+瞄准敌人释放暴风雪。",1
+RockLance,岩石锐矛,"在敌人的脚边
+
+生成尖锐的岩石长矛。",
+Unique_Anubis_GroundPunch,粉碎大地,"<characterName id=|Anubis|/>的专属技能。
+
+高高跃起后，对地面使出猛力一击。
+
+产生的衝击波将对大范围的目标造成伤害。",
+Unique_Anubis_Tackle,巨力冲锋,"<characterName id=|Anubis|/>的专用技能。
+
+快速移动追击敌人，
+
+释放能量同时不断挥出强劲利拳。",
+Unique_Anubis_LowRoundKick,回旋踢,"<characterName id=|Anubis|/>的专用技能。
+
+用强健的腿脚回旋飞踢，大范围横扫周围的敌人。",
+Unique_Grassmammoth_Earthquake,地震,"森猛犸的专用技能。
+
+以巨大的身躯撼动大地，
+
+对四周大范围的目标造成伤害。",
+SandTornado,砂砾飓风,"在左右两侧生成砂砾龙卷风，
+
+并扇向敌人。",
+Unique_HerculesBeetle_BeetleTackle,终极角击,"<characterName id=|HerculesBeetle|/>的专用技能。
+
+以四支粗壮的角串起敌人。",
+ThrowRock,投石,"将岩石从眼前的地上吸附起来
+
+瞄准敌人并发射。",
+Unique_DrillGame_ShellAttack,甲壳回旋,"<characterName id=|DrillGame|/>的专用技能。
+
+以全身高速旋转的方式移动，
+
+并以钻头刨削敌人，持续造成对方伤害。",
+StoneShotgun,碎石霰弹,向前方射出大量的小石头碎屑。,
+MudShot,泥浆投掷,"用黏糊糊的泥巴
+
+瞄准敌人并发射。",
+Thunderbolt,闪电伏特,"积蓄雷电之力
+
+瞄准敌人释放强劲电击。",
+LightningStrike,闪电冲击,"让自己化作避雷针引来雷电，
+
+并在原地引发闪电爆炸。",
+Unique_Kirin_LightningTackle,疾风迅雷,"<characterName id=|Kirin|/>的专用技能。
+
+在自己的周围制造出落雷后，
+
+猛力冲向敌人。",
+Unique_ThunderDragonMan_ThunderSwordAttack,雷神之枪,"<characterName id=|ThunderDragonMan|/>的专用技能。
+
+向上跳起后召唤雷剑，
+
+将之丢向敌人。",
+ThreeThunder,三重雷击,在敌人头上生成3次落雷。,
+Unique_ElecPanda_ElecScratch,霹雳连爪,"<characterName id=|ElecPanda|/>的专用技能。
+
+飞扑向敌人，并用带电流的爪子将其劈开。
+
+飞扑2次后，面向地面伸出爪子，
+
+大范围扩散电流。",
+Unique_GrassPanda_Electric_ElectricPunch,爆裂拳击,"<characterName id=|GrassPanda_Electric|/>的专用技能。
+
+不停转动右臂，向前方挥出带电拳击。",
+LineThunder,雷击,生成可笔直前进的雷击。,
+LockonLaser,锁定雷射,"瞄准敌人后
+
+发射超高速的雷电激光。",
+ThunderFunnel,等离子浮游炮,"生成两个蕴含雷电能量的球
+
+然后瞄准敌人，从中发射无数雷球。",
+ThunderBall,闪电球,"发射雷电球
+
+并缓慢追击敌人。",
+ElecWave,冲击波,"快速放电
+
+给周围造成冲击。",
+SpreadPulse,电火花,"向前方发射呈放射状扩散的
+
+雷电球。",
+CrossThunder,十字雷击,"堵住敌人的左右两侧
+
+生成可向两个方向前进的雷击。",
+ThunderRain,雷雨,"召唤雷电
+
+在一定时间后生成大量落电。",
+FireBall,烈焰球,"在头上生成巨大火球，并向敌人发射。
+
+中弹后会爆炸，造成大范围爆炸冲击波。",
+Unique_Horus_FlareBird,凤凰翔波,"<characterName id=|Horus|/>的专用技能。
+
+扇起炙热的龙卷风后，
+
+身体被狱火包围，一边滑翔一边突袭敌人。",
+Inferno,地狱火,"使周围地面活性化，
+
+并在一定时间后爆炸。",
+Unique_VolcanicMonster_MagmaAttack,火山爆发,"<characterName id=|VolcanicMonster|/>的专用技能。
+
+举起前脚猛击地面，
+
+使岩浆于敌人所在处喷发。
+
+喷发时四周更会有火山弹倾泻而下。",
+Unique_FireKirin_Tackle,烈焰冲撞,"<characterName id=|FireKirin|/>的专用技能。
+
+带着缠绕全身的火焰向前猛冲。
+
+途经之处均会留下滚滚火焰。",
+FlareTornado,烈焰风暴,"在左右两侧生成炙热的龙卷风，
+
+并扇向敌人。",
+Unique_AmaterasuWolf_FireCharge,风林火山,"<characterName id=|AmaterasuWolf|/>的专用技能。
+
+带着缠绕全身的青蓝火焰，气势汹汹地向前猛冲。",
+Unique_Baphomet_SwallowKite,狱火爪,"炎魔羊的专用技能。
+
+在接近对象的同时，以左手爪子向上挥击后跳起，
+
+再用右手爪子多次迅速向下挥砍。",
+Flamethrower,烈焰放射,"面向敌人释放火焰，
+
+造成持续伤害。",
+Unique_Ronin_Iai,居合斩,"<characterName id=|Ronin|/>的专用技能。
+
+摆出迎战姿势后瞬间移动至敌人面前，
+
+并使出超高速的拔刀攻击。",
+FlareArrow,烈焰箭,"连续发射3支高速火箭
+
+并追击敌人。",
+Unique_FlameBuffalo_FlameHorn,炽热角击,"<characterName id=|FlameBuffalo|/>的专用技能。
+
+锁定敌人后，
+
+以凶猛气势顶着锐利牛角冲向对方。",
+FireSeed,烈焰溅射,"向敌人发射火球。
+
+稍作飞行后会破裂
+
+并向前方放射小型火球。",
+FireBlast,烈焰射击,"瞄准后发射可笔直飞向敌人
+
+的火焰弹。",
+DragonMeteor,龙彗星,"召唤大量小陨石
+
+瞄准敌人并发射。",
+Unique_JetDragon_JumpBeam,光束彗星,"<characterName id=|JetDragon|/>的专用技能。
+
+展开发光的翅膀，
+
+并发射大量光束朝敌人飞去。
+
+光束命中目标便会引发爆炸。",
+Unique_FairyDragon_FairyTornado,神秘旋风,"精灵龙的专用技能。
+
+发射2股蕴含不可思议能力的龙卷风，
+
+追击敌人。",
+DragonBreath,龙息,"向前方吹出蕴含龙之力的气息
+
+，持续造成伤害。",
+DragonWave,龙之波动,"快速释放龙之力
+
+给周围造成冲击。",
+DragonCanon,龙息弹,"用蕴藏龙之力的能量弹
+
+瞄准敌人并发射。",
+SolarBeam,太阳光束,"积蓄太阳之力
+
+瞄准敌人发射强劲光线。",
+RootAttack,缠绕地刺,"用地下尖锐的根部追击敌人
+
+并从脚下贯穿敌人。",
+Unique_GrassPanda_MusclePunch,筋肉重拳,"<characterName id=|GrassPanda|/>的专用技能。
+
+不停转动右臂，向前方猛力出拳攻击。",
+GrassTornado,绿野飓风,"在左右两侧生成龙卷风，
+
+并扇向敌人。",
+Unique_QueenBee_SpinLance,回旋矛,"<characterName id=|QueenBee|/>的专用技能。
+
+以法杖聚集力量后，再旋转法杖来释放能量。",
+Unique_RobinHood_BowSnipe,精准狙击,"羽箭射手的专用技能。
+
+拉满弓弦瞄准敌人，
+
+对敌人射出箭矢。",
+SeedMine,种子地雷,"发射危险的种子。
+
+碰到敌人会绽开并爆炸。",
+Unique_FlowerDinosaur_Whip,植物猛击,"花冠龙的专用技能。
+
+使用巨大的尾巴拍打前方地面，
+
+造成大范围冲击。",
+SpecialCutter,多重利刃,"瞄准敌人发射
+
+3发直线飞行的超高速风刃。",
+SeedMachinegun,种子机关枪,"释放大量坚硬的种子
+
+攻击前方的敌人。",
+WindCutter,风刃,"发射超高速风刃
+
+瞄准后笔直飞向敌人。",
+HydroPump,高压水炮,"猛烈地释放出水流
+
+并向前方大范围横扫。",
+WaterBall,爆裂水球,"在头上生成巨大水球
+
+瞄准敌人并发射。",
+Unique_BluePlatypus_Toboggan,乘风破浪,#N/A,
+AcidRain,酸雨,"生成酸性云朵
+
+在敌人头上下酸雨。",
+BubbleShot,泡沫射击,"发射大量泡沫
+
+并缓慢追击敌人。",
+WaterGun,水枪,"发射水弹
+
+笔直飞向对方。",
+AquaJet,水流射击,朝敌人发射高速水弹。,
+WaterWave,zh-Hans Text,"用水之龙卷风在前方生成墙壁
+
+并使其缓慢前进。",1
+TidalWave,zh-Hans Text,"大范围掀起小波浪
+
+延缓敌人行动后，
+
+用大型波浪攻击敌人。",1
+SelfExplosion,超自爆,"赌上性命引发大爆炸。
+
+使用后便会化作夜空中闪耀的明星。",
+SelfDestruct_Bee,蜂！蜂！蜂！,"赌上性命引发爆炸。
+
+是种为了荣誉而牺牲自己的技能。",
+SelfDestruct,自爆,"赌上性命引发爆炸。
+
+使用后会陷入无法战斗的状态。",
+HyperBeam,帕鲁光束,"积蓄破坏性的能量，
+
+朝前方大范围射出威力惊人的光束。",
+Unique_SaintCentaur_OneSpearRushes,闪枪冲锋,"<characterName id=|SaintCentaur|/>的专用技能。
+
+让神圣的力量覆满自身，
+
+并以左手持长枪向前冲锋。
+
+右手的盾牌在冲锋时能挡下所有攻击。",
+Unique_KingAlpaca_BodyPress,泰山压顶,"君王美露帕的专用技能。
+
+向上高高跳起后，
+
+用丰满的庞大身躯辗压敌人。",
+Unique_FengyunDeeper_CloudTempest,阴云之岚,"<characterName id=|FengyunDeeper|/>的专用技能。
+
+操控大气，借助风压向前猛冲。",
+Unique_Gorilla_GroundPunch,猩猩连打,"<characterName id=|Gorilla|/>的专用技能。
+
+猛击地面两次后高高跳起，
+
+再赏给对方强力的一拳。",
+Unique_SakuraSaurus_SideTackle,铁山靠,"连理龙的专用技能。
+
+侧身站立，
+
+然后向前猛撞敌人，并将其击飞。",
+PowerBall,元气弹,"积蓄大量能量，
+
+并将其化作巨大球体射出。",
+Unique_HawkBird_Storm,龙卷风,"<characterName id=|HawkBird|/>的专用技能。
+
+在前方制造出龙卷风后，
+
+以滑翔的姿态冲向敌人。",
+Unique_Eagle_GlidingNail,滑空爪,"<characterName id=|Eagle|/>的专用技能。
+
+向前伸出脚爪，
+
+以滑翔的姿态猛力冲向目标。",
+Unique_NaughtyCat_CatPress,喵咪扑击,"<characterName id=|NaughtyCat|/>的专用技能。
+
+带着无所畏惧的笑容跳起，
+
+再用全身的力量辗压敌人。",
+Unique_Boar_Tackle,猪突猛进,"<characterName id=|Boar|/>的专用技能。
+
+瞄准敌人后，猛烈地冲向敌人。",
+Unique_Deer_PushupHorn,尖角顶击,"紫霞鹿的专用技能。
+
+面向敌人冲刺，扬起尖角攻击敌人。
+
+如在骑乘时发动，可操控前进方向。",
+Unique_Garm_Bite,狂野獠牙,"<characterName id=|Garm|/>的专用技能。
+
+快速地向敌人飞扑，咬住敌人进行攻击。",
+Unique_PinkCat_CatPunch,喵喵拳,"<characterName id=|PinkCat|/>的专用技能。
+
+挥舞双臂追击敌人，
+
+连续挥出利拳。",
+Unique_Alpaca_Tackle,绒毛冲撞,"<characterName id=|Alpaca|/>的专用技能。
+
+散发出可爱的气场并朝向前方冲刺。",
+Unique_SheepBall_Roll,滚滚毛球,"<characterName id=|SheepBall|/>的专用技能。
+
+咕噜咕噜地滚动并追击敌人。
+
+攻击后会因晕眩而无法动弹。",
+PowerShot,能量射击,"积蓄能量，
+
+并将其化作子弹射出。",
+Unique_ChickenPal_ChickenPeck,皮皮冲鸡,#N/A,
+AirCanon,空气炮,以急速射出空气团块。,
+Human_Punch,击打,相信自己的拳头，出拳攻击。,
+Intimidate,恐吓,zh-Hans Text,1
